@@ -61,7 +61,7 @@ export default function Contact() {
 
   const inputBase = {
     background: 'rgba(255, 255, 255, 0.04)',
-    border: '1px solid rgba(0, 212, 255, 0.15)',
+    border: '1px solid rgba(0, 207, 255, 0.15)',
     borderRadius: 8,
     color: '#F1F5F9',
     padding: '0.75rem 1rem',
@@ -76,7 +76,7 @@ export default function Contact() {
     <section
       id="contact"
       className="relative py-28 px-6 overflow-hidden"
-      style={{ background: '#0F172A' }}
+      style={{ background: '#071526' }}
       aria-label="Contact us"
     >
       {/* Border top */}
@@ -251,19 +251,19 @@ export default function Contact() {
                       style={{ ...inputBase, cursor: 'pointer' }}
                       aria-required="true"
                     >
-                      <option value="" disabled style={{ background: '#0F172A' }}>
+                      <option value="" disabled style={{ background: '#071526' }}>
                         Select a service…
                       </option>
-                      <option value="AI Automation" style={{ background: '#0F172A' }}>
+                      <option value="AI Automation" style={{ background: '#071526' }}>
                         AI Automation
                       </option>
-                      <option value="Social Media Marketing" style={{ background: '#0F172A' }}>
+                      <option value="Social Media Marketing" style={{ background: '#071526' }}>
                         Social Media Marketing
                       </option>
-                      <option value="Website Development" style={{ background: '#0F172A' }}>
+                      <option value="Website Development" style={{ background: '#071526' }}>
                         Website Development
                       </option>
-                      <option value="All Three" style={{ background: '#0F172A' }}>
+                      <option value="All Three" style={{ background: '#071526' }}>
                         All Three — Full Package
                       </option>
                     </select>
@@ -363,7 +363,7 @@ export default function Contact() {
           transition={{ delay: 0.3 }}
         >
           <div className="flex items-center gap-2">
-            <Mail size={15} style={{ color: '#00D4FF' }} aria-hidden="true" />
+            <Mail size={15} style={{ color: '#00CFFF' }} aria-hidden="true" />
             <a
               href="mailto:hello@hazetechsolutions.com"
               className="hover:text-primary transition-colors"
@@ -373,7 +373,7 @@ export default function Contact() {
             </a>
           </div>
           <div className="flex items-center gap-2">
-            <Clock size={15} style={{ color: '#8B5CF6' }} aria-hidden="true" />
+            <Clock size={15} style={{ color: '#FF6B00' }} aria-hidden="true" />
             <span>We respond within 24 hours</span>
           </div>
         </motion.div>

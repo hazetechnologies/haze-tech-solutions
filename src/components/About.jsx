@@ -7,21 +7,21 @@ const values = [
     title: 'Boutique & Hands-On',
     description:
       "You're not a ticket in a queue. Every client gets direct access to our team, personalized strategies, and consistent communication from day one.",
-    accent: '#00D4FF',
+    accent: '#00CFFF',
   },
   {
     icon: Zap,
     title: 'AI-First Approach',
     description:
       'We build around the best AI tools available — not as a gimmick, but because they genuinely compress timelines, reduce costs, and unlock capabilities that weren\'t possible before.',
-    accent: '#8B5CF6',
+    accent: '#FF6B00',
   },
   {
     icon: Target,
     title: 'Results-Focused',
     description:
       'We measure success in outcomes, not deliverables. More leads, more conversions, more growth — that\'s the standard we hold ourselves to for every engagement.',
-    accent: '#00D4FF',
+    accent: '#00CFFF',
   },
 ]
 
@@ -40,7 +40,7 @@ export default function About() {
     <section
       id="about"
       className="relative py-28 px-6 overflow-hidden"
-      style={{ background: '#020817' }}
+      style={{ background: '#040D1A' }}
       aria-label="About Haze Tech Solutions"
     >
       {/* Orbs */}
@@ -110,9 +110,9 @@ export default function About() {
                   whileHover={{ scale: 1.05 }}
                   className="relative w-24 h-24 rounded-full flex items-center justify-center"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(0,212,255,0.2), rgba(139,92,246,0.2))',
-                    border: '2px solid rgba(0,212,255,0.3)',
-                    boxShadow: '0 0 24px rgba(0,212,255,0.2)',
+                    background: 'linear-gradient(135deg, rgba(0,207,255,0.2), rgba(255,107,0,0.2))',
+                    border: '2px solid rgba(0,207,255,0.3)',
+                    boxShadow: '0 0 24px rgba(0,207,255,0.2)',
                   }}
                 >
                   <span
@@ -144,7 +144,7 @@ export default function About() {
               {/* Divider */}
               <div
                 className="h-px w-full mb-5"
-                style={{ background: 'linear-gradient(to right, transparent, rgba(0,212,255,0.2), transparent)' }}
+                style={{ background: 'linear-gradient(to right, transparent, rgba(0,207,255,0.2), transparent)' }}
               />
 
               <div className="grid grid-cols-3 gap-3 text-center">

@@ -6,9 +6,9 @@ const services = [
     icon: Bot,
     title: 'AI Automation',
     tagline: 'Work smarter, not harder.',
-    accent: '#00D4FF',
-    glowColor: 'rgba(0, 212, 255, 0.25)',
-    borderHover: 'rgba(0, 212, 255, 0.4)',
+    accent: '#00CFFF',
+    glowColor: 'rgba(0, 207, 255, 0.25)',
+    borderHover: 'rgba(0, 207, 255, 0.4)',
     bullets: [
       'Custom workflow design & deployment',
       'AI agent configuration & training',
@@ -20,9 +20,9 @@ const services = [
     icon: TrendingUp,
     title: 'Social Media Marketing',
     tagline: 'Grow your audience on autopilot.',
-    accent: '#8B5CF6',
-    glowColor: 'rgba(139, 92, 246, 0.25)',
-    borderHover: 'rgba(139, 92, 246, 0.4)',
+    accent: '#FF6B00',
+    glowColor: 'rgba(255, 107, 0, 0.25)',
+    borderHover: 'rgba(255, 107, 0, 0.4)',
     bullets: [
       'Content strategy & editorial calendar',
       'Scheduled posting automation',
@@ -34,16 +34,15 @@ const services = [
     icon: Globe,
     title: 'Website Development',
     tagline: 'Sites built to convert.',
-    accent: '#00D4FF',
-    glowColor: 'rgba(0, 212, 255, 0.15)',
-    borderHover: 'rgba(139, 92, 246, 0.4)',
+    accent: '#00CFFF',
+    glowColor: 'rgba(0, 207, 255, 0.15)',
+    borderHover: 'rgba(255, 107, 0, 0.4)',
     bullets: [
       'Conversion-focused UI/UX design',
       'Mobile-first responsive builds',
       'SEO-optimized structure & markup',
       'CMS integration & training',
     ],
-    featured: true,
   },
 ]
 
@@ -62,12 +61,12 @@ export default function Services() {
     <section
       id="services"
       className="relative py-28 px-6 overflow-hidden"
-      style={{ background: '#020817' }}
+      style={{ background: '#040D1A' }}
       aria-label="Services"
     >
-      {/* Background orbs */}
+      {/* Background orb — orange */}
       <div
-        className="orb orb-violet"
+        className="orb orb-orange"
         style={{ width: 400, height: 400, top: '10%', right: '-5%', opacity: 0.7 }}
         aria-hidden="true"
       />
@@ -111,13 +110,13 @@ export default function Services() {
                 variants={cardVariants}
                 whileHover={{
                   y: -8,
-                  boxShadow: `0 24px 60px rgba(0,0,0,0.5), 0 0 40px ${service.glowColor}`,
+                  boxShadow: `0 24px 60px rgba(0,0,0,0.6), 0 0 40px ${service.glowColor}`,
                   borderColor: service.borderHover,
                 }}
                 className="glass-card p-8 flex flex-col relative cursor-default"
                 style={{
                   transition: 'all 0.3s ease',
-                  borderColor: 'rgba(0, 212, 255, 0.1)',
+                  borderColor: 'rgba(0, 207, 255, 0.1)',
                 }}
               >
                 {/* Icon */}
@@ -132,9 +131,7 @@ export default function Services() {
                 </div>
 
                 {/* Title & tagline */}
-                <h3
-                  className="font-display font-bold text-lg text-text-main mb-1"
-                >
+                <h3 className="font-display font-bold text-lg text-text-main mb-1">
                   {service.title}
                 </h3>
                 <p className="text-sm mb-6" style={{ color: service.accent }}>
@@ -176,9 +173,7 @@ export default function Services() {
           viewport={{ once: true }}
           transition={{ delay: 0.4, duration: 0.6 }}
         >
-          <p className="text-muted mb-4 text-sm">
-            Not sure where to start?
-          </p>
+          <p className="text-muted mb-4 text-sm">Not sure where to start?</p>
           <motion.button
             onClick={() => {
               const el = document.querySelector('#contact')

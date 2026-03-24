@@ -30,7 +30,7 @@ export default function Hero() {
     <section
       id="home"
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
-      style={{ background: '#020817' }}
+      style={{ background: '#040D1A' }}
       aria-label="Hero section"
     >
       {/* ── Animated grid background ── */}
@@ -66,10 +66,10 @@ export default function Hero() {
           style={{
             width: 80,
             height: 80,
-            border: '1px solid rgba(0, 212, 255, 0.3)',
+            border: '1px solid rgba(0, 207, 255, 0.3)',
             borderRadius: 8,
             transform: 'rotate(20deg)',
-            background: 'rgba(0, 212, 255, 0.04)',
+            background: 'rgba(0, 207, 255, 0.04)',
           }}
         />
       </motion.div>
@@ -83,9 +83,9 @@ export default function Hero() {
           style={{
             width: 56,
             height: 56,
-            border: '1px solid rgba(139, 92, 246, 0.35)',
+            border: '1px solid rgba(255, 107, 0, 0.35)',
             borderRadius: '50%',
-            background: 'rgba(139, 92, 246, 0.05)',
+            background: 'rgba(255, 107, 0, 0.05)',
           }}
         />
       </motion.div>
@@ -98,7 +98,7 @@ export default function Hero() {
         <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
           <polygon
             points="22,2 42,12 42,32 22,42 2,32 2,12"
-            stroke="rgba(0, 212, 255, 0.2)"
+            stroke="rgba(0, 207, 255, 0.2)"
             strokeWidth="1"
             fill="none"
           />

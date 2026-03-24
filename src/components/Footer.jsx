@@ -54,8 +54,8 @@ export default function Footer() {
     <footer
       className="relative pt-20 pb-10 px-6 overflow-hidden"
       style={{
-        background: '#020817',
-        borderTop: '1px solid rgba(0, 212, 255, 0.1)',
+        background: '#040D1A',
+        borderTop: '1px solid rgba(0, 207, 255, 0.1)',
       }}
       aria-label="Site footer"
     >
@@ -80,8 +80,8 @@ export default function Footer() {
               <svg width="26" height="26" viewBox="0 0 64 64" fill="none" aria-hidden="true">
                 <polygon
                   points="32,4 56,18 56,46 32,60 8,46 8,18"
-                  fill="#020817"
-                  stroke="#00D4FF"
+                  fill="#040D1A"
+                  stroke="#00CFFF"
                   strokeWidth="2.5"
                 />
                 <text
@@ -89,7 +89,7 @@ export default function Footer() {
                   fontFamily="sans-serif"
                   fontSize="22"
                   fontWeight="900"
-                  fill="#00D4FF"
+                  fill="#00CFFF"
                   textAnchor="middle"
                 >H</text>
               </svg>

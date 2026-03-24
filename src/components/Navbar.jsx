@@ -41,12 +41,12 @@ export default function Navbar() {
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
       style={{
         background: scrolled
-          ? 'rgba(2, 8, 23, 0.92)'
-          : 'rgba(2, 8, 23, 0.6)',
+          ? 'rgba(4, 13, 26, 0.95)'
+          : 'rgba(4, 13, 26, 0.65)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         borderBottom: scrolled
-          ? '1px solid rgba(0, 212, 255, 0.1)'
+          ? '1px solid rgba(0, 207, 255, 0.1)'
           : '1px solid transparent',
       }}
       initial={{ y: -80 }}
@@ -70,8 +70,8 @@ export default function Navbar() {
           <svg width="28" height="28" viewBox="0 0 64 64" fill="none" aria-hidden="true">
             <polygon
               points="32,4 56,18 56,46 32,60 8,46 8,18"
-              fill="#020817"
-              stroke="#00D4FF"
+              fill="#040D1A"
+              stroke="#00CFFF"
               strokeWidth="2.5"
             />
             <text
@@ -79,7 +79,7 @@ export default function Navbar() {
               fontFamily="sans-serif"
               fontSize="22"
               fontWeight="900"
-              fill="#00D4FF"
+              fill="#00CFFF"
               textAnchor="middle"
             >H</text>
           </svg>
@@ -136,8 +136,8 @@ export default function Navbar() {
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             style={{
-              background: 'rgba(2, 8, 23, 0.97)',
-              borderTop: '1px solid rgba(0, 212, 255, 0.1)',
+              background: 'rgba(4, 13, 26, 0.98)',
+              borderTop: '1px solid rgba(0, 207, 255, 0.1)',
               overflow: 'hidden',
             }}
           >

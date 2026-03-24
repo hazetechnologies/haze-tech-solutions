@@ -17,8 +17,8 @@ html {
 
 body {
   margin: 0;
-  background-color: #020817;
-  color: #F1F5F9;
+  background-color: #040D1A;
+  color: #E8F4FF;
   font-family: 'Plus Jakarta Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -35,48 +35,48 @@ body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0F172A;
+  background: #071526;
 }
 ::-webkit-scrollbar-thumb {
-  background: #00D4FF44;
+  background: #00CFFF44;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #00D4FF88;
+  background: #00CFFF88;
 }
 
 /* ─── Text Selection ──────────────────────────────────────── */
 ::selection {
-  background: rgba(0, 212, 255, 0.25);
-  color: #F1F5F9;
+  background: rgba(0, 207, 255, 0.25);
+  color: #E8F4FF;
 }
 
-/* ─── Utility Classes ─────────────────────────────────────── */
+/* ─── Gradient: cyan → orange (matches image logo palette) ── */
 .gradient-text {
-  background: linear-gradient(135deg, #00D4FF 0%, #8B5CF6 100%);
+  background: linear-gradient(135deg, #00CFFF 0%, #FF6B00 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text-reverse {
-  background: linear-gradient(135deg, #8B5CF6 0%, #00D4FF 100%);
+  background: linear-gradient(135deg, #FF6B00 0%, #00CFFF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 207, 255, 0.03);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 207, 255, 0.12);
   border-radius: 16px;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #00D4FF, #0EA5E9);
-  color: #020817;
+  background: linear-gradient(135deg, #00CFFF, #0099CC);
+  color: #040D1A;
   font-family: 'Orbitron', sans-serif;
   font-weight: 700;
   font-size: 0.8rem;
@@ -94,20 +94,20 @@ body {
 }
 
 .btn-primary:hover {
-  box-shadow: 0 0 24px rgba(0, 212, 255, 0.5), 0 0 48px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 24px rgba(0, 207, 255, 0.5), 0 0 48px rgba(0, 207, 255, 0.2);
   transform: translateY(-2px);
 }
 
 .btn-secondary {
   background: transparent;
-  color: #F1F5F9;
+  color: #E8F4FF;
   font-family: 'Orbitron', sans-serif;
   font-weight: 600;
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   padding: 0.75rem 1.75rem;
   border-radius: 8px;
-  border: 1px solid rgba(241, 245, 249, 0.25);
+  border: 1px solid rgba(232, 244, 255, 0.2);
   cursor: pointer;
   transition: all 0.3s ease;
   text-decoration: none;
@@ -118,16 +118,16 @@ body {
 }
 
 .btn-secondary:hover {
-  border-color: rgba(0, 212, 255, 0.5);
-  color: #00D4FF;
-  box-shadow: 0 0 16px rgba(0, 212, 255, 0.15);
+  border-color: rgba(255, 107, 0, 0.5);
+  color: #FF6B00;
+  box-shadow: 0 0 16px rgba(255, 107, 0, 0.15);
 }
 
 /* ─── Animated Grid Background ───────────────────────────── */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(0, 212, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(0, 207, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 207, 255, 0.05) 1px, transparent 1px);
   background-size: 60px 60px;
   animation: gridDrift 30s linear infinite;
 }
@@ -146,32 +146,38 @@ body {
 }
 
 .orb-cyan {
-  background: radial-gradient(circle, rgba(0, 212, 255, 0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(0, 207, 255, 0.18) 0%, transparent 70%);
 }
 
+/* Replaces orb-violet → orb-orange */
+.orb-orange {
+  background: radial-gradient(circle, rgba(255, 107, 0, 0.14) 0%, transparent 70%);
+}
+
+/* Keep orb-violet as alias so existing components don't break */
 .orb-violet {
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 107, 0, 0.12) 0%, transparent 70%);
 }
 
-/* ─── Section Title ───────────────────────────────────────── */
+/* ─── Section Label ───────────────────────────────────────── */
 .section-label {
   display: inline-block;
   font-family: 'Orbitron', sans-serif;
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.2em;
-  color: #00D4FF;
+  color: #00CFFF;
   text-transform: uppercase;
   padding: 0.35rem 1rem;
-  border: 1px solid rgba(0, 212, 255, 0.25);
+  border: 1px solid rgba(0, 207, 255, 0.25);
   border-radius: 100px;
-  background: rgba(0, 212, 255, 0.05);
+  background: rgba(0, 207, 255, 0.05);
   margin-bottom: 1rem;
 }
 
 /* ─── Input / Textarea Focus ──────────────────────────────── */
 input:focus, textarea:focus, select:focus {
   outline: none;
-  border-color: rgba(0, 212, 255, 0.5) !important;
-  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 207, 255, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(0, 207, 255, 0.1);
 }

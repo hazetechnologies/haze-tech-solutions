@@ -6,7 +6,7 @@ const caseStudies = [
     client: 'Coastal Coffee Co.',
     industry: 'Food & Beverage',
     service: 'AI Automation',
-    serviceColor: '#00D4FF',
+    serviceColor: '#00CFFF',
     icon: TrendingUp,
     challenge: 'Catering inquiries were falling through the cracks — slow manual follow-ups cost them bookings every week.',
     result: '3× response rate. 40% increase in catering bookings within 60 days.',
@@ -18,7 +18,7 @@ const caseStudies = [
     client: 'Ember Boutique',
     industry: 'Retail & Fashion',
     service: 'Social Media',
-    serviceColor: '#8B5CF6',
+    serviceColor: '#FF6B00',
     icon: Users,
     challenge: 'Inconsistent posting and no content strategy left their social presence stagnant at 12K followers for over a year.',
     result: '12K → 47K Instagram followers in 90 days with automated content scheduling.',
@@ -30,7 +30,7 @@ const caseStudies = [
     client: 'Summit Legal Group',
     industry: 'Professional Services',
     service: 'Web Development',
-    serviceColor: '#00D4FF',
+    serviceColor: '#00CFFF',
     icon: BarChart3,
     challenge: 'An outdated website with poor mobile performance was driving away potential clients before they even made contact.',
     result: '210% increase in organic traffic. 55% lower bounce rate. 2× contact form submissions.',
@@ -55,13 +55,13 @@ export default function Portfolio() {
     <section
       id="portfolio"
       className="relative py-28 px-6 overflow-hidden"
-      style={{ background: '#0F172A' }}
+      style={{ background: '#071526' }}
       aria-label="Portfolio and case studies"
     >
       {/* Subtle top border glow */}
       <div
         className="absolute top-0 left-0 right-0 h-px"
-        style={{ background: 'linear-gradient(to right, transparent, rgba(0,212,255,0.3), transparent)' }}
+        style={{ background: 'linear-gradient(to right, transparent, rgba(0,207,255,0.3), transparent)' }}
         aria-hidden="true"
       />
 
@@ -111,11 +111,11 @@ export default function Portfolio() {
                 variants={cardVariants}
                 whileHover={{
                   y: -6,
-                  boxShadow: `0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(0,212,255,0.1)`,
+                  boxShadow: `0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(0,207,255,0.1)`,
                 }}
                 className="glass-card overflow-hidden flex flex-col"
                 style={{
-                  background: 'rgba(2, 8, 23, 0.6)',
+                  background: 'rgba(4, 13, 26, 0.6)',
                   transition: 'all 0.3s ease',
                 }}
               >
@@ -232,7 +232,7 @@ export default function Portfolio() {
       {/* Bottom border */}
       <div
         className="absolute bottom-0 left-0 right-0 h-px"
-        style={{ background: 'linear-gradient(to right, transparent, rgba(139,92,246,0.3), transparent)' }}
+        style={{ background: 'linear-gradient(to right, transparent, rgba(255,107,0,0.3), transparent)' }}
         aria-hidden="true"
       />
     </section>

@@ -7,13 +7,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#020817',
-        surface: '#0F172A',
-        'surface-2': '#1E293B',
-        primary: '#00D4FF',
-        secondary: '#8B5CF6',
-        muted: '#94A3B8',
-        'text-main': '#F1F5F9',
+        background: '#040D1A',
+        surface: '#071526',
+        'surface-2': '#0D2040',
+        primary: '#00CFFF',    // Electric cyan (globe mesh)
+        secondary: '#FF6B00',  // Burnt orange (TECHNOLOGIES text)
+        muted: '#8BA8C4',
+        'text-main': '#E8F4FF',
       },
       fontFamily: {
         display: ['Orbitron', 'sans-serif'],
@@ -42,11 +42,11 @@ export default {
         },
       },
       boxShadow: {
-        'glow-cyan': '0 0 20px rgba(0, 212, 255, 0.4), 0 0 40px rgba(0, 212, 255, 0.1)',
-        'glow-cyan-sm': '0 0 10px rgba(0, 212, 255, 0.3)',
-        'glow-violet': '0 0 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(139, 92, 246, 0.1)',
-        'glow-violet-sm': '0 0 10px rgba(139, 92, 246, 0.3)',
-        'card-hover': '0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 212, 255, 0.15)',
+        'glow-cyan': '0 0 20px rgba(0, 207, 255, 0.4), 0 0 40px rgba(0, 207, 255, 0.1)',
+        'glow-cyan-sm': '0 0 10px rgba(0, 207, 255, 0.3)',
+        'glow-orange': '0 0 20px rgba(255, 107, 0, 0.4), 0 0 40px rgba(255, 107, 0, 0.1)',
+        'glow-orange-sm': '0 0 10px rgba(255, 107, 0, 0.3)',
+        'card-hover': '0 20px 60px rgba(0, 0, 0, 0.6), 0 0 30px rgba(0, 207, 255, 0.15)',
       },
     },
   },
