@@ -55,7 +55,7 @@ export default function Contact() {
       setForm(INITIAL_FORM)
     } catch (err) {
       console.error('EmailJS error:', err)
-      setStatus('error')
+      setStatus(err?.text || err?.message || JSON.stringify(err) || 'error')
     }
   }
 
@@ -303,7 +303,7 @@ export default function Contact() {
                   >
                     <AlertCircle size={16} style={{ color: '#ef4444' }} aria-hidden="true" />
                     <span className="text-sm text-red-400">
-                      Something went wrong. Please try again or email us directly.
+                      Error: {status}
                     </span>
                   </motion.div>
                 )}
