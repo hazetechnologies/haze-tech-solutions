@@ -49,7 +49,7 @@ export default function Contact() {
           service_interest: form.service,
           message: form.message,
         },
-        PUBLIC_KEY
+        { publicKey: PUBLIC_KEY }
       )
       setStatus('success')
       setForm(INITIAL_FORM)
