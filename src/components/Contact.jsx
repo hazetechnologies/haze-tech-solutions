@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
 
-// EmailJS credentials come from env vars — add them to a .env file
-const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID
-const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
-const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+// EmailJS credentials
+const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_yvdhcdh'
+const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_oznyojk'
+const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'AI5U2lCzsUiQ4pYPA'
 
 const INITIAL_FORM = {
   name: '',
@@ -55,7 +55,7 @@ export default function Contact() {
       setForm(INITIAL_FORM)
     } catch (err) {
       console.error('EmailJS error:', err)
-      setStatus(err?.text || err?.message || JSON.stringify(err) || 'error')
+      setStatus('error')
     }
   }
 
@@ -303,7 +303,7 @@ export default function Contact() {
                   >
                     <AlertCircle size={16} style={{ color: '#ef4444' }} aria-hidden="true" />
                     <span className="text-sm text-red-400">
-                      Error: {status}
+                      Something went wrong. Please try again or email us directly.
                     </span>
                   </motion.div>
                 )}
