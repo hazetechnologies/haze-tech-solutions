@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 
 // EmailJS credentials
-const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_yvdhcdh'
-const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_oznyojk'
-const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'AI5U2lCzsUiQ4pYPA'
+const SERVICE_ID = 'service_4uzwhit'
+const TEMPLATE_ID = 'template_oznyojk'
+const PUBLIC_KEY = 'C2wRIWiA_TNE1S9mZ'
 
 const INITIAL_FORM = {
   name: '',
@@ -19,6 +20,7 @@ const INITIAL_FORM = {
 export default function Contact() {
   const [form, setForm] = useState(INITIAL_FORM)
   const [status, setStatus] = useState('idle') // idle | loading | success | error
+  const [errorMsg, setErrorMsg] = useState('')
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -39,6 +41,16 @@ export default function Contact() {
     }
 
     try {
+      // Save lead to Supabase
+      supabase.from('leads').insert({
+        name: form.name,
+        email: form.email,
+        business_name: form.business,
+        service_interest: form.service,
+        message: form.message,
+        source: 'contact',
+      }).then(({ error }) => { if (error) console.error('Supabase lead save error:', error) })
+
       await emailjs.send(
         SERVICE_ID,
         TEMPLATE_ID,
@@ -55,6 +67,7 @@ export default function Contact() {
       setForm(INITIAL_FORM)
     } catch (err) {
       console.error('EmailJS error:', err)
+      setErrorMsg(err?.text || err?.message || JSON.stringify(err) || 'Unknown error')
       setStatus('error')
     }
   }

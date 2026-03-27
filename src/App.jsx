@@ -1,29 +1,45 @@
-import Navbar from './components/Navbar'
-import Hero from './components/Hero'
-import Services from './components/Services'
-import Portfolio from './components/Portfolio'
-import About from './components/About'
-import Contact from './components/Contact'
-import Footer from './components/Footer'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './lib/AuthContext'
+import ProtectedRoute from './lib/ProtectedRoute'
 
-/**
- * Haze Tech Solutions — Main App
- * Single-page scrollable site with anchor navigation.
- * All sections are composed here; routing is handled via
- * smooth-scroll anchors (no React Router needed).
- */
+import MainSite       from './MainSite'
+import AuditPage      from './pages/AuditPage'
+
+import AdminLogin     from './pages/admin/AdminLogin'
+import AdminLayout    from './pages/admin/AdminLayout'
+import Dashboard      from './pages/admin/Dashboard'
+import Leads          from './pages/admin/Leads'
+import PortfolioManager from './pages/admin/PortfolioManager'
+import BlogManager    from './pages/admin/BlogManager'
+import PressManager   from './pages/admin/PressManager'
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-background text-text-main font-body">
-      <Navbar />
-      <main>
-        <Hero />
-        <Services />
-        <Portfolio />
-        <About />
-        <Contact />
-      </main>
-      <Footer />
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public */}
+          <Route path="/"       element={<MainSite />} />
+          <Route path="/audit"  element={<AuditPage />} />
+
+          {/* Admin login */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+
+          {/* Redirect /admin → /admin/dashboard (protected) */}
+          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+
+          {/* Protected admin shell */}
+          <Route path="/admin" element={
+            <ProtectedRoute><AdminLayout /></ProtectedRoute>
+          }>
+            <Route path="dashboard"  element={<Dashboard />} />
+            <Route path="leads"      element={<Leads />} />
+            <Route path="portfolio"  element={<PortfolioManager />} />
+            <Route path="blog"       element={<BlogManager />} />
+            <Route path="press"      element={<PressManager />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }

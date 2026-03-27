@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 const navLinks = [
   { label: 'Home', href: '#home' },
@@ -13,6 +14,7 @@ const navLinks = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const navigate = useNavigate()
 
   // Detect scroll to add stronger glass effect
   useEffect(() => {
@@ -105,7 +107,7 @@ export default function Navbar() {
         {/* CTA + Hamburger */}
         <div className="flex items-center gap-4">
           <motion.button
-            onClick={() => handleNavClick('#contact')}
+            onClick={() => navigate('/audit')}
             className="hidden md:inline-flex btn-primary text-sm"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
@@ -165,7 +167,7 @@ export default function Navbar() {
                 className="pt-3"
               >
                 <button
-                  onClick={() => handleNavClick('#contact')}
+                  onClick={() => { navigate('/audit'); setMenuOpen(false) }}
                   className="btn-primary w-full justify-center"
                 >
                   Get a Free Audit
