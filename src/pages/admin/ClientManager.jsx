@@ -135,8 +135,39 @@ export default function ClientManager() {
 
 function AddClientModal({ onClose, onCreated }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', company: '', phone: '', product: '', price: '', subscription_terms: '' })
-  const [saving, setSaving] = useState(false)
-  const [error, setError]   = useState(null)
+  const [products, setProducts] = useState([])
+  const [plans, setPlans]       = useState([])
+  const [saving, setSaving]     = useState(false)
+  const [error, setError]       = useState(null)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('products').select('*').eq('active', true).order('display_order'),
+      supabase.from('subscription_plans').select('*').eq('active', true).order('display_order'),
+    ]).then(([pRes, sRes]) => {
+      setProducts(pRes.data ?? [])
+      setPlans(sRes.data ?? [])
+    })
+  }, [])
+
+  const handleProductChange = (productName) => {
+    const prod = products.find(p => p.name === productName)
+    setForm(prev => ({
+      ...prev,
+      product: productName,
+      price: prod?.base_price ? String(prod.base_price) : prev.price,
+    }))
+  }
+
+  const handlePlanChange = (planName) => {
+    const plan = plans.find(p => p.name === planName)
+    if (plan && plan.discount_percent > 0 && form.price) {
+      const discounted = Number(form.price) * (1 - plan.discount_percent / 100)
+      setForm(prev => ({ ...prev, subscription_terms: planName, price: String(discounted.toFixed(2)) }))
+    } else {
+      setForm(prev => ({ ...prev, subscription_terms: planName }))
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -165,6 +196,7 @@ function AddClientModal({ onClose, onCreated }) {
   }
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+  const selectStyle = { width: '100%', background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '9px', padding: '10px 14px', color: '#F1F5F9', fontSize: '14px', fontFamily: "'Plus Jakarta Sans', sans-serif", outline: 'none', boxSizing: 'border-box', cursor: 'pointer' }
 
   return (
     <div onClick={onClose} style={styles.overlay}>
@@ -181,9 +213,28 @@ function AddClientModal({ onClose, onCreated }) {
             <Field label="Password *" value={form.password} onChange={v => set('password', v)} placeholder="Temporary password" type="password" />
             <Field label="Company" value={form.company} onChange={v => set('company', v)} placeholder="Acme Corp" />
             <Field label="Phone" value={form.phone} onChange={v => set('phone', v)} placeholder="+1 (555) 000-0000" />
-            <Field label="Product / Service" value={form.product} onChange={v => set('product', v)} placeholder="e.g. Social Media Management" />
-            <Field label="Price" value={form.price} onChange={v => set('price', v)} placeholder="1500.00" type="number" />
-            <Field label="Subscription Terms" value={form.subscription_terms} onChange={v => set('subscription_terms', v)} placeholder="e.g. Monthly, 6-month contract, One-time" />
+
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Product / Service</label>
+              <select value={form.product} onChange={e => handleProductChange(e.target.value)} style={selectStyle}>
+                <option value="">-- Select a product --</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.name}>{p.name}{p.base_price ? ` — $${Number(p.base_price).toLocaleString()}` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <Field label="Price ($)" value={form.price} onChange={v => set('price', v)} placeholder="Auto-filled from product" type="number" />
+
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Subscription Plan</label>
+              <select value={form.subscription_terms} onChange={e => handlePlanChange(e.target.value)} style={selectStyle}>
+                <option value="">-- Select a plan --</option>
+                {plans.map(p => (
+                  <option key={p.id} value={p.name}>{p.name}{p.discount_percent > 0 ? ` (${p.discount_percent}% off)` : ''}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '10px', color: '#FCA5A5', fontSize: '12px', marginBottom: '16px' }}>{error}</div>}

@@ -13,8 +13,9 @@ import Leads          from './pages/admin/Leads'
 import PortfolioManager from './pages/admin/PortfolioManager'
 import BlogManager    from './pages/admin/BlogManager'
 import PressManager   from './pages/admin/PressManager'
-import ClientManager  from './pages/admin/ClientManager'
-import ClientDetail   from './pages/admin/ClientDetail'
+import ClientManager   from './pages/admin/ClientManager'
+import ClientDetail    from './pages/admin/ClientDetail'
+import ProductsManager from './pages/admin/ProductsManager'
 
 import PortalLogin     from './pages/portal/PortalLogin'
 import PortalLayout    from './pages/portal/PortalLayout'
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="press"           element={<PressManager />} />
             <Route path="clients"         element={<ClientManager />} />
             <Route path="clients/:clientId" element={<ClientDetail />} />
+            <Route path="products"        element={<ProductsManager />} />
           </Route>
 
           {/* Portal login */}
