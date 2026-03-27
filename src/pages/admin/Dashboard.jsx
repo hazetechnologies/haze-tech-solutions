@@ -143,7 +143,7 @@ export default function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('leads')
-        .select('id, name, email, business, service, source, status, created_at')
+        .select('id, name, email, business_name, service_interest, source, status, created_at')
         .order('created_at', { ascending: false })
         .limit(10)
 
@@ -274,8 +274,8 @@ export default function Dashboard() {
                   >
                     <td style={{ ...styles.td, ...styles.tdName }}>{lead.name || '—'}</td>
                     <td style={{ ...styles.td, ...styles.tdMuted }}>{lead.email || '—'}</td>
-                    <td style={{ ...styles.td, ...styles.tdMuted }}>{lead.business || '—'}</td>
-                    <td style={{ ...styles.td, ...styles.tdMuted }}>{lead.service || '—'}</td>
+                    <td style={{ ...styles.td, ...styles.tdMuted }}>{lead.business_name || '—'}</td>
+                    <td style={{ ...styles.td, ...styles.tdMuted }}>{lead.service_interest || '—'}</td>
                     <td style={styles.td}>
                       <span style={sourceBadge(lead.source)}>{lead.source || 'contact'}</span>
                     </td>

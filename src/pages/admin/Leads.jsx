@@ -22,7 +22,7 @@ function escCsv(v) {
 function downloadCsv(leads) {
   const headers = ['Name', 'Email', 'Business', 'Service', 'Source', 'Status', 'Notes', 'Date']
   const rows = leads.map(l => [
-    l.name, l.email, l.business, l.service, l.source, l.status, l.notes, fmtDate(l.created_at),
+    l.name, l.email, l.business_name, l.service_interest, l.source, l.status, l.notes, fmtDate(l.created_at),
   ].map(escCsv).join(','))
   const csv = [headers.join(','), ...rows].join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
@@ -208,7 +208,7 @@ export default function Leads() {
     try {
       const { data, error: err } = await supabase
         .from('leads')
-        .select('id, name, email, business, service, source, status, notes, created_at')
+        .select('id, name, email, business_name, service_interest, source, status, notes, created_at')
         .order('created_at', { ascending: false })
       if (err) throw err
       setLeads(data ?? [])
@@ -389,8 +389,8 @@ export default function Leads() {
                   >
                     <td style={{ ...styles.td, ...styles.tdBold }}>{lead.name || '—'}</td>
                     <td style={{ ...styles.td, ...styles.tdMuted, maxWidth: '180px' }}>{lead.email || '—'}</td>
-                    <td style={{ ...styles.td, ...styles.tdMuted, maxWidth: '140px' }}>{lead.business || '—'}</td>
-                    <td style={{ ...styles.td, ...styles.tdMuted, maxWidth: '150px' }}>{lead.service || '—'}</td>
+                    <td style={{ ...styles.td, ...styles.tdMuted, maxWidth: '140px' }}>{lead.business_name || '—'}</td>
+                    <td style={{ ...styles.td, ...styles.tdMuted, maxWidth: '150px' }}>{lead.service_interest || '—'}</td>
                     <td style={styles.td}>
                       <span style={sourceBadgeStyle(lead.source)}>{lead.source || 'contact'}</span>
                     </td>
