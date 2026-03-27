@@ -150,22 +150,31 @@ function AddClientModal({ onClose, onCreated }) {
     })
   }, [])
 
+  const selectedProduct = products.find(p => p.name === form.product)
+  const filteredPlans = selectedProduct ? plans.filter(p => p.product_id === selectedProduct.id) : []
+
   const handleProductChange = (productName) => {
     const prod = products.find(p => p.name === productName)
     setForm(prev => ({
       ...prev,
       product: productName,
-      price: prod?.base_price ? String(prod.base_price) : prev.price,
+      price: prod?.base_price ? String(prod.base_price) : '',
+      subscription_terms: '',
     }))
   }
 
   const handlePlanChange = (planName) => {
     const plan = plans.find(p => p.name === planName)
-    if (plan && plan.discount_percent > 0 && form.price) {
-      const discounted = Number(form.price) * (1 - plan.discount_percent / 100)
+    const basePrice = selectedProduct?.base_price ? Number(selectedProduct.base_price) : Number(form.price)
+    if (plan && plan.discount_percent > 0 && basePrice) {
+      const discounted = basePrice * (1 - plan.discount_percent / 100)
       setForm(prev => ({ ...prev, subscription_terms: planName, price: String(discounted.toFixed(2)) }))
     } else {
-      setForm(prev => ({ ...prev, subscription_terms: planName }))
+      if (selectedProduct?.base_price) {
+        setForm(prev => ({ ...prev, subscription_terms: planName, price: String(selectedProduct.base_price) }))
+      } else {
+        setForm(prev => ({ ...prev, subscription_terms: planName }))
+      }
     }
   }
 
@@ -228,9 +237,9 @@ function AddClientModal({ onClose, onCreated }) {
 
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Subscription Plan</label>
-              <select value={form.subscription_terms} onChange={e => handlePlanChange(e.target.value)} style={selectStyle}>
-                <option value="">-- Select a plan --</option>
-                {plans.map(p => (
+              <select value={form.subscription_terms} onChange={e => handlePlanChange(e.target.value)} style={selectStyle} disabled={!form.product}>
+                <option value="">{form.product ? '-- Select a plan --' : '-- Select a product first --'}</option>
+                {filteredPlans.map(p => (
                   <option key={p.id} value={p.name}>{p.name}{p.discount_percent > 0 ? ` (${p.discount_percent}% off)` : ''}</option>
                 ))}
               </select>

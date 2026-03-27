@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS products (
 -- Subscription / billing plans
 CREATE TABLE IF NOT EXISTS subscription_plans (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  product_id uuid REFERENCES products(id) ON DELETE CASCADE,
   name text NOT NULL,
   billing_cycle text DEFAULT 'monthly',
   duration_months integer,
