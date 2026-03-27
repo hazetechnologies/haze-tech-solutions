@@ -107,6 +107,26 @@ export default function Navbar() {
         {/* CTA + Hamburger */}
         <div className="flex items-center gap-4">
           <motion.button
+            onClick={() => navigate('/portal/login')}
+            className="hidden md:inline-flex text-sm"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(0, 207, 255, 0.3)',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              color: '#00CFFF',
+              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            whileHover={{ scale: 1.05, borderColor: '#00CFFF' }}
+            whileTap={{ scale: 0.97 }}
+            aria-label="Client portal login"
+          >
+            Client Login
+          </motion.button>
+          <motion.button
             onClick={() => navigate('/audit')}
             className="hidden md:inline-flex btn-primary text-sm"
             whileHover={{ scale: 1.05 }}
@@ -165,7 +185,26 @@ export default function Navbar() {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.35 }}
                 className="pt-3"
+                style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
               >
+                <button
+                  onClick={() => { navigate('/portal/login'); setMenuOpen(false) }}
+                  style={{
+                    width: '100%',
+                    background: 'transparent',
+                    border: '1px solid rgba(0, 207, 255, 0.3)',
+                    borderRadius: '8px',
+                    padding: '10px',
+                    color: '#00CFFF',
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                  }}
+                >
+                  Client Login
+                </button>
                 <button
                   onClick={() => { navigate('/audit'); setMenuOpen(false) }}
                   className="btn-primary w-full justify-center"
