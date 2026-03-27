@@ -7,6 +7,7 @@ import {
   Briefcase,
   FileText,
   Newspaper,
+  UserCircle,
   ExternalLink,
   LogOut,
   ChevronRight,
@@ -20,6 +21,7 @@ const navItems = [
   { to: '/admin/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/admin/blog',      label: 'Blog',      icon: FileText },
   { to: '/admin/press',     label: 'Press',     icon: Newspaper },
+  { to: '/admin/clients',   label: 'Clients',   icon: UserCircle },
 ]
 
 const pageTitles = {
@@ -28,6 +30,7 @@ const pageTitles = {
   '/admin/portfolio': 'Portfolio',
   '/admin/blog':      'Blog',
   '/admin/press':     'Press',
+  '/admin/clients':   'Clients',
 }
 
 function getPageTitle(pathname) {
