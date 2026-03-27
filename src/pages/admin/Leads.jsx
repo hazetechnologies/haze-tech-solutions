@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   Users, Search, Download, RefreshCw, AlertCircle,
-  ChevronDown, FileX, Filter,
+  ChevronDown, FileX, Filter, BarChart2, X, ExternalLink,
 } from 'lucide-react'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -20,9 +20,11 @@ function escCsv(v) {
 }
 
 function downloadCsv(leads) {
-  const headers = ['Name', 'Email', 'Business', 'Service', 'Source', 'Status', 'Notes', 'Date']
+  const headers = ['Name', 'Email', 'Business', 'Service', 'Source', 'URL', 'Overall', 'Perf', 'SEO', 'Mobile', 'Security', 'CRO', 'Status', 'Notes', 'Date']
   const rows = leads.map(l => [
-    l.name, l.email, l.business_name, l.service_interest, l.source, l.status, l.notes, fmtDate(l.created_at),
+    l.name, l.email, l.business_name, l.service_interest, l.source, l.url,
+    l.overall_score, l.perf_score, l.seo_score, l.mobile_score, l.security_score, l.cro_score,
+    l.status, l.notes, fmtDate(l.created_at),
   ].map(escCsv).join(','))
   const csv = [headers.join(','), ...rows].join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
@@ -190,13 +192,85 @@ function NotesCell({ lead, onUpdate }) {
   )
 }
 
+// ─── AuditScoresModal ─────────────────────────────────────────────────────────
+
+function ScoreBar({ label, score }) {
+  const color = score >= 90 ? '#22c55e' : score >= 70 ? '#f59e0b' : '#ef4444'
+  const grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F'
+  return (
+    <div style={{ marginBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+        <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 500 }}>{label}</span>
+        <span style={{ fontSize: '12px', fontWeight: 700, color, fontFamily: 'monospace' }}>{grade} ({score})</span>
+      </div>
+      <div style={{ height: '6px', background: 'rgba(255,255,255,0.07)', borderRadius: '4px', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${score}%`, background: color, borderRadius: '4px', transition: 'width 0.6s ease', boxShadow: `0 0 8px ${color}60` }} />
+      </div>
+    </div>
+  )
+}
+
+function AuditScoresModal({ lead, onClose }) {
+  if (!lead) return null
+  const scores = [
+    { label: 'Overall',  score: lead.overall_score },
+    { label: 'Performance', score: lead.perf_score },
+    { label: 'SEO',      score: lead.seo_score },
+    { label: 'Mobile',   score: lead.mobile_score },
+    { label: 'Security', score: lead.security_score },
+    { label: 'Design / CRO', score: lead.cro_score },
+  ]
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: '#0F172A', border: '1px solid rgba(0,212,255,0.2)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '420px', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <BarChart2 size={16} color="#00D4FF" />
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#F1F5F9' }}>Audit Report</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#475569' }}>{lead.name} — {lead.business_name || lead.url}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: '2px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {lead.url && (
+          <a
+            href={lead.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#00D4FF', textDecoration: 'none', marginBottom: '20px', background: 'rgba(0,212,255,0.08)', padding: '5px 10px', borderRadius: '6px', border: '1px solid rgba(0,212,255,0.2)' }}
+          >
+            <ExternalLink size={12} /> {lead.url}
+          </a>
+        )}
+
+        {scores.every(s => s.score == null) ? (
+          <p style={{ color: '#475569', fontSize: '13px', textAlign: 'center', padding: '20px 0' }}>No score data saved for this audit.</p>
+        ) : (
+          scores.map(s => s.score != null && <ScoreBar key={s.label} label={s.label} score={s.score} />)
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 export default function Leads() {
-  const [leads, setLeads]         = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState(null)
+  const [leads, setLeads]           = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [selectedAudit, setSelectedAudit] = useState(null)
 
   // filters
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -208,7 +282,7 @@ export default function Leads() {
     try {
       const { data, error: err } = await supabase
         .from('leads')
-        .select('id, name, email, business_name, service_interest, source, status, notes, created_at')
+        .select('id, name, email, business_name, service_interest, source, url, perf_score, seo_score, mobile_score, security_score, cro_score, overall_score, status, notes, created_at')
         .order('created_at', { ascending: false })
       if (err) throw err
       setLeads(data ?? [])
@@ -253,6 +327,8 @@ export default function Leads() {
         .filter-select:focus { outline: none; border-color: rgba(0,212,255,0.5) !important; }
         .search-input:focus  { outline: none; border-color: rgba(0,212,255,0.5) !important; }
       `}</style>
+
+      <AuditScoresModal lead={selectedAudit} onClose={() => setSelectedAudit(null)} />
 
       {/* ── Header ── */}
       <div style={styles.topRow}>
@@ -347,7 +423,7 @@ export default function Leads() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {['Name', 'Email', 'Business', 'Service Interest', 'Source', 'Date', 'Status', 'Notes'].map(h => (
+                {['Name', 'Email', 'Business', 'Service Interest', 'Source', 'Date', 'Status', 'Notes', 'Report'].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
               </tr>
@@ -356,16 +432,16 @@ export default function Leads() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <td key={j} style={styles.td}>
-                        <div style={{ ...styles.skeleton, width: [100, 150, 100, 120, 60, 80, 60, 120][j] + 'px' }} />
+                        <div style={{ ...styles.skeleton, width: [100, 150, 100, 120, 60, 80, 60, 120, 50][j] + 'px' }} />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : !error && filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={styles.emptyCell}>
+                  <td colSpan={9} style={styles.emptyCell}>
                     <div style={styles.emptyState}>
                       <div style={styles.emptyIcon}>
                         <FileX size={32} color="#334155" />
@@ -400,6 +476,18 @@ export default function Leads() {
                     </td>
                     <td style={{ ...styles.td, minWidth: '200px' }}>
                       <NotesCell lead={lead} onUpdate={handleUpdate} />
+                    </td>
+                    <td style={styles.td}>
+                      {lead.source === 'audit' && (
+                        <button
+                          onClick={() => setSelectedAudit(lead)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '7px', color: '#A78BFA', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.22)' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.12)' }}
+                        >
+                          <BarChart2 size={12} /> View
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
