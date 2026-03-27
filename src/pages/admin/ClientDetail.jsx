@@ -105,6 +105,13 @@ export default function ClientDetail() {
               {client.company && <span>{client.company} &middot; </span>}{client.email}
               {client.phone && <span> &middot; {client.phone}</span>}
             </div>
+            {client.product && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#00D4FF', background: 'rgba(0,212,255,0.1)', padding: '3px 10px', borderRadius: '6px' }}>{client.product}</span>
+                {client.price && <span style={{ fontSize: '13px', color: '#F1F5F9', fontWeight: 700 }}>${Number(client.price).toLocaleString()}</span>}
+                {client.subscription_terms && <span style={{ fontSize: '11px', color: '#64748B' }}>{client.subscription_terms}</span>}
+              </div>
+            )}
           </div>
         </div>
       </div>

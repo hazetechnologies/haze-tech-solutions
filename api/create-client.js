@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Only admins can create clients' })
   }
 
-  const { name, email, password, company, phone } = req.body
+  const { name, email, password, company, phone, product, price, subscription_terms } = req.body
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email, and password are required' })
@@ -67,6 +67,9 @@ export default async function handler(req, res) {
         email,
         company: company || null,
         phone: phone || null,
+        product: product || null,
+        price: price ? Number(price) : null,
+        subscription_terms: subscription_terms || null,
       })
       .select()
       .single()

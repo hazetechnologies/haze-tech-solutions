@@ -108,6 +108,10 @@ export default function ClientManager() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: '#64748B', marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={12} /> {c.email}</div>
                     {c.phone && <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={12} /> {c.phone}</div>}
+                    {c.product && <div style={{ marginTop: '4px' }}><span style={{ fontSize: '10px', fontWeight: 600, color: '#00D4FF', background: 'rgba(0,212,255,0.1)', padding: '2px 8px', borderRadius: '4px' }}>{c.product}</span>
+                    {c.price && <span style={{ marginLeft: '6px', fontSize: '11px', color: '#F1F5F9', fontWeight: 600 }}>${Number(c.price).toLocaleString()}</span>}
+                    {c.subscription_terms && <span style={{ marginLeft: '6px', fontSize: '10px', color: '#475569' }}>({c.subscription_terms})</span>}
+                    </div>}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', color: '#475569' }}>
@@ -130,7 +134,7 @@ export default function ClientManager() {
 }
 
 function AddClientModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', company: '', phone: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', company: '', phone: '', product: '', price: '', subscription_terms: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
 
@@ -177,6 +181,9 @@ function AddClientModal({ onClose, onCreated }) {
             <Field label="Password *" value={form.password} onChange={v => set('password', v)} placeholder="Temporary password" type="password" />
             <Field label="Company" value={form.company} onChange={v => set('company', v)} placeholder="Acme Corp" />
             <Field label="Phone" value={form.phone} onChange={v => set('phone', v)} placeholder="+1 (555) 000-0000" />
+            <Field label="Product / Service" value={form.product} onChange={v => set('product', v)} placeholder="e.g. Social Media Management" />
+            <Field label="Price" value={form.price} onChange={v => set('price', v)} placeholder="1500.00" type="number" />
+            <Field label="Subscription Terms" value={form.subscription_terms} onChange={v => set('subscription_terms', v)} placeholder="e.g. Monthly, 6-month contract, One-time" />
           </div>
 
           {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '10px', color: '#FCA5A5', fontSize: '12px', marginBottom: '16px' }}>{error}</div>}

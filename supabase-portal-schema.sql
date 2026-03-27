@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS clients (
   email text NOT NULL,
   company text,
   phone text,
+  product text,
+  price decimal(10,2),
+  subscription_terms text,
   created_at timestamptz DEFAULT now()
 );
 
