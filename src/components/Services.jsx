@@ -183,7 +183,7 @@ export default function Services() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
           >
-            Get a Free Audit
+            Book a Consultation
           </motion.button>
         </motion.div>
       </div>

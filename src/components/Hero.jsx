@@ -150,7 +150,7 @@ export default function Hero() {
               whileHover={{ scale: 1.06, boxShadow: '0 0 30px rgba(0,212,255,0.5)' }}
               whileTap={{ scale: 0.97 }}
             >
-              Get a Free Audit
+              Get Started
               <ArrowRight size={16} aria-hidden="true" />
             </motion.button>
 

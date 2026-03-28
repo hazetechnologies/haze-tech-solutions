@@ -223,7 +223,7 @@ export default function Portfolio() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
           >
-            Get a Free Audit
+            Start Your Project
             <ArrowUpRight size={16} aria-hidden="true" />
           </motion.button>
         </motion.div>
