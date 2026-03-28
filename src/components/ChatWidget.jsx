@@ -133,32 +133,34 @@ function ChatWidgetInner() {
                     <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9', margin: '0 0 4px' }}>Chat with Haze AI</h3>
                     <p style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>Enter your info to start chatting</p>
                   </div>
-                  <form onSubmit={handleStartChat}>
+                  <div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
                       <input
                         type="text"
                         placeholder="Your name"
                         value={lead.name}
                         onChange={e => setLead(prev => ({ ...prev, name: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') handleStartChat(e) }}
                         style={styles.formInput}
-                        required
                       />
                       <input
                         type="email"
                         placeholder="Your email"
                         value={lead.email}
                         onChange={e => setLead(prev => ({ ...prev, email: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') handleStartChat(e) }}
                         style={styles.formInput}
-                        required
                       />
                     </div>
-                    <button
-                      type="submit"
+                    <div
+                      onClick={handleStartChat}
+                      role="button"
+                      tabIndex={0}
                       style={styles.startBtn}
                     >
                       Start Chatting <ArrowRight size={14} />
-                    </button>
-                  </form>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div style={styles.footer}>Powered by Haze Tech Solutions</div>
