@@ -118,45 +118,46 @@ export default function ChatWidget() {
 
           {/* Form phase */}
           {phase === 'form' && (
-            <div style={styles.formWrap}>
-              <div style={styles.formCard}>
-                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #00D4FF, #0099CC)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                    <Bot size={24} color="#020817" />
+            <>
+              <div style={styles.formWrap}>
+                <div style={styles.formCard}>
+                  <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #00D4FF, #0099CC)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                      <Bot size={24} color="#020817" />
+                    </div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9', margin: '0 0 4px' }}>Chat with Haze AI</h3>
+                    <p style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>Enter your info to start chatting</p>
                   </div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9', margin: '0 0 4px' }}>Chat with Haze AI</h3>
-                  <p style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>Enter your info to start chatting</p>
+                  <form onSubmit={handleStartChat}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                      <input
+                        type="text"
+                        placeholder="Your name"
+                        value={lead.name}
+                        onChange={e => setLead(prev => ({ ...prev, name: e.target.value }))}
+                        style={styles.formInput}
+                        required
+                      />
+                      <input
+                        type="email"
+                        placeholder="Your email"
+                        value={lead.email}
+                        onChange={e => setLead(prev => ({ ...prev, email: e.target.value }))}
+                        style={styles.formInput}
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      style={styles.startBtn}
+                    >
+                      Start Chatting <ArrowRight size={14} />
+                    </button>
+                  </form>
                 </div>
-                <form onSubmit={handleStartChat}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-                    <input
-                      type="text"
-                      placeholder="Your name"
-                      value={lead.name}
-                      onChange={e => setLead(prev => ({ ...prev, name: e.target.value }))}
-                      style={styles.formInput}
-                      required
-                    />
-                    <input
-                      type="email"
-                      placeholder="Your email"
-                      value={lead.email}
-                      onChange={e => setLead(prev => ({ ...prev, email: e.target.value }))}
-                      style={styles.formInput}
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!lead.name.trim() || !lead.email.trim()}
-                    style={{ ...styles.startBtn, opacity: !lead.name.trim() || !lead.email.trim() ? 0.5 : 1 }}
-                  >
-                    Start Chatting <ArrowRight size={14} />
-                  </button>
-                </form>
               </div>
               <div style={styles.footer}>Powered by Haze Tech Solutions</div>
-            </div>
+            </>
           )}
 
           {/* Chat phase */}
@@ -254,11 +255,11 @@ const styles = {
     padding: '4px', borderRadius: '6px',
   },
   formWrap: {
-    flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+    flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
     padding: '24px',
   },
   formCard: {
-    flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+    display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1,
   },
   formInput: {
     width: '100%', background: 'rgba(255,255,255,0.04)',
