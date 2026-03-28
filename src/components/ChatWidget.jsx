@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { MessageCircle, X, Send, Bot, User } from 'lucide-react'
+import { MessageCircle, X, Send, Bot, ArrowRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function ChatWidget() {
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hey there! I'm Haze, your AI assistant. How can I help you today? Whether you're curious about our services or ready to get started, I'm here to chat!" }
-  ])
+  const [phase, setPhase] = useState('form') // 'form' | 'chat'
+  const [lead, setLead] = useState({ name: '', email: '' })
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [leadCaptured, setLeadCaptured] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -18,23 +17,26 @@ export default function ChatWidget() {
   }, [messages])
 
   useEffect(() => {
-    if (open && inputRef.current) inputRef.current.focus()
-  }, [open])
+    if (open && phase === 'chat' && inputRef.current) inputRef.current.focus()
+  }, [open, phase])
 
-  // Try to detect and save lead info from messages
-  const tryCaptureLead = (allMessages) => {
-    if (leadCaptured) return
-    const fullText = allMessages.filter(m => m.role === 'user').map(m => m.content).join(' ')
-    const emailMatch = fullText.match(/[\w.-]+@[\w.-]+\.\w+/)
-    if (emailMatch) {
-      const nameMatch = fullText.match(/(?:my name is|i'm|i am|name:?)\s+([a-zA-Z]+(?:\s[a-zA-Z]+)?)/i)
-      supabase.from('leads').insert({
-        name: nameMatch?.[1] || 'Chat Visitor',
-        email: emailMatch[0],
-        source: 'chatbot',
-        service_interest: 'General Inquiry (via Chat)',
-      }).then(() => setLeadCaptured(true))
-    }
+  const handleStartChat = async (e) => {
+    e.preventDefault()
+    if (!lead.name.trim() || !lead.email.trim()) return
+
+    // Save lead to Supabase immediately
+    supabase.from('leads').insert({
+      name: lead.name.trim(),
+      email: lead.email.trim(),
+      source: 'chatbot',
+      service_interest: 'General Inquiry (via Chat)',
+    }).catch(console.error)
+
+    // Start chat with greeting
+    setMessages([
+      { role: 'assistant', content: `Hey ${lead.name.split(' ')[0]}! I'm Haze, your AI assistant. How can I help you today? Whether you're curious about our services or ready to get started, I'm here to chat!` }
+    ])
+    setPhase('chat')
   }
 
   const handleSend = async () => {
@@ -48,7 +50,6 @@ export default function ChatWidget() {
     setLoading(true)
 
     try {
-      // Only send last 10 messages for context
       const apiMessages = updated
         .slice(-10)
         .map(m => ({ role: m.role, content: m.content }))
@@ -56,14 +57,11 @@ export default function ChatWidget() {
       const res = await fetch('https://n8n.srv934577.hstgr.cloud/webhook/haze-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ messages: apiMessages, lead }),
       })
       const data = await res.json()
 
-      const assistantMsg = { role: 'assistant', content: data.reply || data.error || 'Sorry, something went wrong.' }
-      const final = [...updated, assistantMsg]
-      setMessages(final)
-      tryCaptureLead(final)
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'Sorry, something went wrong.' }])
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I'm having trouble connecting right now. Please try again or reach out via our contact form!" }])
     } finally {
@@ -118,56 +116,101 @@ export default function ChatWidget() {
             </button>
           </div>
 
-          {/* Messages */}
-          <div style={styles.messages}>
-            {messages.map((msg, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '10px', animation: 'chatSlideUp 0.3s ease' }}>
-                {msg.role === 'assistant' && (
-                  <div style={styles.avatarBot}><Bot size={12} color="#00D4FF" /></div>
+          {/* Form phase */}
+          {phase === 'form' && (
+            <div style={styles.formWrap}>
+              <div style={styles.formCard}>
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #00D4FF, #0099CC)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                    <Bot size={24} color="#020817" />
+                  </div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9', margin: '0 0 4px' }}>Chat with Haze AI</h3>
+                  <p style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>Enter your info to start chatting</p>
+                </div>
+                <form onSubmit={handleStartChat}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                    <input
+                      type="text"
+                      placeholder="Your name"
+                      value={lead.name}
+                      onChange={e => setLead(prev => ({ ...prev, name: e.target.value }))}
+                      style={styles.formInput}
+                      required
+                    />
+                    <input
+                      type="email"
+                      placeholder="Your email"
+                      value={lead.email}
+                      onChange={e => setLead(prev => ({ ...prev, email: e.target.value }))}
+                      style={styles.formInput}
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!lead.name.trim() || !lead.email.trim()}
+                    style={{ ...styles.startBtn, opacity: !lead.name.trim() || !lead.email.trim() ? 0.5 : 1 }}
+                  >
+                    Start Chatting <ArrowRight size={14} />
+                  </button>
+                </form>
+              </div>
+              <div style={styles.footer}>Powered by Haze Tech Solutions</div>
+            </div>
+          )}
+
+          {/* Chat phase */}
+          {phase === 'chat' && (
+            <>
+              {/* Messages */}
+              <div style={styles.messages}>
+                {messages.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '10px', animation: 'chatSlideUp 0.3s ease' }}>
+                    {msg.role === 'assistant' && (
+                      <div style={styles.avatarBot}><Bot size={12} color="#00D4FF" /></div>
+                    )}
+                    <div style={msg.role === 'user' ? styles.userBubble : styles.botBubble}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                    <div style={styles.avatarBot}><Bot size={12} color="#00D4FF" /></div>
+                    <div style={{ ...styles.botBubble, display: 'flex', gap: '4px', padding: '12px 16px' }}>
+                      {[0, 1, 2].map(i => (
+                        <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#64748B', display: 'inline-block', animation: `dotBounce 1.4s infinite ease-in-out ${i * 0.16}s` }} />
+                      ))}
+                    </div>
+                  </div>
                 )}
-                <div style={msg.role === 'user' ? styles.userBubble : styles.botBubble}>
-                  {msg.content}
-                </div>
+                <div ref={messagesEndRef} />
               </div>
-            ))}
-            {loading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                <div style={styles.avatarBot}><Bot size={12} color="#00D4FF" /></div>
-                <div style={{ ...styles.botBubble, display: 'flex', gap: '4px', padding: '12px 16px' }}>
-                  {[0, 1, 2].map(i => (
-                    <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#64748B', display: 'inline-block', animation: `dotBounce 1.4s infinite ease-in-out ${i * 0.16}s` }} />
-                  ))}
-                </div>
+
+              {/* Input */}
+              <div style={styles.inputArea}>
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKey}
+                  placeholder="Type a message..."
+                  disabled={loading}
+                  style={styles.input}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={loading || !input.trim()}
+                  style={{ ...styles.sendBtn, opacity: loading || !input.trim() ? 0.4 : 1 }}
+                  aria-label="Send message"
+                >
+                  <Send size={16} />
+                </button>
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
 
-          {/* Input */}
-          <div style={styles.inputArea}>
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Type a message..."
-              disabled={loading}
-              style={styles.input}
-            />
-            <button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              style={{ ...styles.sendBtn, opacity: loading || !input.trim() ? 0.4 : 1 }}
-              aria-label="Send message"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-
-          {/* Footer */}
-          <div style={styles.footer}>
-            Powered by Haze Tech Solutions
-          </div>
+              <div style={styles.footer}>Powered by Haze Tech Solutions</div>
+            </>
+          )}
         </div>
       )}
     </>
@@ -208,7 +251,27 @@ const styles = {
   },
   closeBtn: {
     background: 'none', border: 'none', color: '#64748B', cursor: 'pointer',
-    padding: '4px', borderRadius: '6px', transition: 'color 0.15s',
+    padding: '4px', borderRadius: '6px',
+  },
+  formWrap: {
+    flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+    padding: '24px',
+  },
+  formCard: {
+    flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+  },
+  formInput: {
+    width: '100%', background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
+    padding: '12px 14px', color: '#F1F5F9', fontSize: '14px',
+    fontFamily: "'Plus Jakarta Sans', sans-serif", outline: 'none', boxSizing: 'border-box',
+  },
+  startBtn: {
+    width: '100%', padding: '12px',
+    background: 'linear-gradient(135deg, #00D4FF, #0099CC)',
+    border: 'none', borderRadius: '10px', color: '#020817',
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '14px', fontWeight: 700,
+    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
   },
   messages: {
     flex: 1, overflowY: 'auto', padding: '16px',
