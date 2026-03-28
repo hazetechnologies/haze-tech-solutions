@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { MessageCircle, X, Send, Bot, ArrowRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function ChatWidget() {
+  return createPortal(<ChatWidgetInner />, document.body)
+}
+
+function ChatWidgetInner() {
   const [open, setOpen] = useState(false)
   const [phase, setPhase] = useState('form') // 'form' | 'chat'
   const [lead, setLead] = useState({ name: '', email: '' })
