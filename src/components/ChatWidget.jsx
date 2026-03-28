@@ -220,7 +220,7 @@ export default function ChatWidget() {
 
 const styles = {
   bubble: {
-    position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999,
+    position: 'fixed', bottom: '24px', right: '24px', zIndex: 2147483647,
     width: 56, height: 56, borderRadius: '50%',
     background: 'linear-gradient(135deg, #00D4FF, #0099CC)',
     border: 'none', color: '#020817', cursor: 'pointer',
@@ -228,9 +228,10 @@ const styles = {
     boxShadow: '0 4px 24px rgba(0,212,255,0.3)',
     animation: 'chatPulse 2s infinite',
     transition: 'transform 0.2s',
+    pointerEvents: 'auto',
   },
   window: {
-    position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999,
+    position: 'fixed', bottom: '24px', right: '24px', zIndex: 2147483647,
     width: '380px', maxWidth: 'calc(100vw - 32px)', height: '520px', maxHeight: 'calc(100vh - 100px)',
     background: '#0B1120', border: '1px solid rgba(0,212,255,0.15)',
     borderRadius: '16px', display: 'flex', flexDirection: 'column',
