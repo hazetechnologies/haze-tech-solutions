@@ -2,7 +2,13 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 function ChatWidgetInner() {
-  const [sessionId] = useState(() => crypto.randomUUID())
+  const [sessionId] = useState(() => {
+    const stored = localStorage.getItem('haze_chat_session')
+    if (stored) return stored
+    const id = crypto.randomUUID()
+    localStorage.setItem('haze_chat_session', id)
+    return id
+  })
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([
     { role: 'assistant', text: "Hey! I'm Haze, your AI assistant at Haze Tech Solutions. I can help with AI Automation, Social Media, Web Development, and SEO. What's your name and how can I help you today?" }
