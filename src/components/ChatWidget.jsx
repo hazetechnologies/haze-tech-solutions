@@ -152,14 +152,13 @@ function ChatWidgetInner() {
                         style={styles.formInput}
                       />
                     </div>
-                    <div
-                      onClick={handleStartChat}
-                      role="button"
-                      tabIndex={0}
-                      style={styles.startBtn}
+                    <a
+                      href="#"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStartChat(e); }}
+                      style={{ ...styles.startBtn, textDecoration: 'none' }}
                     >
                       Start Chatting <ArrowRight size={14} />
-                    </div>
+                    </a>
                   </div>
                 </div>
               </div>
@@ -245,7 +244,8 @@ const styles = {
     boxShadow: '0 8px 48px rgba(0,0,0,0.5), 0 0 40px rgba(0,212,255,0.08)',
     animation: 'chatSlideUp 0.3s ease',
     fontFamily: "'Plus Jakarta Sans', sans-serif",
-    overflow: 'hidden',
+    overflow: 'visible',
+    pointerEvents: 'auto',
   },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -281,6 +281,8 @@ const styles = {
     border: 'none', borderRadius: '10px', color: '#020817',
     fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '14px', fontWeight: 700,
     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+    pointerEvents: 'auto', position: 'relative', zIndex: 2147483647,
+    userSelect: 'none', WebkitTapHighlightColor: 'transparent',
   },
   messages: {
     flex: 1, overflowY: 'auto', padding: '16px',
