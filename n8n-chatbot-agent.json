@@ -1,0 +1,111 @@
+{
+  "name": "Haze Tech Chatbot",
+  "nodes": [
+    {
+      "id": "webhook-1",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "haze-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-1",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst messages = body.messages || [];\nconst lastMessage = messages[messages.length - 1]?.content || '';\nconst sessionId = body.sessionId || 'default';\nreturn [{ json: { chatInput: lastMessage, sessionId } }];"
+      }
+    },
+    {
+      "id": "agent-1",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [660, 300],
+      "parameters": {
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "You are Haze, the friendly AI assistant for Haze Tech Solutions — a digital agency specializing in AI Automation, Social Media Marketing, Website Development, and SEO & Digital Marketing.\n\nYour job is to:\n1. Welcome visitors warmly and help them understand our services\n2. Answer questions about what we offer, pricing (give ranges, not exact), and process\n3. Gently guide interested visitors to share their name, email, and what service they need\n4. Be concise, friendly, and professional. Use short responses (2-3 sentences max)\n\nOur services:\n- AI Automation ($2,000-5,000): Custom AI workflows, chatbots, lead automation, CRM integration\n- Social Media Management ($1,000-2,500/mo): Strategy, content creation, community management, paid ads\n- Website Development ($2,500-8,000): Custom React/Next.js sites, e-commerce, landing pages, SEO-optimized\n- SEO & Digital Marketing ($800-2,000/mo): On-page SEO, Google Ads, analytics, conversion optimization\n\nWe offer Monthly, Quarterly (5% off), 6-Month (10% off), and Annual (15% off) plans.\n\nIMPORTANT: When a visitor shares their email address (and optionally their name), you MUST use the save_lead tool to save their information. After saving, confirm warmly and let them know the team will reach out within 24 hours.\n\nKeep responses SHORT. Never use markdown formatting. Don't use bullet points in chat — write conversationally.",
+          "maxIterations": 5
+        }
+      }
+    },
+    {
+      "id": "model-1",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [560, 520],
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "maxTokens": 300,
+          "temperature": 0.7
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "CzugtKcko8mGRSJo",
+          "name": "WB365 OpenAi account"
+        }
+      }
+    },
+    {
+      "id": "memory-1",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [720, 520],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId }}",
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "tool-code-1",
+      "name": "Save Lead",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [880, 520],
+      "parameters": {
+        "name": "save_lead",
+        "description": "Save a new lead to the database when a visitor shares their email address. Call this tool whenever someone provides their email. Parameters: name (the visitor's name, use 'Chat Visitor' if unknown), email (required, the email address), service_interest (what service they want, e.g. 'AI Automation', 'Website Development', or 'General Inquiry').",
+        "jsCode": "const name = $fromAI('name', 'Chat Visitor', { description: 'The visitor name, or Chat Visitor if unknown' });\nconst email = $fromAI('email', '', { description: 'The visitor email address (required)' });\nconst serviceInterest = $fromAI('service_interest', 'General Inquiry', { description: 'What service they are interested in' });\n\nif (!email) {\n  return 'Error: email is required to save a lead.';\n}\n\ntry {\n  const response = await $helpers.httpRequest({\n    method: 'POST',\n    url: 'https://ioxpfvxcsclgmwyslxjj.supabase.co/rest/v1/leads',\n    headers: {\n      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlveHBmdnhjc2NsZ213eXNseGpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MjE1MjgsImV4cCI6MjA5MDE5NzUyOH0.1ths1adstY-quy3ANEtXwMrdEWMxREgCLOzt_Benu6k',\n      'Content-Type': 'application/json',\n      'Prefer': 'return=minimal'\n    },\n    body: JSON.stringify({\n      name: name,\n      email: email,\n      source: 'chatbot',\n      service_interest: serviceInterest\n    })\n  });\n  return `Lead saved successfully for ${email}`;\n} catch (error) {\n  return `Error saving lead: ${error.message}`;\n}"
+      }
+    },
+    {
+      "id": "respond-1",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $json.output || 'Sorry, something went wrong.' }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [{"name": "Access-Control-Allow-Origin", "value": "*"}]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Chat Webhook": {"main": [[{"node": "Extract Message", "type": "main", "index": 0}]]},
+    "Extract Message": {"main": [[{"node": "AI Agent", "type": "main", "index": 0}]]},
+    "OpenAI Chat Model": {"ai_languageModel": [[{"node": "AI Agent", "type": "ai_languageModel", "index": 0}]]},
+    "Window Buffer Memory": {"ai_memory": [[{"node": "AI Agent", "type": "ai_memory", "index": 0}]]},
+    "Save Lead": {"ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]},
+    "AI Agent": {"main": [[{"node": "Send Response", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"}
+}

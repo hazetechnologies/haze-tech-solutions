@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 function ChatWidgetInner() {
+  const [sessionId] = useState(() => crypto.randomUUID())
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([
     { role: 'assistant', text: "Hey! I'm Haze, your AI assistant at Haze Tech Solutions. I can help with AI Automation, Social Media, Web Development, and SEO. What's your name and how can I help you today?" }
@@ -26,7 +27,7 @@ function ChatWidgetInner() {
       const res = await fetch('https://n8n.srv934577.hstgr.cloud/webhook/haze-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMsgs }),
+        body: JSON.stringify({ messages: apiMsgs, sessionId }),
       })
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', text: data.reply || 'Sorry, something went wrong.' }])
