@@ -20,6 +20,7 @@ function ChatWidgetInner() {
 
   function startChat() {
     if (!name.trim() || !email.trim()) {
+      alert('Please fill in both fields')
       setFormError('Please enter both your name and email')
       return
     }
