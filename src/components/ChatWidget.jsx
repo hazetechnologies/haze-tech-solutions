@@ -1,14 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { supabase } from '../lib/supabase'
 
 function ChatWidgetInner() {
   const [open, setOpen] = useState(false)
-  const [step, setStep] = useState(0) // 0 = form, 1 = chat
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [err, setErr] = useState('')
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState([
+    { role: 'assistant', text: "Hey! I'm Haze, your AI assistant at Haze Tech Solutions. I can help with AI Automation, Social Media, Web Development, and SEO. What's your name and how can I help you today?" }
+  ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
@@ -16,19 +13,6 @@ function ChatWidgetInner() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  function submitForm() {
-    if (!name.trim() || !email.trim()) {
-      setErr('Please enter your name and email')
-      return
-    }
-    supabase.from('leads').insert({
-      name: name.trim(), email: email.trim(),
-      source: 'chatbot', service_interest: 'General Inquiry (via Chat)',
-    }).catch(console.error)
-    setMessages([{ role: 'assistant', text: `Hey ${name.split(' ')[0]}! I'm Haze, your AI assistant. How can I help you today?` }])
-    setStep(1)
-  }
 
   async function sendMessage() {
     const text = input.trim()
@@ -42,7 +26,7 @@ function ChatWidgetInner() {
       const res = await fetch('https://n8n.srv934577.hstgr.cloud/webhook/haze-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMsgs, lead: { name, email } }),
+        body: JSON.stringify({ messages: apiMsgs }),
       })
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', text: data.reply || 'Sorry, something went wrong.' }])
@@ -95,77 +79,47 @@ function ChatWidgetInner() {
         </div>
       </div>
 
-      {/* Step 0: Name/Email form */}
-      {step === 0 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: 24 }}>
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #00D4FF, #0099CC)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#020817" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#F1F5F9', marginBottom: 4 }}>Chat with Haze AI</div>
-            <div style={{ fontSize: 12, color: '#64748B' }}>Enter your info to start chatting</div>
-          </div>
-          <input type="text" placeholder="Your name" value={name} onChange={e => { setName(e.target.value); setErr('') }}
-            style={{ width: '100%', padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#F1F5F9', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
-          />
-          <input type="email" placeholder="Your email" value={email} onChange={e => { setEmail(e.target.value); setErr('') }}
-            onKeyDown={e => { if (e.key === 'Enter') submitForm() }}
-            style={{ width: '100%', padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#F1F5F9', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
-          />
-          {err && <div style={{ color: '#FCA5A5', fontSize: 12, textAlign: 'center', marginBottom: 8 }}>{err}</div>}
-          <div onClick={submitForm} style={{
-            width: '100%', padding: 12, textAlign: 'center', borderRadius: 10, fontSize: 14, fontWeight: 700,
-            background: 'linear-gradient(135deg, #00D4FF, #0099CC)', color: '#020817',
-            cursor: 'pointer', boxSizing: 'border-box',
-          }}>
-            Start Chatting →
-          </div>
-        </div>
-      )}
-
-      {/* Step 1: Chat */}
-      {step === 1 && (
-        <>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {messages.map((msg, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{
-                  maxWidth: '80%', padding: '10px 14px', borderRadius: 12, fontSize: 13, lineHeight: 1.5,
-                  ...(msg.role === 'user'
-                    ? { background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.2)', color: '#F1F5F9' }
-                    : { background: '#1E293B', border: '1px solid rgba(255,255,255,0.06)', color: '#CBD5E1' }
-                  ),
-                }}>
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div style={{ display: 'flex' }}>
-                <div style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 18px', color: '#64748B', fontSize: 13 }}>
-                  Typing...
-                </div>
-              </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-            <input
-              value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') sendMessage() }}
-              placeholder="Type a message..." disabled={loading}
-              style={{ flex: 1, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#F1F5F9', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
-            />
-            <div onClick={sendMessage} style={{
-              width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #00D4FF, #0099CC)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
-              opacity: loading || !input.trim() ? 0.4 : 1,
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {messages.map((msg, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            <div style={{
+              maxWidth: '80%', padding: '10px 14px', borderRadius: 12, fontSize: 13, lineHeight: 1.5,
+              ...(msg.role === 'user'
+                ? { background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.2)', color: '#F1F5F9' }
+                : { background: '#1E293B', border: '1px solid rgba(255,255,255,0.06)', color: '#CBD5E1' }
+              ),
             }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#020817" strokeWidth="2"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+              {msg.text}
             </div>
           </div>
-        </>
-      )}
+        ))}
+        {loading && (
+          <div style={{ display: 'flex' }}>
+            <div style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 18px', color: '#64748B', fontSize: 13 }}>
+              Typing...
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        <input
+          value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') sendMessage() }}
+          placeholder="Type a message..." disabled={loading}
+          style={{ flex: 1, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#F1F5F9', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+        />
+        <div onClick={sendMessage} style={{
+          width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #00D4FF, #0099CC)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+          opacity: loading || !input.trim() ? 0.4 : 1,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#020817" strokeWidth="2"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+        </div>
+      </div>
     </div>
   )
 }
