@@ -16,8 +16,14 @@ function ChatWidgetInner() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const [formError, setFormError] = useState('')
+
   function startChat() {
-    if (!name.trim() || !email.trim()) return
+    if (!name.trim() || !email.trim()) {
+      setFormError('Please enter both your name and email')
+      return
+    }
+    setFormError('')
     supabase.from('leads').insert({
       name: name.trim(),
       email: email.trim(),
@@ -124,14 +130,16 @@ function ChatWidgetInner() {
             onKeyDown={e => { if (e.key === 'Enter') startChat() }}
             style={{ width: '100%', padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#F1F5F9', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
           />
+          {formError && (
+            <div style={{ color: '#FCA5A5', fontSize: 12, textAlign: 'center', marginBottom: -8 }}>{formError}</div>
+          )}
           <div
             onClick={startChat}
             style={{
               width: '100%', padding: 12, textAlign: 'center',
-              background: (!name.trim() || !email.trim()) ? 'rgba(0,212,255,0.3)' : 'linear-gradient(135deg, #00D4FF, #0099CC)',
+              background: 'linear-gradient(135deg, #00D4FF, #0099CC)',
               borderRadius: 10, color: '#020817', fontSize: 14, fontWeight: 700,
-              cursor: (!name.trim() || !email.trim()) ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit', boxSizing: 'border-box',
+              cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box',
             }}
           >
             Start Chatting →
