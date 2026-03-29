@@ -17,7 +17,6 @@ function ChatWidgetInner() {
   }, [messages])
 
   function startChat() {
-    alert('Button clicked! Name: ' + name + ', Email: ' + email)
     if (!name.trim() || !email.trim()) return
     supabase.from('leads').insert({
       name: name.trim(),
