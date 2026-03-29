@@ -15,6 +15,12 @@ const INITIAL_FORM = {
   business: '',
   service: '',
   message: '',
+  website: '',
+  goals: '',
+  industry: '',
+  repetitive_task: '',
+  payment_process: '',
+  vendor_process: '',
 }
 
 export default function Contact() {
@@ -42,14 +48,34 @@ export default function Contact() {
 
     try {
       // Save lead to Supabase
-      supabase.from('leads').insert({
+      const leadData = {
         name: form.name,
         email: form.email,
         business_name: form.business,
         service_interest: form.service,
         message: form.message,
         source: 'contact',
-      }).then(({ error }) => { if (error) console.error('Supabase lead save error:', error) })
+      }
+      // Add AI Automation fields if that service was selected
+      if (form.service === 'AI Automation' || form.service === 'All Three') {
+        leadData.website = form.website || null
+        leadData.goals = form.goals || null
+        leadData.industry = form.industry || null
+        leadData.repetitive_task = form.repetitive_task || null
+        leadData.payment_process = form.payment_process || null
+        leadData.vendor_process = form.vendor_process || null
+      }
+      supabase.from('leads').insert(leadData).select().single().then(({ data, error }) => {
+        if (error) { console.error('Supabase lead save error:', error); return }
+        // If AI Automation, trigger report generation
+        if (data && (form.service === 'AI Automation' || form.service === 'All Three')) {
+          fetch('https://n8n.srv934577.hstgr.cloud/webhook/automation-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...leadData, lead_id: data.id }),
+          }).catch(console.error)
+        }
+      })
 
       await emailjs.send(
         SERVICE_ID,
@@ -282,6 +308,111 @@ export default function Contact() {
                     </select>
                   </div>
                 </div>
+
+                {/* AI Automation extra fields */}
+                <AnimatePresence>
+                  {(form.service === 'AI Automation' || form.service === 'All Three') && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <div
+                        className="space-y-5"
+                        style={{
+                          background: 'rgba(0, 207, 255, 0.04)',
+                          border: '1px solid rgba(0, 207, 255, 0.12)',
+                          borderRadius: 12,
+                          padding: '1.25rem',
+                          marginBottom: '1.25rem',
+                        }}
+                      >
+                        <p style={{ fontSize: '0.8rem', color: '#00CFFF', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', margin: '0 0 0.75rem' }}>
+                          AI Automation Details
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                          <div>
+                            <label htmlFor="website" className="block text-sm font-medium text-muted mb-2">
+                              Website URL
+                            </label>
+                            <input
+                              id="website" type="url" name="website"
+                              value={form.website} onChange={handleChange}
+                              placeholder="https://yoursite.com"
+                              style={inputBase}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="industry" className="block text-sm font-medium text-muted mb-2">
+                              Industry
+                            </label>
+                            <input
+                              id="industry" type="text" name="industry"
+                              value={form.industry} onChange={handleChange}
+                              placeholder="e.g. Real Estate, E-commerce, Healthcare"
+                              style={inputBase}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label htmlFor="goals" className="block text-sm font-medium text-muted mb-2">
+                            What are your goals?
+                          </label>
+                          <textarea
+                            id="goals" name="goals"
+                            value={form.goals} onChange={handleChange}
+                            placeholder="e.g. Save time on follow-ups, automate invoicing, reduce manual data entry..."
+                            rows={2}
+                            style={{ ...inputBase, resize: 'vertical' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="repetitive_task" className="block text-sm font-medium text-muted mb-2">
+                            What repetitive tasks do you want automated? <span className="text-primary">*</span>
+                          </label>
+                          <textarea
+                            id="repetitive_task" name="repetitive_task"
+                            value={form.repetitive_task} onChange={handleChange}
+                            placeholder="e.g. Manually sending follow-up emails, copying data between spreadsheets, scheduling appointments..."
+                            rows={3}
+                            style={{ ...inputBase, resize: 'vertical' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="payment_process" className="block text-sm font-medium text-muted mb-2">
+                            How does your business get paid?
+                          </label>
+                          <textarea
+                            id="payment_process" name="payment_process"
+                            value={form.payment_process} onChange={handleChange}
+                            placeholder="e.g. Invoices via QuickBooks, Stripe checkout, manual bank transfers..."
+                            rows={2}
+                            style={{ ...inputBase, resize: 'vertical' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="vendor_process" className="block text-sm font-medium text-muted mb-2">
+                            How do you pay vendors and employees?
+                          </label>
+                          <textarea
+                            id="vendor_process" name="vendor_process"
+                            value={form.vendor_process} onChange={handleChange}
+                            placeholder="e.g. Gusto payroll, manual checks, Venmo, direct deposit..."
+                            rows={2}
+                            style={{ ...inputBase, resize: 'vertical' }}
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* Message */}
                 <div>

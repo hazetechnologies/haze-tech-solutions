@@ -1,0 +1,66 @@
+{
+  "name": "AI Automation Report Generator",
+  "nodes": [
+    {
+      "id": "trigger-1",
+      "name": "New Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "automation-report",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-prompt",
+      "name": "Build Report Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "parameters": {
+        "jsCode": "const lead = $input.first().json.body;\n\nconst prompt = `You are a senior AI automation consultant at Haze Tech Solutions. A potential client has submitted an intake form. Analyze their business and create a detailed automation plan.\n\nCLIENT INFORMATION:\n- Name: ${lead.name || 'N/A'}\n- Business: ${lead.business_name || 'N/A'}\n- Website: ${lead.website || 'N/A'}\n- Industry: ${lead.industry || 'N/A'}\n- Goals: ${lead.goals || 'N/A'}\n- Repetitive Tasks: ${lead.repetitive_task || 'N/A'}\n- Payment Process: ${lead.payment_process || 'N/A'}\n- Vendor/Employee Payment: ${lead.vendor_process || 'N/A'}\n- Additional Info: ${lead.message || 'N/A'}\n\nCreate a comprehensive automation plan with:\n\n1. EXECUTIVE SUMMARY (2-3 sentences about what we can do for them)\n\n2. RECOMMENDED WORKFLOWS (list 3-6 specific n8n workflows we can build):\n   For each workflow:\n   - Workflow Name\n   - Problem it Solves\n   - How it Works (step by step)\n   - Tools/Integrations Needed (e.g. Gmail, Slack, QuickBooks, CRM)\n   - Estimated Time Saved per Week\n\n3. QUICK WINS (1-2 automations we can deploy in week 1)\n\n4. ESTIMATED ROI\n   - Hours saved per month\n   - Estimated cost savings\n   - Payback period\n\n5. IMPLEMENTATION TIMELINE\n   - Phase 1 (Week 1-2): Quick wins\n   - Phase 2 (Week 3-4): Core automations\n   - Phase 3 (Month 2): Advanced integrations\n\n6. RECOMMENDED PACKAGE & PRICING TIER\n\nBe specific and practical. Reference actual tools and integrations. Make it actionable.`;\n\nreturn [{ json: { prompt, leadId: lead.lead_id || null } }];"
+      }
+    },
+    {
+      "id": "openai-1",
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer {{$env.OPENAI_API_KEY}}"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o', max_tokens: 2000, temperature: 0.7, messages: [{ role: 'user', content: $json.prompt }] }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-parse",
+      "name": "Parse & Save Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300],
+      "parameters": {
+        "jsCode": "const report = $input.first().json.choices?.[0]?.message?.content || 'Failed to generate report';\nconst leadId = $node['Build Report Prompt'].json.leadId;\n\n// Save to Supabase\nif (leadId) {\n  try {\n    await $helpers.httpRequest({\n      method: 'POST',\n      url: 'https://ioxpfvxcsclgmwyslxjj.supabase.co/rest/v1/automation_reports',\n      headers: {\n        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlveHBmdnhjc2NsZ213eXNseGpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MjE1MjgsImV4cCI6MjA5MDE5NzUyOH0.1ths1adstY-quy3ANEtXwMrdEWMxREgCLOzt_Benu6k',\n        'Content-Type': 'application/json',\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        lead_id: leadId,\n        report: report,\n        status: 'generated'\n      })\n    });\n  } catch(e) {\n    console.log('Failed to save report:', e.message);\n  }\n}\n\nreturn [{ json: { success: true, report, leadId } }];"
+      }
+    }
+  ],
+  "connections": {
+    "New Lead Webhook": {"main": [[{"node": "Build Report Prompt", "type": "main", "index": 0}]]},
+    "Build Report Prompt": {"main": [[{"node": "Generate Report", "type": "main", "index": 0}]]},
+    "Generate Report": {"main": [[{"node": "Parse & Save Report", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"}
+}

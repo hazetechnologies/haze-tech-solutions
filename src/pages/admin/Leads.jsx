@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   Users, Search, Download, RefreshCw, AlertCircle,
-  ChevronDown, FileX, Filter, BarChart2, X, ExternalLink,
+  ChevronDown, FileX, Filter, BarChart2, X, ExternalLink, FileText,
 } from 'lucide-react'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -263,6 +263,66 @@ function AuditScoresModal({ lead, onClose }) {
   )
 }
 
+// ─── AutomationReportModal ────────────────────────────────────────────────────
+
+function AutomationReportModal({ lead, onClose }) {
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!lead) return
+    supabase
+      .from('automation_reports')
+      .select('*')
+      .eq('lead_id', lead.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        setReport(data)
+        setLoading(false)
+      })
+  }, [lead])
+
+  if (!lead) return null
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#0F172A', border: '1px solid rgba(0,212,255,0.2)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '640px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <FileText size={16} color="#00D4FF" />
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#F1F5F9' }}>Automation Report</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#475569' }}>{lead.name} — {lead.business_name || lead.email}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: '2px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#475569', fontSize: '13px' }}>Loading report...</div>
+        ) : !report ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <FileText size={32} color="#334155" style={{ margin: '0 auto 8px' }} />
+            <p style={{ color: '#475569', fontSize: '13px' }}>No automation report generated yet.</p>
+            <p style={{ color: '#334155', fontSize: '12px' }}>The report is generated automatically when an AI Automation lead submits the form.</p>
+          </div>
+        ) : (
+          <div style={{ fontSize: '13px', color: '#CBD5E1', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {report.report}
+            <div style={{ marginTop: '16px', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', fontSize: '11px', color: '#475569' }}>
+              Generated: {new Date(report.created_at).toLocaleString()} | Status: {report.status}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 export default function Leads() {
@@ -271,6 +331,7 @@ export default function Leads() {
   const [error, setError]           = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedAudit, setSelectedAudit] = useState(null)
+  const [selectedReport, setSelectedReport] = useState(null)
 
   // filters
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -329,6 +390,7 @@ export default function Leads() {
       `}</style>
 
       <AuditScoresModal lead={selectedAudit} onClose={() => setSelectedAudit(null)} />
+      <AutomationReportModal lead={selectedReport} onClose={() => setSelectedReport(null)} />
 
       {/* ── Header ── */}
       <div style={styles.topRow}>
@@ -481,11 +543,21 @@ export default function Leads() {
                       {lead.source === 'audit' && (
                         <button
                           onClick={() => setSelectedAudit(lead)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '7px', color: '#A78BFA', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '7px', color: '#A78BFA', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: '4px' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.22)' }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.12)' }}
                         >
-                          <BarChart2 size={12} /> View
+                          <BarChart2 size={12} /> Audit
+                        </button>
+                      )}
+                      {(lead.service_interest === 'AI Automation' || lead.service_interest === 'All Three') && (
+                        <button
+                          onClick={() => setSelectedReport(lead)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: '7px', color: '#00D4FF', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.22)' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.12)' }}
+                        >
+                          <FileText size={12} /> AI Plan
                         </button>
                       )}
                     </td>
