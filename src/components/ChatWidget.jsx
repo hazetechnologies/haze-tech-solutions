@@ -19,7 +19,6 @@ function ChatWidgetInner() {
   const [formError, setFormError] = useState('')
 
   function startChat() {
-    alert('CLICK FIRED - name: "' + name + '" email: "' + email + '"')
     if (!name.trim() || !email.trim()) {
       setFormError('Please enter both your name and email')
       return
