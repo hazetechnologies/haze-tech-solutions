@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import logoIcon from '../assets/logo/haze-logo-icon.svg'
 
 const navLinks = [
   { label: 'Home', href: '#home' },
   { label: 'Services', href: '#services' },
   { label: 'Portfolio', href: '#portfolio' },
   { label: 'About', href: '#about' },
+  { label: 'Blog', href: '/blog', isRoute: true },
   { label: 'Contact', href: '#contact' },
 ]
 
@@ -68,23 +70,7 @@ export default function Navbar() {
           style={{ textDecoration: 'none' }}
           whileHover={{ scale: 1.02 }}
         >
-          {/* Hex icon */}
-          <svg width="28" height="28" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-            <polygon
-              points="32,4 56,18 56,46 32,60 8,46 8,18"
-              fill="#040D1A"
-              stroke="#00CFFF"
-              strokeWidth="2.5"
-            />
-            <text
-              x="32" y="39"
-              fontFamily="sans-serif"
-              fontSize="22"
-              fontWeight="900"
-              fill="#00CFFF"
-              textAnchor="middle"
-            >H</text>
-          </svg>
+          <img src={logoIcon} alt="Haze Tech" width="32" height="32" />
           <span className="gradient-text">Haze Tech</span>
           <span className="text-text-main/80 font-light text-base hidden sm:inline">Solutions</span>
         </motion.a>
@@ -93,13 +79,23 @@ export default function Navbar() {
         <ul className="hidden md:flex items-center gap-8 list-none m-0 p-0">
           {navLinks.map((link) => (
             <li key={link.label}>
-              <button
-                onClick={() => handleNavClick(link.href)}
-                className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
-                style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
-              >
-                {link.label}
-              </button>
+              {link.isRoute ? (
+                <button
+                  onClick={() => navigate(link.href)}
+                  className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
+                  style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
+                >
+                  {link.label}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleNavClick(link.href)}
+                  className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
+                  style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
+                >
+                  {link.label}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -172,7 +168,7 @@ export default function Navbar() {
                   transition={{ delay: i * 0.06 }}
                 >
                   <button
-                    onClick={() => handleNavClick(link.href)}
+                    onClick={() => { link.isRoute ? navigate(link.href) : handleNavClick(link.href); setMenuOpen(false) }}
                     className="w-full text-left py-3 px-2 text-text-main font-medium border-b border-white/5 last:border-0 bg-transparent cursor-pointer hover:text-primary transition-colors"
                     style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                   >

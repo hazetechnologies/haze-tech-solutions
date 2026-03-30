@@ -17,6 +17,9 @@ import ClientManager   from './pages/admin/ClientManager'
 import ClientDetail    from './pages/admin/ClientDetail'
 import ProductsManager from './pages/admin/ProductsManager'
 
+import BlogPage        from './pages/BlogPage'
+import BlogPost        from './pages/BlogPost'
+
 import PortalLogin     from './pages/portal/PortalLogin'
 import PortalLayout    from './pages/portal/PortalLayout'
 import PortalDashboard from './pages/portal/PortalDashboard'
@@ -31,6 +34,8 @@ export default function App() {
           {/* Public */}
           <Route path="/"       element={<MainSite />} />
           <Route path="/audit"  element={<AuditPage />} />
+          <Route path="/blog"   element={<BlogPage />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
 
           {/* Admin login */}
           <Route path="/admin/login" element={<AdminLogin />} />

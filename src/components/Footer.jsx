@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { supabase } from '../lib/supabase'
+import logoIcon from '../assets/logo/haze-logo-icon.svg'
 
 // Simple inline social icons to avoid extra deps
 const InstagramIcon = () => (
@@ -50,6 +53,33 @@ const handleScroll = (href) => {
 }
 
 export default function Footer() {
+  const [nlEmail, setNlEmail] = useState('')
+  const [nlStatus, setNlStatus] = useState('idle') // idle | loading | success | error
+
+  const handleSubscribe = async (e) => {
+    e.preventDefault()
+    if (!nlEmail.trim()) return
+    setNlStatus('loading')
+    try {
+      const { error } = await supabase.from('newsletter_subscribers').insert({ email: nlEmail.trim(), source: 'website_footer' })
+      if (error) {
+        if (error.code === '23505') setNlStatus('success') // already subscribed
+        else throw error
+      } else {
+        setNlStatus('success')
+        // Trigger welcome email via n8n
+        fetch('https://n8n.srv934577.hstgr.cloud/webhook/newsletter-welcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: nlEmail.trim() }),
+        }).catch(console.error)
+      }
+      setNlEmail('')
+    } catch {
+      setNlStatus('error')
+    }
+  }
+
   return (
     <footer
       className="relative pt-20 pb-10 px-6 overflow-hidden"
@@ -77,22 +107,7 @@ export default function Footer() {
               whileHover={{ scale: 1.02 }}
               style={{ width: 'fit-content' }}
             >
-              <svg width="26" height="26" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-                <polygon
-                  points="32,4 56,18 56,46 32,60 8,46 8,18"
-                  fill="#040D1A"
-                  stroke="#00CFFF"
-                  strokeWidth="2.5"
-                />
-                <text
-                  x="32" y="39"
-                  fontFamily="sans-serif"
-                  fontSize="22"
-                  fontWeight="900"
-                  fill="#00CFFF"
-                  textAnchor="middle"
-                >H</text>
-              </svg>
+              <img src={logoIcon} alt="Haze Tech" width="28" height="28" />
               <span
                 className="font-display font-black text-base gradient-text"
               >
@@ -164,6 +179,64 @@ export default function Footer() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+
+        {/* Newsletter */}
+        <div className="mb-14">
+          <div
+            className="glass-card p-6 md:p-8"
+            style={{ background: 'rgba(0, 207, 255, 0.04)' }}
+          >
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              <div className="flex-1">
+                <h3 className="font-display font-bold text-text-main text-base mb-2">
+                  Stay in the Loop
+                </h3>
+                <p className="text-muted text-sm m-0">
+                  Get AI automation tips, marketing insights, and exclusive offers straight to your inbox.
+                </p>
+              </div>
+              {nlStatus === 'success' ? (
+                <p className="text-sm font-medium" style={{ color: '#22c55e' }}>
+                  You're subscribed!
+                </p>
+              ) : (
+                <form onSubmit={handleSubscribe} className="flex gap-3 w-full md:w-auto">
+                  <input
+                    type="email"
+                    value={nlEmail}
+                    onChange={(e) => setNlEmail(e.target.value)}
+                    placeholder="you@email.com"
+                    required
+                    className="flex-1 md:w-64"
+                    style={{
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(0,207,255,0.15)',
+                      borderRadius: 8,
+                      color: '#F1F5F9',
+                      padding: '0.65rem 1rem',
+                      fontFamily: '"Plus Jakarta Sans", sans-serif',
+                      fontSize: '0.9rem',
+                      outline: 'none',
+                    }}
+                  />
+                  <motion.button
+                    type="submit"
+                    disabled={nlStatus === 'loading'}
+                    className="btn-primary text-sm"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    style={nlStatus === 'loading' ? { opacity: 0.6 } : {}}
+                  >
+                    {nlStatus === 'loading' ? 'Joining...' : 'Subscribe'}
+                  </motion.button>
+                </form>
+              )}
+              {nlStatus === 'error' && (
+                <p className="text-sm" style={{ color: '#ef4444' }}>Something went wrong. Try again.</p>
+              )}
+            </div>
           </div>
         </div>
 

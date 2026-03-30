@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00CFFF"/>
+      <stop offset="100%" stop-color="#0088CC"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B00"/>
+      <stop offset="100%" stop-color="#FF8C33"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer hexagon - white fill -->
+  <polygon points="60,6 108,30 108,90 60,114 12,90 12,30"
+    fill="#FFFFFF" stroke="url(#glow)" stroke-width="2.5"/>
+
+  <!-- H letter - dark -->
+  <path d="M42 38 L42 82 M42 60 L78 60 M78 38 L78 82"
+    stroke="#040D1A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Orange accent dot -->
+  <circle cx="92" cy="34" r="4" fill="url(#accent)" opacity="0.9"/>
+</svg>

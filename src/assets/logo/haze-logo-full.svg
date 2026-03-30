@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" fill="none">
+  <defs>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00CFFF"/>
+      <stop offset="100%" stop-color="#0088CC"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B00"/>
+      <stop offset="100%" stop-color="#FF8C33"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00CFFF"/>
+      <stop offset="100%" stop-color="#FF6B00"/>
+    </linearGradient>
+    <filter id="glow-filter">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Hexagon icon -->
+  <polygon points="40,4 72,20 72,60 40,76 8,60 8,20"
+    fill="#040D1A" stroke="url(#glow)" stroke-width="2"/>
+
+  <!-- Circuit lines -->
+  <line x1="24" y1="30" x2="24" y2="50" stroke="#00CFFF" stroke-width="0.8" opacity="0.3"/>
+  <line x1="56" y1="30" x2="56" y2="50" stroke="#00CFFF" stroke-width="0.8" opacity="0.3"/>
+  <circle cx="24" cy="30" r="1.5" fill="#00CFFF" opacity="0.4"/>
+  <circle cx="56" cy="50" r="1.5" fill="#00CFFF" opacity="0.4"/>
+
+  <!-- H letter -->
+  <g filter="url(#glow-filter)">
+    <path d="M28 24 L28 56 M28 40 L52 40 M52 24 L52 56"
+      stroke="url(#glow)" stroke-width="4" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- Orange accent -->
+  <circle cx="62" cy="22" r="2.5" fill="url(#accent)" opacity="0.9"/>
+
+  <!-- HAZE TECH text -->
+  <text x="88" y="38" font-family="'Orbitron', 'Arial Black', sans-serif" font-weight="900" font-size="24" letter-spacing="3">
+    <tspan fill="url(#textGrad)">HAZE</tspan>
+    <tspan fill="#E8F4FF" dx="6">TECH</tspan>
+  </text>
+
+  <!-- SOLUTIONS subtitle -->
+  <text x="89" y="56" font-family="'Plus Jakarta Sans', 'Helvetica', sans-serif" font-weight="400" font-size="11" letter-spacing="5" fill="#8BA8C4">
+    SOLUTIONS
+  </text>
+</svg>
