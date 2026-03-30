@@ -67,7 +67,13 @@ export default function Contact() {
       }
       supabase.from('leads').insert(leadData).select().single().then(({ data, error }) => {
         if (error) { console.error('Supabase lead save error:', error); return }
-        // If AI Automation, trigger report generation
+        // Trigger lead nurture email sequence
+        fetch('https://n8n.srv934577.hstgr.cloud/webhook/lead-nurture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: form.name, email: form.email, service: form.service }),
+        }).catch(console.error)
+        // If AI Automation, also trigger report generation
         if (data && (form.service === 'AI Automation' || form.service === 'All Three')) {
           fetch('https://n8n.srv934577.hstgr.cloud/webhook/automation-report', {
             method: 'POST',
