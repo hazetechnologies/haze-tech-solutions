@@ -16,7 +16,10 @@ import PressManager   from './pages/admin/PressManager'
 import ClientManager   from './pages/admin/ClientManager'
 import ClientDetail    from './pages/admin/ClientDetail'
 import ProductsManager from './pages/admin/ProductsManager'
-import Settings        from './pages/admin/Settings'
+import Settings           from './pages/admin/Settings'
+import BusinessInfo       from './pages/admin/BusinessInfo'
+import FaqManager         from './pages/admin/FaqManager'
+import AutomationTriggers from './pages/admin/AutomationTriggers'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
@@ -57,6 +60,9 @@ export default function App() {
             <Route path="clients/:clientId" element={<ClientDetail />} />
             <Route path="products"        element={<ProductsManager />} />
             <Route path="settings"        element={<Settings />} />
+            <Route path="business-info"   element={<BusinessInfo />} />
+            <Route path="faqs"            element={<FaqManager />} />
+            <Route path="triggers"        element={<AutomationTriggers />} />
           </Route>
 
           {/* Portal login */}

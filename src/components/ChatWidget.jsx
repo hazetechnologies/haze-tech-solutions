@@ -30,7 +30,7 @@ function ChatWidgetInner() {
     setLoading(true)
     try {
       const apiMsgs = updated.slice(-10).map(m => ({ role: m.role, content: m.text }))
-      const res = await fetch('https://n8n.srv934577.hstgr.cloud/webhook/haze-chat', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMsgs, sessionId }),

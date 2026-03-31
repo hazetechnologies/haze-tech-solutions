@@ -10,6 +10,9 @@ import {
   UserCircle,
   Package,
   Settings,
+  Building,
+  HelpCircle,
+  Zap,
   ExternalLink,
   LogOut,
   ChevronRight,
@@ -25,7 +28,10 @@ const navItems = [
   { to: '/admin/press',     label: 'Press',     icon: Newspaper },
   { to: '/admin/clients',   label: 'Clients',   icon: UserCircle },
   { to: '/admin/products',  label: 'Products',  icon: Package },
-  { to: '/admin/settings',  label: 'Settings',  icon: Settings },
+  { to: '/admin/business-info', label: 'Business Info', icon: Building },
+  { to: '/admin/faqs',          label: 'FAQs',          icon: HelpCircle },
+  { to: '/admin/triggers',      label: 'Triggers',      icon: Zap },
+  { to: '/admin/settings',      label: 'Settings',      icon: Settings },
 ]
 
 const pageTitles = {
@@ -36,7 +42,10 @@ const pageTitles = {
   '/admin/press':     'Press',
   '/admin/clients':   'Clients',
   '/admin/products':  'Products',
-  '/admin/settings':  'Settings',
+  '/admin/business-info': 'Business Info',
+  '/admin/faqs':          'FAQs',
+  '/admin/triggers':      'Triggers',
+  '/admin/settings':      'Settings',
 }
 
 function getPageTitle(pathname) {
