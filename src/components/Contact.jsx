@@ -73,9 +73,9 @@ export default function Contact() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: form.name, email: form.email, service: form.service }),
         }).catch(console.error)
-        // If AI Automation, also trigger report generation
+        // If AI Automation, generate automation report via our serverless function
         if (data && (form.service === 'AI Automation' || form.service === 'All Three')) {
-          fetch('https://n8n.srv934577.hstgr.cloud/webhook/automation-report', {
+          fetch('/api/generate-report', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...leadData, lead_id: data.id }),
