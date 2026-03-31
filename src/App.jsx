@@ -16,6 +16,7 @@ import PressManager   from './pages/admin/PressManager'
 import ClientManager   from './pages/admin/ClientManager'
 import ClientDetail    from './pages/admin/ClientDetail'
 import ProductsManager from './pages/admin/ProductsManager'
+import Settings        from './pages/admin/Settings'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="clients"         element={<ClientManager />} />
             <Route path="clients/:clientId" element={<ClientDetail />} />
             <Route path="products"        element={<ProductsManager />} />
+            <Route path="settings"        element={<Settings />} />
           </Route>
 
           {/* Portal login */}

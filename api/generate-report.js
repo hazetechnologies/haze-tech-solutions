@@ -3,12 +3,35 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const openaiKey = process.env.OPENAI_API_KEY
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!openaiKey || !supabaseServiceKey) {
-    return res.status(500).json({ error: 'API keys not configured' })
+  if (!supabaseServiceKey) {
+    return res.status(500).json({ error: 'Service key not configured' })
+  }
+
+  // Fetch API key and model from admin_settings in Supabase
+  let openaiKey = process.env.OPENAI_API_KEY || ''
+  let model = 'gpt-4o'
+
+  try {
+    const settingsRes = await fetch(`${supabaseUrl}/rest/v1/admin_settings?select=key,value&key=in.(openai_api_key,report_model)`, {
+      headers: {
+        'apikey': supabaseServiceKey,
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+    })
+    const settingsData = await settingsRes.json()
+    for (const s of settingsData) {
+      if (s.key === 'openai_api_key' && s.value) openaiKey = s.value
+      if (s.key === 'report_model' && s.value) model = s.value
+    }
+  } catch (e) {
+    console.error('Failed to fetch settings:', e.message)
+  }
+
+  if (!openaiKey) {
+    return res.status(500).json({ error: 'OpenAI API key not configured. Go to Admin → Settings to add it.' })
   }
 
   const lead = req.body
@@ -200,7 +223,7 @@ Create a comprehensive automation plan with:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model,
         max_tokens: 2500,
         temperature: 0.7,
         messages: [
