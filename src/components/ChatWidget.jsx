@@ -36,7 +36,7 @@ function ChatWidgetInner() {
         body: JSON.stringify({ messages: apiMsgs, sessionId }),
       })
       const data = await res.json()
-      setMessages(prev => [...prev, { role: 'assistant', text: data.reply || 'Sorry, something went wrong.' }])
+      setMessages(prev => [...prev, { role: 'assistant', text: data.reply || data.error || 'Sorry, something went wrong.' }])
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I'm having trouble connecting. Please try our contact form!" }])
     } finally {
