@@ -10,11 +10,41 @@ export default function AdminLogin() {
   const navigate = useNavigate()
   const { signIn } = useAuth()
 
-  const [view, setView] = useState('login') // 'login' | 'forgot' | 'sent'
+  const [view, setView] = useState('login') // 'login' | 'forgot' | 'sent' | 'reset'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  // Detect password reset token in URL hash
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash.includes('type=recovery') || hash.includes('access_token')) {
+      // Parse hash params
+      const params = new URLSearchParams(hash.replace('#', ''))
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      const errorCode = params.get('error_code')
+
+      if (errorCode === 'otp_expired') {
+        setError('This password reset link has expired. Please request a new one.')
+        setView('forgot')
+        window.history.replaceState(null, '', window.location.pathname)
+        return
+      }
+
+      if (accessToken) {
+        // Set the session so we can update the password
+        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(() => {
+            setView('reset')
+            window.history.replaceState(null, '', window.location.pathname)
+          })
+      }
+    }
+  }, [])
 
   // Simple math captcha
   const [captchaA, setCaptchaA] = useState(0)
@@ -53,6 +83,37 @@ export default function AdminLogin() {
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
       newCaptcha()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault()
+    if (!newPassword || newPassword.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    setError(null)
+    setLoading(true)
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+      if (updateError) {
+        setError(updateError.message || 'Failed to update password')
+      } else {
+        await supabase.auth.signOut()
+        setNewPassword('')
+        setConfirmPassword('')
+        setView('login')
+        setError('Password updated! Sign in with your new password.')
+      }
+    } catch (err) {
+      setError('An unexpected error occurred.')
     } finally {
       setLoading(false)
     }
@@ -184,6 +245,46 @@ export default function AdminLogin() {
             >
               Back to login
             </div>
+          </form>
+        )}
+
+        {/* ── Reset Password View ── */}
+        {view === 'reset' && (
+          <form onSubmit={handleResetPassword} noValidate>
+            <p style={{ color: '#94A3B8', fontSize: '14px', lineHeight: 1.6, marginBottom: '20px' }}>
+              Enter your new password below.
+            </p>
+            <div style={styles.fieldGroup}>
+              <div>
+                <label htmlFor="new-password" style={styles.label}>New Password</label>
+                <input
+                  id="new-password" type="password" autoComplete="new-password"
+                  value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  style={styles.input} disabled={loading} required minLength={6}
+                />
+              </div>
+              <div>
+                <label htmlFor="confirm-password" style={styles.label}>Confirm Password</label>
+                <input
+                  id="confirm-password" type="password" autoComplete="new-password"
+                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter your password"
+                  style={styles.input} disabled={loading} required
+                />
+              </div>
+            </div>
+
+            {error && <div style={styles.errorBox} role="alert">{error}</div>}
+
+            <button
+              type="submit"
+              style={{ ...styles.button, ...(loading || !newPassword || !confirmPassword ? styles.buttonDisabled : {}) }}
+              disabled={loading || !newPassword || !confirmPassword}
+            >
+              {loading && <span style={styles.spinner} />}
+              {loading ? 'Updating...' : 'Update Password'}
+            </button>
           </form>
         )}
 
