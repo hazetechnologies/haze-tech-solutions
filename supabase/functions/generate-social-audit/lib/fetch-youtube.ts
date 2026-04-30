@@ -21,17 +21,23 @@ function parseHandle(input: string): { handle?: string; channelId?: string } {
   return { handle: '@' + trimmed }
 }
 
-async function resolveChannel(input: string): Promise<{ id: string; snippet: any; statistics: any } | null> {
+type ResolveResult =
+  | { kind: 'ok'; channel: { id: string; snippet: any; statistics: any } }
+  | { kind: 'not_found' }
+  | { kind: 'api_error' }
+
+async function resolveChannel(input: string): Promise<ResolveResult> {
   const parsed = parseHandle(input)
   const param = parsed.channelId
     ? `id=${encodeURIComponent(parsed.channelId)}`
     : `forHandle=${encodeURIComponent(parsed.handle!)}`
   const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&${param}&key=${encodeURIComponent(YT_KEY)}`
   const res = await fetch(url)
-  if (!res.ok) return null
+  if (res.status === 403 || res.status >= 500) return { kind: 'api_error' }
+  if (!res.ok) return { kind: 'not_found' }
   const data = await res.json()
-  if (!data.items?.length) return null
-  return data.items[0]
+  if (!data.items?.length) return { kind: 'not_found' }
+  return { kind: 'ok', channel: data.items[0] }
 }
 
 async function fetchRecentVideos(channelId: string): Promise<FetchedPost[]> {
@@ -59,15 +65,24 @@ async function fetchRecentVideos(channelId: string): Promise<FetchedPost[]> {
   }))
 }
 
+function deriveDisplayHandle(channel: { id: string; snippet: any }): string {
+  if (channel.snippet?.customUrl) return '@' + channel.snippet.customUrl
+  return channel.id  // fallback to UC... ID; no @ prefix because title contains spaces/emoji
+}
+
 async function fetchOne(input: string): Promise<FetchedHandle> {
   try {
-    const channel = await resolveChannel(input)
-    if (!channel) {
+    const result = await resolveChannel(input)
+    if (result.kind === 'api_error') {
+      return { handle: input, available: false, unavailable_reason: 'api_error', posts: [] }
+    }
+    if (result.kind === 'not_found') {
       return { handle: input, available: false, unavailable_reason: 'not_found', posts: [] }
     }
+    const { channel } = result
     const posts = await fetchRecentVideos(channel.id)
     return {
-      handle: '@' + (channel.snippet.customUrl ?? channel.snippet.title),
+      handle: deriveDisplayHandle(channel),
       available: true,
       followers_count: parseInt(channel.statistics?.subscriberCount ?? '0', 10),
       media_count: parseInt(channel.statistics?.videoCount ?? '0', 10),
