@@ -1,30 +1,51 @@
 // supabase/functions/generate-social-audit/lib/fetch-instagram.ts
 import type { FetchedHandle, FetchedPlatform, FetchedPost } from './types.ts'
 
+function requireEnv(name: string): string {
+  const v = Deno.env.get(name)
+  if (!v) throw new Error(`${name} must be set`)
+  return v
+}
+
 const GRAPH_VERSION = Deno.env.get('META_GRAPH_VERSION') ?? 'v21.0'
-const IG_BIZ_ID = Deno.env.get('META_IG_BUSINESS_ACCOUNT_ID')!
-const PAGE_TOKEN = Deno.env.get('META_PAGE_ACCESS_TOKEN')!
+const IG_BIZ_ID = requireEnv('META_IG_BUSINESS_ACCOUNT_ID')
+const PAGE_TOKEN = requireEnv('META_PAGE_ACCESS_TOKEN')
 
 const FIELDS = `business_discovery.username({u}){followers_count,media_count,media.limit(20){id,caption,like_count,comments_count,media_type,timestamp,permalink,thumbnail_url,media_url}}`
 
 function normalize(h: string): string {
-  return h.replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/\/$/, '').trim()
+  return h
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
+    .replace(/[?#].*$/, '')
+    .replace(/\/$/, '')
+    .replace(/^@/, '')
+    .trim()
+    .toLowerCase()
+}
+
+function classifyError(code: number, message: string): FetchedHandle['unavailable_reason'] {
+  if (code !== 100) return 'api_error'
+  const m = message.toLowerCase()
+  if (m.includes('does not exist')) return 'not_found'
+  if (m.includes('not a business') || m.includes('not a creator') || m.includes('business account')) {
+    return 'personal_account'
+  }
+  return 'api_error'
 }
 
 async function fetchOne(handle: string): Promise<FetchedHandle> {
   const username = normalize(handle)
-  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${IG_BIZ_ID}?fields=${encodeURIComponent(FIELDS.replace('{u}', username))}&access_token=${PAGE_TOKEN}`
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${IG_BIZ_ID}?fields=${encodeURIComponent(FIELDS.replace('{u}', username))}&access_token=${encodeURIComponent(PAGE_TOKEN)}`
 
   const res = await fetch(url)
+  if (res.status >= 500) {
+    return { handle: '@' + username, available: false, unavailable_reason: 'api_error', posts: [] }
+  }
+
   const data = await res.json()
 
   if (data.error) {
-    const code = data.error.code
-    const msg = String(data.error.message || '')
-    let reason: FetchedHandle['unavailable_reason'] = 'api_error'
-    if (code === 100) {
-      reason = msg.toLowerCase().includes('does not exist') ? 'not_found' : 'personal_account'
-    }
+    const reason = classifyError(data.error.code, String(data.error.message || ''))
     return { handle: '@' + username, available: false, unavailable_reason: reason, posts: [] }
   }
 
