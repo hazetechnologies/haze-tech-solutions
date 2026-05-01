@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
     await update({ status: 'analyzing', progress_message: 'Analyzing content with AI…', raw_data: raw })
 
-    const { systemPrompt, userContent } = buildPrompt(inputs, raw)
+    const { systemPrompt, userContent } = await buildPrompt(inputs, raw)
     const aiRes = await callOpenAI(systemPrompt, userContent)
     const report: AuditReport = JSON.parse(aiRes)
     const markdown = renderMarkdown(report)

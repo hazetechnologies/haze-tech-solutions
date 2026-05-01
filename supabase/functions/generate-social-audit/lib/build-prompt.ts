@@ -93,10 +93,31 @@ Output JSON only, matching the provided schema.
 
 If a platform has unavailable handles (personal account, not found, API error), note it in the report and skip that platform's section if no data was retrieved.`
 
-export function buildPrompt(inputs: AuditInputs, raw: RawData): {
+async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HazeTechAudit/1.0)' }
+    })
+    if (!res.ok) return null
+    const buf = new Uint8Array(await res.arrayBuffer())
+    // Base64-encode in chunks to avoid call-stack overflow for large images
+    let binary = ''
+    const chunkSize = 0x8000
+    for (let i = 0; i < buf.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + chunkSize)))
+    }
+    const b64 = btoa(binary)
+    const ct = res.headers.get('content-type') || 'image/jpeg'
+    return `data:${ct};base64,${b64}`
+  } catch {
+    return null
+  }
+}
+
+export async function buildPrompt(inputs: AuditInputs, raw: RawData): Promise<{
   systemPrompt: string
-  userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
-} {
+  userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: string } }>
+}> {
   const userText = JSON.stringify({ inputs, raw_data: raw }, null, 2)
   const imageUrls: string[] = []
 
@@ -113,11 +134,16 @@ export function buildPrompt(inputs: AuditInputs, raw: RawData): {
     }
   }
 
-  const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
+  // Fetch all images in parallel and inline as base64 data URLs
+  const dataUrls = await Promise.all(imageUrls.map(fetchImageAsDataUrl))
+
+  const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: string } }> = [
     { type: 'text', text: userText }
   ]
-  for (const url of imageUrls) {
-    userContent.push({ type: 'image_url', image_url: { url, detail: 'low' } })
+  for (const dataUrl of dataUrls) {
+    if (dataUrl) {
+      userContent.push({ type: 'image_url', image_url: { url: dataUrl, detail: 'low' } })
+    }
   }
 
   return { systemPrompt: SYSTEM_PROMPT(inputs), userContent }
