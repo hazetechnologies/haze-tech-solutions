@@ -34,16 +34,24 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `db insert failed: ${error.message}` })
   }
 
-  // Fire-and-forget invoke the Edge Function
+  // Invoke the Edge Function. It uses EdgeRuntime.waitUntil to do the long work
+  // in the background and returns {ok:true} immediately, so awaiting here is safe (~1s).
   const edgeUrl = `${process.env.SUPABASE_EDGE_FUNCTION_URL}/generate-social-audit`
-  fetch(edgeUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ audit_id: data.id }),
-  }).catch(err => console.error('Edge Function invoke failed:', err))
+  try {
+    const edgeRes = await fetch(edgeUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ audit_id: data.id }),
+    })
+    if (!edgeRes.ok) {
+      console.error('Edge Function invoke non-ok:', edgeRes.status, await edgeRes.text())
+    }
+  } catch (err) {
+    console.error('Edge Function invoke failed:', err)
+  }
 
   return res.status(200).json({ audit_id: data.id })
 }

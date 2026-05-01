@@ -18,20 +18,28 @@ Deno.serve(async (req) => {
     })
   }
 
+  // @ts-ignore EdgeRuntime is a Supabase global; not in @types/deno
+  EdgeRuntime.waitUntil(processAudit(audit_id))
+
+  return new Response(JSON.stringify({ ok: true, audit_id }), {
+    headers: { 'Content-Type': 'application/json' }
+  })
+})
+
+async function processAudit(audit_id: string): Promise<void> {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
   async function update(patch: Record<string, unknown>) {
     await supabase.from('social_audits').update(patch).eq('id', audit_id)
   }
 
-  async function fail(error: string) {
-    await update({ status: 'failed', error })
-  }
-
   try {
     const { data: row, error: readErr } = await supabase
       .from('social_audits').select('inputs').eq('id', audit_id).single()
-    if (readErr || !row) { await fail(`row not found: ${readErr?.message}`); return ok() }
+    if (readErr || !row) {
+      await update({ status: 'failed', error: `row not found: ${readErr?.message}` })
+      return
+    }
 
     const inputs = validateInputs(row.inputs)
     await update({ status: 'fetching', progress_message: 'Fetching platform data…' })
@@ -48,13 +56,11 @@ Deno.serve(async (req) => {
     }
     await Promise.all(fetches)
 
-    // Aggregation rule from spec: platform "succeeded" iff self handle was fetched
     const igOk = !!raw.instagram?.self?.available
     const ytOk = !!raw.youtube?.self?.available
     if (!igOk && !ytOk) {
-      await update({ raw_data: raw })
-      await fail('All requested platforms failed to fetch the lead\'s own handles.')
-      return ok()
+      await update({ raw_data: raw, status: 'failed', error: 'All requested platforms failed to fetch the lead\'s own handles.' })
+      return
     }
 
     await update({ status: 'analyzing', progress_message: 'Analyzing content with AI…', raw_data: raw })
@@ -71,12 +77,10 @@ Deno.serve(async (req) => {
       report_markdown: markdown,
       completed_at: new Date().toISOString(),
     })
-    return ok()
   } catch (err) {
-    await fail(err instanceof Error ? err.message : String(err))
-    return ok()
+    await update({ status: 'failed', error: err instanceof Error ? err.message : String(err) })
   }
-})
+}
 
 async function callOpenAI(systemPrompt: string, userContent: any[]): Promise<string> {
   const body = {
@@ -104,13 +108,8 @@ async function callOpenAI(systemPrompt: string, userContent: any[]): Promise<str
 
   try {
     return await attempt()
-  } catch (err) {
-    // One retry on rate-limit/transient errors
+  } catch (_err) {
     await new Promise(r => setTimeout(r, 5000))
     return await attempt()
   }
-}
-
-function ok() {
-  return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } })
 }
