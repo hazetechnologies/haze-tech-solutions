@@ -15,9 +15,9 @@ const mdComponents = {
   p:  (props) => <p style={{ margin: '0.75rem 0', color: '#CBD5E1', lineHeight: 1.65 }} {...props} />,
   strong: (props) => <strong style={{ color: '#F1F5F9', fontWeight: 700 }} {...props} />,
   em: (props) => <em style={{ color: '#94A3B8' }} {...props} />,
-  ul: (props) => <ul style={{ margin: '0.75rem 0 1rem', paddingLeft: '1.25rem', color: '#CBD5E1', lineHeight: 1.65 }} {...props} />,
-  ol: (props) => <ol style={{ margin: '0.75rem 0 1rem', paddingLeft: '1.25rem', color: '#CBD5E1', lineHeight: 1.65 }} {...props} />,
-  li: (props) => <li style={{ margin: '0.25rem 0' }} {...props} />,
+  ul: (props) => <ul style={{ margin: '0.75rem 0 1rem', paddingLeft: '1.5rem', color: '#CBD5E1', lineHeight: 1.65, listStyleType: 'disc', listStylePosition: 'outside' }} {...props} />,
+  ol: (props) => <ol style={{ margin: '0.75rem 0 1rem', paddingLeft: '1.5rem', color: '#CBD5E1', lineHeight: 1.65, listStyleType: 'decimal', listStylePosition: 'outside' }} {...props} />,
+  li: (props) => <li style={{ margin: '0.25rem 0', display: 'list-item' }} {...props} />,
   hr: () => <hr style={{ margin: '2rem 0', border: 0, borderTop: '1px solid rgba(255,255,255,0.1)' }} />,
   table: (props) => (
     <div style={{ overflowX: 'auto', margin: '1rem 0' }}>

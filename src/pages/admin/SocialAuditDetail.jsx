@@ -11,9 +11,9 @@ const mdComponents = {
   h3: (props) => <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: '1rem 0 0.5rem' }} {...props} />,
   p:  (props) => <p style={{ margin: '0.5rem 0', lineHeight: 1.6 }} {...props} />,
   strong: (props) => <strong style={{ fontWeight: 700 }} {...props} />,
-  ul: (props) => <ul style={{ margin: '0.5rem 0', paddingLeft: '1.25rem', lineHeight: 1.6 }} {...props} />,
-  ol: (props) => <ol style={{ margin: '0.5rem 0', paddingLeft: '1.25rem', lineHeight: 1.6 }} {...props} />,
-  li: (props) => <li style={{ margin: '0.25rem 0' }} {...props} />,
+  ul: (props) => <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem', lineHeight: 1.6, listStyleType: 'disc', listStylePosition: 'outside' }} {...props} />,
+  ol: (props) => <ol style={{ margin: '0.5rem 0', paddingLeft: '1.5rem', lineHeight: 1.6, listStyleType: 'decimal', listStylePosition: 'outside' }} {...props} />,
+  li: (props) => <li style={{ margin: '0.25rem 0', display: 'list-item' }} {...props} />,
   hr: () => <hr style={{ margin: '1.5rem 0', border: 0, borderTop: '1px solid rgba(255,255,255,0.1)' }} />,
   table: (props) => (
     <div style={{ overflowX: 'auto', margin: '0.75rem 0' }}>
