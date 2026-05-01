@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
 
 async function callOpenAI(systemPrompt: string, userContent: any[]): Promise<string> {
   const body = {
-    model: 'gpt-4o',
+    model: 'gpt-4o-mini',
     response_format: { type: 'json_schema', json_schema: REPORT_JSON_SCHEMA },
     messages: [
       { role: 'system', content: systemPrompt },

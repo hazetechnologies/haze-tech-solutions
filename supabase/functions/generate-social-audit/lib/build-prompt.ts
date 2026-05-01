@@ -117,7 +117,7 @@ export function buildPrompt(inputs: AuditInputs, raw: RawData): {
     { type: 'text', text: userText }
   ]
   for (const url of imageUrls) {
-    userContent.push({ type: 'image_url', image_url: { url } })
+    userContent.push({ type: 'image_url', image_url: { url, detail: 'low' } })
   }
 
   return { systemPrompt: SYSTEM_PROMPT(inputs), userContent }
