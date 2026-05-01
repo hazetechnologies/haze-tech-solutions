@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { Lock } from 'lucide-react'
+import { trackEvent } from '../../lib/telemetry'
 
 const CAPTCHA_SITE_KEY = '6LcXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' // Replace with your reCAPTCHA site key
 
@@ -73,11 +74,14 @@ export default function AdminLogin() {
     setError(null)
     setLoading(true)
     try {
+      trackEvent('portal_login_attempted', { surface: 'admin' })
       const { error: authError } = await signIn(email.trim(), password)
       if (authError) {
+        trackEvent('portal_login_failed', { surface: 'admin', error_code: authError.message })
         setError(authError.message || 'Invalid credentials. Please try again.')
         newCaptcha()
       } else {
+        trackEvent('portal_login_succeeded', { surface: 'admin' })
         navigate('/admin/dashboard')
       }
     } catch (err) {
