@@ -5,6 +5,7 @@ import PortalProtectedRoute from './lib/PortalProtectedRoute'
 
 import MainSite       from './MainSite'
 import AuditPage      from './pages/AuditPage'
+import AuditResults   from './pages/AuditResults'
 
 import AdminLogin     from './pages/admin/AdminLogin'
 import AdminLayout    from './pages/admin/AdminLayout'
@@ -20,6 +21,8 @@ import Settings           from './pages/admin/Settings'
 import BusinessInfo       from './pages/admin/BusinessInfo'
 import FaqManager         from './pages/admin/FaqManager'
 import AutomationTriggers from './pages/admin/AutomationTriggers'
+import SocialAudits       from './pages/admin/SocialAudits'
+import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
@@ -38,6 +41,7 @@ export default function App() {
           {/* Public */}
           <Route path="/"       element={<MainSite />} />
           <Route path="/audit"  element={<AuditPage />} />
+          <Route path="/audit/:id" element={<AuditResults />} />
           <Route path="/blog"   element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
 
@@ -63,6 +67,8 @@ export default function App() {
             <Route path="business-info"   element={<BusinessInfo />} />
             <Route path="faqs"            element={<FaqManager />} />
             <Route path="triggers"        element={<AutomationTriggers />} />
+            <Route path="social-audits"   element={<SocialAudits />} />
+            <Route path="social-audits/:id" element={<SocialAuditDetail />} />
           </Route>
 
           {/* Portal login */}

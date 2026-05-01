@@ -13,6 +13,7 @@ import {
   Building,
   HelpCircle,
   Zap,
+  BarChart3,
   ExternalLink,
   LogOut,
   ChevronRight,
@@ -31,6 +32,7 @@ const navItems = [
   { to: '/admin/business-info', label: 'Business Info', icon: Building },
   { to: '/admin/faqs',          label: 'FAQs',          icon: HelpCircle },
   { to: '/admin/triggers',      label: 'Triggers',      icon: Zap },
+  { to: '/admin/social-audits', label: 'Social Audits', icon: BarChart3 },
   { to: '/admin/settings',      label: 'Settings',      icon: Settings },
 ]
 
@@ -45,6 +47,7 @@ const pageTitles = {
   '/admin/business-info': 'Business Info',
   '/admin/faqs':          'FAQs',
   '/admin/triggers':      'Triggers',
+  '/admin/social-audits': 'Social Audits',
   '/admin/settings':      'Settings',
 }
 
