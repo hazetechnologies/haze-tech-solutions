@@ -40,7 +40,7 @@ function renderPlatform(name: string, report: PlatformReport): string {
   lines.push(`**Visual consistency:** ${report.content_analysis.visual_consistency_score}/10\n`)
 
   lines.push(`**Recommendations**`)
-  for (const r of report.recommendations) lines.push(`- ${r}`)
+  report.recommendations.forEach((r, i) => lines.push(`${i + 1}. ${r}`))
   lines.push('')
 
   return lines.join('\n')
@@ -55,7 +55,7 @@ export function renderMarkdown(report: AuditReport): string {
   if (report.platforms.youtube) lines.push(renderPlatform('YouTube', report.platforms.youtube))
 
   lines.push(`## Top recommendations\n`)
-  for (const r of report.top_recommendations) lines.push(`- ${r}`)
+  report.top_recommendations.forEach((r, i) => lines.push(`${i + 1}. ${r}`))
   lines.push('')
 
   lines.push(`---\n${report.next_steps_cta}\n`)
