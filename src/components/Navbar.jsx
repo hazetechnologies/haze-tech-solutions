@@ -122,15 +122,6 @@ export default function Navbar() {
           >
             Client Login
           </motion.button>
-          <motion.button
-            onClick={() => navigate('/audit')}
-            className="hidden md:inline-flex btn-primary text-sm"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-            aria-label="Get a free audit"
-          >
-            Get a Free Audit
-          </motion.button>
 
           {/* Mobile hamburger */}
           <button
@@ -200,12 +191,6 @@ export default function Navbar() {
                   }}
                 >
                   Client Login
-                </button>
-                <button
-                  onClick={() => { navigate('/audit'); setMenuOpen(false) }}
-                  className="btn-primary w-full justify-center"
-                >
-                  Get a Free Audit
                 </button>
               </motion.li>
             </ul>

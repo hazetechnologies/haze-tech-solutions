@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ChevronDown, Sparkles } from 'lucide-react'
+import { ArrowRight, ChevronDown, Sparkles, Globe } from 'lucide-react'
 
 // Animation variants
 const containerVariants = {
@@ -183,6 +183,37 @@ export default function Hero() {
               >
                 <Sparkles size={15} aria-hidden="true" />
                 Free Social Audit
+              </Link>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ scale: 1.04, boxShadow: '0 0 24px rgba(255,107,0,0.25)' }}
+              whileTap={{ scale: 0.97 }}
+              style={{ display: 'inline-flex' }}
+            >
+              <Link
+                to="/audit"
+                className="text-sm"
+                style={{
+                  fontFamily: 'Orbitron, sans-serif',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  padding: '0.75rem 1.75rem',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255, 107, 0, 0.55)',
+                  background: 'rgba(255, 107, 0, 0.06)',
+                  color: '#FF6B00',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  whiteSpace: 'nowrap',
+                  fontSize: '0.8rem',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <Globe size={15} aria-hidden="true" />
+                Free Website Audit
               </Link>
             </motion.div>
 
