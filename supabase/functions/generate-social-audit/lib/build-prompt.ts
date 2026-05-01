@@ -15,9 +15,10 @@ export const REPORT_JSON_SCHEMA = {
       platforms: {
         type: 'object',
         additionalProperties: false,
+        required: ['instagram', 'youtube'],
         properties: {
-          instagram: { $ref: '#/$defs/platformReport' },
-          youtube:   { $ref: '#/$defs/platformReport' },
+          instagram: { anyOf: [{ $ref: '#/$defs/platformReport' }, { type: 'null' }] },
+          youtube:   { anyOf: [{ $ref: '#/$defs/platformReport' }, { type: 'null' }] },
         }
       },
       top_recommendations: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 10 },
@@ -91,7 +92,7 @@ Your job:
 
 Output JSON only, matching the provided schema.
 
-If a platform has unavailable handles (personal account, not found, API error), note it in the report and skip that platform's section if no data was retrieved.`
+If a platform has no data (not requested, all handles unavailable, etc.), set its value in "platforms" to null. If at least one handle was fetched, include the platform's section. Note unavailable handles in the report's summary.`
 
 async function fetchImageAsDataUrl(url: string): Promise<string | null> {
   try {
