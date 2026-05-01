@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import logoIcon from '../assets/logo/haze-logo-icon.svg'
+import { trackCta } from '../lib/telemetry'
 
 const navLinks = [
   { label: 'Home', href: '#home' },
@@ -81,7 +82,7 @@ export default function Navbar() {
             <li key={link.label}>
               {link.isRoute ? (
                 <button
-                  onClick={() => navigate(link.href)}
+                  onClick={() => { trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar'); navigate(link.href) }}
                   className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
                   style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >
@@ -89,7 +90,7 @@ export default function Navbar() {
                 </button>
               ) : (
                 <button
-                  onClick={() => handleNavClick(link.href)}
+                  onClick={() => { trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar'); handleNavClick(link.href) }}
                   className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
                   style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >
@@ -103,7 +104,7 @@ export default function Navbar() {
         {/* CTA + Hamburger */}
         <div className="flex items-center gap-4">
           <motion.button
-            onClick={() => navigate('/portal/login')}
+            onClick={() => { trackCta('navbar-client-login', 'navbar'); navigate('/portal/login') }}
             className="hidden md:inline-flex text-sm"
             style={{
               background: 'transparent',
@@ -159,7 +160,7 @@ export default function Navbar() {
                   transition={{ delay: i * 0.06 }}
                 >
                   <button
-                    onClick={() => { link.isRoute ? navigate(link.href) : handleNavClick(link.href); setMenuOpen(false) }}
+                    onClick={() => { trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar-mobile'); link.isRoute ? navigate(link.href) : handleNavClick(link.href); setMenuOpen(false) }}
                     className="w-full text-left py-3 px-2 text-text-main font-medium border-b border-white/5 last:border-0 bg-transparent cursor-pointer hover:text-primary transition-colors"
                     style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                   >
@@ -175,7 +176,7 @@ export default function Navbar() {
                 style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
               >
                 <button
-                  onClick={() => { navigate('/portal/login'); setMenuOpen(false) }}
+                  onClick={() => { trackCta('navbar-client-login', 'navbar-mobile'); navigate('/portal/login'); setMenuOpen(false) }}
                   style={{
                     width: '100%',
                     background: 'transparent',

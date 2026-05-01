@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Bot, TrendingUp, Globe, Check, ArrowRight } from 'lucide-react'
+import { trackCta } from '../lib/telemetry'
 
 const services = [
   {
@@ -159,6 +160,7 @@ export default function Services() {
                 {service.cta && (
                   <Link
                     to={service.cta.to}
+                    onClick={() => trackCta(service.cta.to === '/free-social-audit' ? 'services-social-media-audit' : 'services-website-audit', 'services')}
                     className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-all"
                     style={{
                       color: service.accent,
