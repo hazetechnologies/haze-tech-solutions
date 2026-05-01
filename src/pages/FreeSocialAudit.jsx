@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, Link } from 'react-router-dom'
 import { Send, AlertCircle, ArrowLeft, Sparkles, Zap, ShieldCheck } from 'lucide-react'
+import { identifyLead, trackEvent } from '../lib/telemetry'
 
 const INITIAL_FORM = {
   name: '',
@@ -41,6 +42,9 @@ export default function FreeSocialAudit() {
 
     setStatus('loading')
 
+    identifyLead({ email: form.email, name: form.name, source: 'free-social-audit' })
+    trackEvent('lead_submitted', { source: 'free-social-audit' })
+
     const platforms = {}
     if (form.ig_self.trim()) {
       platforms.instagram = {
@@ -79,6 +83,7 @@ export default function FreeSocialAudit() {
       }
       const { audit_id } = await res.json()
       if (!audit_id) throw new Error('No audit id returned')
+      trackEvent('social_audit_started', { audit_id })
       navigate(`/audit/${audit_id}`)
     } catch (err) {
       console.error('start-social-audit failed:', err)

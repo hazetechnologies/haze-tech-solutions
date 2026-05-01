@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { identifyLead, trackEvent } from '../lib/telemetry'
 
 // EmailJS credentials
 const SERVICE_ID = 'service_4uzwhit'
@@ -35,6 +36,9 @@ export default function Contact() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setStatus('loading')
+
+    identifyLead({ email: form.email, name: form.name, source: 'contact' })
+    trackEvent('lead_submitted', { source: 'contact', service: form.service })
 
     // If EmailJS env vars aren't configured, log gracefully and show success UI
     if (!SERVICE_ID || !TEMPLATE_ID || !PUBLIC_KEY) {
