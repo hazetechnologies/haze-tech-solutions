@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -21,12 +22,22 @@ const INITIAL_FORM = {
   repetitive_task: '',
   payment_process: '',
   vendor_process: '',
+  social_ig_self: '',
+  social_ig_comp1: '',
+  social_ig_comp2: '',
+  social_yt_self: '',
+  social_yt_comp1: '',
+  social_yt_comp2: '',
+  social_audience: '',
+  social_goal: 'Leads',
+  social_challenge: '',
 }
 
 export default function Contact() {
   const [form, setForm] = useState(INITIAL_FORM)
   const [status, setStatus] = useState('idle') // idle | loading | success | error
   const [errorMsg, setErrorMsg] = useState('')
+  const navigate = useNavigate()
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -65,8 +76,16 @@ export default function Contact() {
         leadData.payment_process = form.payment_process || null
         leadData.vendor_process = form.vendor_process || null
       }
-      supabase.from('leads').insert(leadData).select().single().then(({ data, error }) => {
-        if (error) { console.error('Supabase lead save error:', error); return }
+      // Add Social Media notes for admin visibility (optional reference)
+      if (form.service === 'Social Media Marketing' || form.service === 'All Three') {
+        // Note: social audit handles are stored separately in social_audits.inputs;
+        // optionally store a quick reference in leads.notes for admin visibility
+        leadData.notes = `IG: ${form.social_ig_self}, YT: ${form.social_yt_self}`.replace(/^IG: , /, '').replace(/, YT: $/, '')
+      }
+      const { data: insertedLead, error: insertError } = await supabase.from('leads').insert(leadData).select().single()
+      if (insertError) {
+        console.error('Supabase lead save error:', insertError)
+      } else {
         // Trigger lead nurture email sequence
         fetch('https://n8n.srv934577.hstgr.cloud/webhook/lead-nurture', {
           method: 'POST',
@@ -74,14 +93,54 @@ export default function Contact() {
           body: JSON.stringify({ name: form.name, email: form.email, service: form.service }),
         }).catch(console.error)
         // If AI Automation, generate automation report via our serverless function
-        if (data && (form.service === 'AI Automation' || form.service === 'All Three')) {
+        if (insertedLead && (form.service === 'AI Automation' || form.service === 'All Three')) {
           fetch('/api/generate-report', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...leadData, lead_id: data.id }),
+            body: JSON.stringify({ ...leadData, lead_id: insertedLead.id }),
           }).catch(console.error)
         }
-      })
+        // If Social Media, kick off the social audit and redirect to the audit page
+        if (insertedLead && (form.service === 'Social Media Marketing' || form.service === 'All Three')) {
+          const platforms = {}
+          if (form.social_ig_self.trim()) {
+            platforms.instagram = {
+              self: form.social_ig_self.trim(),
+              competitors: [form.social_ig_comp1, form.social_ig_comp2].map(s => s.trim()).filter(Boolean),
+            }
+          }
+          if (form.social_yt_self.trim()) {
+            platforms.youtube = {
+              self: form.social_yt_self.trim(),
+              competitors: [form.social_yt_comp1, form.social_yt_comp2].map(s => s.trim()).filter(Boolean),
+            }
+          }
+          if (Object.keys(platforms).length > 0) {
+            try {
+              const auditRes = await fetch('/api/start-social-audit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  lead_id: insertedLead.id,
+                  inputs: {
+                    platforms,
+                    audience: form.social_audience,
+                    goal: form.social_goal,
+                    challenge: form.social_challenge,
+                  },
+                }),
+              })
+              if (auditRes.ok) {
+                const { audit_id } = await auditRes.json()
+                navigate(`/audit/${audit_id}`)
+                return // skip the EmailJS send + success card
+              }
+            } catch (err) {
+              console.error('start-social-audit failed:', err)
+            }
+          }
+        }
+      }
 
       await emailjs.send(
         SERVICE_ID,
@@ -414,6 +473,64 @@ export default function Contact() {
                             rows={2}
                             style={{ ...inputBase, resize: 'vertical' }}
                           />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Social Media Marketing extra fields */}
+                <AnimatePresence>
+                  {(form.service === 'Social Media Marketing' || form.service === 'All Three') && (
+                    <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} exit={{opacity:0, height:0}}
+                      transition={{duration:0.3}} style={{overflow:'hidden'}}>
+                      <div className="space-y-5" style={{
+                        background:'rgba(0,207,255,0.04)', border:'1px solid rgba(0,207,255,0.12)',
+                        borderRadius:12, padding:'1.25rem', marginBottom:'1.25rem',
+                      }}>
+                        <p style={{fontSize:'0.8rem', color:'#00CFFF', fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase', margin:'0 0 0.75rem'}}>
+                          Social Media Audit Details
+                        </p>
+
+                        <div>
+                          <p style={{fontSize:'0.75rem', color:'#94A3B8', margin:'0 0 0.5rem'}}>Instagram</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <input name="social_ig_self" value={form.social_ig_self} onChange={handleChange} placeholder="@yourbiz" style={inputBase} />
+                            <input name="social_ig_comp1" value={form.social_ig_comp1} onChange={handleChange} placeholder="Competitor 1" style={inputBase} />
+                            <input name="social_ig_comp2" value={form.social_ig_comp2} onChange={handleChange} placeholder="Competitor 2" style={inputBase} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <p style={{fontSize:'0.75rem', color:'#94A3B8', margin:'0 0 0.5rem'}}>YouTube</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <input name="social_yt_self" value={form.social_yt_self} onChange={handleChange} placeholder="@yourchannel or URL" style={inputBase} />
+                            <input name="social_yt_comp1" value={form.social_yt_comp1} onChange={handleChange} placeholder="Competitor 1" style={inputBase} />
+                            <input name="social_yt_comp2" value={form.social_yt_comp2} onChange={handleChange} placeholder="Competitor 2" style={inputBase} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-muted mb-2">Who's your target audience?</label>
+                          <textarea name="social_audience" value={form.social_audience} onChange={handleChange} rows={2}
+                            placeholder="e.g. Small business owners in real estate" style={{...inputBase, resize:'vertical'}} />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium text-muted mb-2">Primary goal</label>
+                            <select name="social_goal" value={form.social_goal} onChange={handleChange} style={{...inputBase, cursor:'pointer'}}>
+                              <option value="Engagement" style={{background:'#071526'}}>Engagement</option>
+                              <option value="Leads" style={{background:'#071526'}}>Leads</option>
+                              <option value="Awareness" style={{background:'#071526'}}>Awareness</option>
+                              <option value="Sales" style={{background:'#071526'}}>Sales</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-muted mb-2">Biggest challenge</label>
+                            <textarea name="social_challenge" value={form.social_challenge} onChange={handleChange} rows={2}
+                              placeholder="Inconsistent posting, low engagement, etc." style={{...inputBase, resize:'vertical'}} />
+                          </div>
                         </div>
                       </div>
                     </motion.div>
