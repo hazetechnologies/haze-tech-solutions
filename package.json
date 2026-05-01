@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
+    "@sentry/react": "^8.55.2",
     "@supabase/supabase-js": "^2.100.1",
     "@tiptap/extension-image": "^3.21.0",
     "@tiptap/extension-link": "^3.21.0",
@@ -20,6 +21,8 @@
     "@tiptap/starter-kit": "^3.21.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.0.1",
+    "posthog-js": "^1.372.6",
+    "posthog-node": "^4.18.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
