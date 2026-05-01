@@ -6,10 +6,7 @@ import remarkGfm from 'remark-gfm'
 
 const POLL_INTERVAL_MS = 2000
 const MAX_POLL_MS = 5 * 60 * 1000
-// TODO: replace with a Google Calendar Appointment Schedule URL
-// (https://calendar.app.google/...) once one is created. The embed URL below
-// just shows the calendar — leads can see availability but can't directly book.
-const BOOK_CALL_URL = 'https://calendar.google.com/calendar/embed?src=8f05d773fb5499b3a71dd2011b454394fc438ccee26515e2c9cb89573ea5d8e3%40group.calendar.google.com&ctz=America%2FNew_York'
+const BOOK_CALL_URL = 'https://calendar.app.google/uSe5kj6VBp1nfK4Q6'
 
 const mdComponents = {
   h1: (props) => <h1 style={{ fontSize: '2.25rem', fontWeight: 800, margin: '0 0 1.5rem', color: '#F1F5F9', lineHeight: 1.15 }} {...props} />,
