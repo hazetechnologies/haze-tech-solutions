@@ -24,9 +24,60 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'at least one platform with a self handle is required' })
   }
 
+  // If no lead_id was supplied but we have an email in inputs, find-or-create
+  // a leads row so audit submissions show up in the admin CRM.
+  let resolvedLeadId = lead_id || null
+  const inputEmail = typeof inputs.email === 'string' ? inputs.email.trim().toLowerCase() : ''
+  if (!resolvedLeadId && inputEmail) {
+    try {
+      const { data: existing, error: lookupErr } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('email', inputEmail)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (lookupErr) {
+        console.error('lead lookup error:', lookupErr)
+      }
+      if (existing?.id) {
+        resolvedLeadId = existing.id
+      } else {
+        const { data: insertedLead, error: insertErr } = await supabase
+          .from('leads')
+          .insert({
+            name: inputs.name || null,
+            email: inputEmail,
+            business_name: inputs.business_name || null,
+            service_interest: 'Social Media Marketing',
+            source: 'free-social-audit',
+          })
+          .select('id')
+          .single()
+        if (insertErr) {
+          console.error('lead insert error:', insertErr)
+        } else if (insertedLead?.id) {
+          resolvedLeadId = insertedLead.id
+          // Fire-and-forget: nurture sequence
+          fetch('https://n8n.srv934577.hstgr.cloud/webhook/lead-nurture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: inputs.name || '',
+              email: inputEmail,
+              service: 'Social Media Marketing',
+            }),
+          }).catch(err => console.error('lead-nurture trigger failed:', err))
+        }
+      }
+    } catch (err) {
+      console.error('lead resolve failed (non-fatal):', err)
+    }
+  }
+
   const { data, error } = await supabase
     .from('social_audits')
-    .insert({ lead_id: lead_id || null, inputs, status: 'pending', progress_message: 'Queued…' })
+    .insert({ lead_id: resolvedLeadId, inputs, status: 'pending', progress_message: 'Queued…' })
     .select('id')
     .single()
 

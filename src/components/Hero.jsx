@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
-import { ArrowRight, ChevronDown } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, ChevronDown, Sparkles } from 'lucide-react'
 
 // Animation variants
 const containerVariants = {
@@ -153,6 +154,37 @@ export default function Hero() {
               Get Started
               <ArrowRight size={16} aria-hidden="true" />
             </motion.button>
+
+            <motion.div
+              whileHover={{ scale: 1.04, boxShadow: '0 0 24px rgba(0,207,255,0.25)' }}
+              whileTap={{ scale: 0.97 }}
+              style={{ display: 'inline-flex' }}
+            >
+              <Link
+                to="/free-social-audit"
+                className="text-sm"
+                style={{
+                  fontFamily: 'Orbitron, sans-serif',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  padding: '0.75rem 1.75rem',
+                  borderRadius: 8,
+                  border: '1px solid rgba(0, 207, 255, 0.55)',
+                  background: 'rgba(0, 207, 255, 0.06)',
+                  color: '#00CFFF',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  whiteSpace: 'nowrap',
+                  fontSize: '0.8rem',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <Sparkles size={15} aria-hidden="true" />
+                Free Social Audit
+              </Link>
+            </motion.div>
 
             <motion.button
               onClick={() => handleScroll('#portfolio')}

@@ -3,9 +3,10 @@ import { AuthProvider } from './lib/AuthContext'
 import ProtectedRoute from './lib/ProtectedRoute'
 import PortalProtectedRoute from './lib/PortalProtectedRoute'
 
-import MainSite       from './MainSite'
-import AuditPage      from './pages/AuditPage'
-import AuditResults   from './pages/AuditResults'
+import MainSite        from './MainSite'
+import AuditPage       from './pages/AuditPage'
+import AuditResults    from './pages/AuditResults'
+import FreeSocialAudit from './pages/FreeSocialAudit'
 
 import AdminLogin     from './pages/admin/AdminLogin'
 import AdminLayout    from './pages/admin/AdminLayout'
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/"       element={<MainSite />} />
           <Route path="/audit"  element={<AuditPage />} />
           <Route path="/audit/:id" element={<AuditResults />} />
+          <Route path="/free-social-audit" element={<FreeSocialAudit />} />
           <Route path="/blog"   element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
 

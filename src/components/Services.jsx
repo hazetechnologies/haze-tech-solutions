@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
-import { Bot, TrendingUp, Globe, Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Bot, TrendingUp, Globe, Check, ArrowRight } from 'lucide-react'
 
 const services = [
   {
@@ -29,6 +30,7 @@ const services = [
       'Analytics & growth reporting',
       'Brand voice development',
     ],
+    cta: { label: 'Get a Free Social Audit', to: '/free-social-audit' },
   },
   {
     icon: Globe,
@@ -152,6 +154,22 @@ export default function Services() {
                     </li>
                   ))}
                 </ul>
+
+                {/* Per-service CTA */}
+                {service.cta && (
+                  <Link
+                    to={service.cta.to}
+                    className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-all"
+                    style={{
+                      color: service.accent,
+                      textDecoration: 'none',
+                      letterSpacing: '0.01em',
+                    }}
+                  >
+                    {service.cta.label}
+                    <ArrowRight size={14} aria-hidden="true" />
+                  </Link>
+                )}
 
                 {/* Bottom accent line */}
                 <div
