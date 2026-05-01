@@ -36,11 +36,18 @@ import PortalInvoices  from './pages/portal/PortalInvoices'
 
 import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
+import useTelemetryIdentity from './hooks/useTelemetryIdentity'
+
+function TelemetryIdentityMount() {
+  useTelemetryIdentity()
+  return null
+}
 
 export default function App() {
   return (
     <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryFallback resetError={resetError} />}>
       <AuthProvider>
+        <TelemetryIdentityMount />
         <BrowserRouter>
           <Routes>
           {/* Public */}
