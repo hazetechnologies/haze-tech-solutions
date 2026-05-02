@@ -10,6 +10,7 @@ import {
   buildContentPillarsPrompt,
   buildContentCalendarPrompt,
   buildColorPalettePrompt,
+  buildImagePrompt,
 } from './prompts.ts'
 import type {
   BrandKitInputs,
@@ -17,12 +18,18 @@ import type {
   ColorPaletteEntry,
   ContentPillar,
   ContentCalendarEntry,
+  ImageAssetId,
+  ImageAssetRef,
 } from './types.ts'
+import { uploadImage } from '../_shared/r2-upload.ts'
+import { resizeToFinalDims } from './post-process.ts'
+import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
 
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY')!
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const OPUS_MODEL = 'claude-opus-4-7'
 const MINI_MODEL = 'gpt-4o-mini'
+const IMAGE_RETRY_DELAYS_MS = [30_000, 60_000, 120_000]  // 3 retry attempts
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -73,10 +80,10 @@ async function processBrandKit(kit_id: string): Promise<void> {
     // ── Text generation (parallel) ──
     const textAssets = await generateAllText(inputs, kit_id)
 
-    await update({ progress_message: 'Drafting copy done. Images next…' })
+    await update({ progress_message: 'Drafting copy done. Generating images…' })
 
-    // Image generation (Task 8 implements). For now, empty images map.
-    const images: Partial<Record<string, { r2_key: string; public_url: string }>> = {}
+    // ── Image generation (serial with retry-on-rate-limit) ──
+    const images = await generateAllImages(inputs, textAssets.color_palette, client_id, kit_id)
 
     const assets: Partial<BrandKitAssets> = {
       ...textAssets,
@@ -88,8 +95,6 @@ async function processBrandKit(kit_id: string): Promise<void> {
       progress_message: null,
       assets,
     })
-
-    void client_id  // used in Task 8
   } catch (err) {
     await update({
       status: 'failed',
@@ -222,4 +227,113 @@ async function callOpusPalette(inputs: BrandKitInputs, kitId: string, evtProps: 
     throw new Error('opus palette: expected exactly 5 colors')
   }
   return parsed.palette
+}
+
+// ── Image generation (serial with retry-on-rate-limit) ──
+
+async function generateAllImages(
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  clientId: string,
+  kitId: string,
+): Promise<Record<ImageAssetId, ImageAssetRef>> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
+
+  for (const assetId of ALL_ASSET_IDS) {
+    const spec = SIZES[assetId]
+    const prompt = buildImagePrompt(assetId, inputs, palette)
+    const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
+    const resized = await resizeToFinalDims(generated, spec)
+    const uploaded = await uploadImage({
+      bytes: resized,
+      clientId,
+      timestamp,
+      assetId,
+    })
+    out[assetId] = uploaded
+  }
+
+  return out as Record<ImageAssetId, ImageAssetRef>
+}
+
+async function generateImageWithRetry(
+  prompt: string,
+  size: '1024x1024' | '1024x1536' | '1536x1024',
+  kitId: string,
+  assetId: string,
+): Promise<Uint8Array> {
+  let lastErr: unknown = null
+  for (let attempt = 0; attempt < IMAGE_RETRY_DELAYS_MS.length + 1; attempt++) {
+    try {
+      const start = Date.now()
+      const res = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${OPENAI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-image-2',
+          prompt,
+          size,
+          n: 1,
+        }),
+      })
+      const latencyMs = Date.now() - start
+
+      // Fire-and-forget telemetry (image gen has its own endpoint, not chat completions,
+      // so we manually capture rather than going through trackedOpenAi).
+      const POSTHOG_KEY = Deno.env.get('POSTHOG_PROJECT_API_KEY')
+      const POSTHOG_HOST = Deno.env.get('POSTHOG_HOST') ?? 'https://us.i.posthog.com'
+      if (POSTHOG_KEY) {
+        fetch(`${POSTHOG_HOST}/capture/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: POSTHOG_KEY,
+            event: '$ai_generation',
+            distinct_id: kitId,
+            properties: {
+              $ai_model: 'gpt-image-2',
+              $ai_provider: 'openai',
+              $ai_latency: latencyMs,
+              $ai_http_status: res.status,
+              surface: 'brand-kit',
+              kit_id: kitId,
+              asset_id: assetId,
+            },
+          }),
+        }).catch(() => {})
+      }
+
+      if (res.status === 429 && attempt < IMAGE_RETRY_DELAYS_MS.length) {
+        await new Promise(r => setTimeout(r, IMAGE_RETRY_DELAYS_MS[attempt]))
+        continue
+      }
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(`gpt-image-2 ${res.status} on ${assetId}: ${errText.slice(0, 300)}`)
+      }
+      const json = await res.json() as { data?: Array<{ b64_json?: string; url?: string }> }
+      const item = json.data?.[0]
+      if (!item) throw new Error(`gpt-image-2 returned no image for ${assetId}`)
+      if (item.b64_json) {
+        return Uint8Array.from(atob(item.b64_json), c => c.charCodeAt(0))
+      }
+      if (item.url) {
+        const dl = await fetch(item.url)
+        if (!dl.ok) throw new Error(`failed to download generated image for ${assetId}: ${dl.status}`)
+        return new Uint8Array(await dl.arrayBuffer())
+      }
+      throw new Error(`gpt-image-2 returned no b64_json or url for ${assetId}`)
+    } catch (err) {
+      lastErr = err
+      if (attempt < IMAGE_RETRY_DELAYS_MS.length) {
+        await new Promise(r => setTimeout(r, IMAGE_RETRY_DELAYS_MS[attempt]))
+        continue
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(`image gen exhausted retries: ${String(lastErr)}`)
 }
