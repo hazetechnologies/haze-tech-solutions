@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { trackEvent } from '../lib/telemetry'
 
 function ChatWidgetInner() {
   const [sessionId] = useState(() => {
@@ -24,6 +25,7 @@ function ChatWidgetInner() {
   async function sendMessage() {
     const text = input.trim()
     if (!text || loading) return
+    trackEvent('chatbot_message_sent', { message_length: text.length })
     const updated = [...messages, { role: 'user', text }]
     setMessages(updated)
     setInput('')
@@ -46,7 +48,7 @@ function ChatWidgetInner() {
 
   if (!open) {
     return (
-      <div onClick={() => setOpen(true)} style={{
+      <div onClick={() => { trackEvent('chatbot_opened'); setOpen(true) }} style={{
         position: 'fixed', bottom: 24, right: 24, width: 56, height: 56, borderRadius: '50%',
         background: 'linear-gradient(135deg, #00D4FF, #0099CC)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: 'pointer', zIndex: 2147483647, boxShadow: '0 4px 24px rgba(0,212,255,0.4)',

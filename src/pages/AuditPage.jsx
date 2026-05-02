@@ -7,6 +7,7 @@ import {
   ArrowLeft, Search, CheckCircle, XCircle, AlertTriangle,
   Zap, Smartphone, Shield, TrendingUp, ExternalLink, RotateCcw, Check,
 } from 'lucide-react'
+import { identifyLead, trackEvent } from '../lib/telemetry'
 
 const SERVICE_ID = 'service_4uzwhit'
 const TEMPLATE_ID = 'template_oznyojk'
@@ -120,6 +121,10 @@ export default function AuditPage() {
     let url = lead.url.trim()
     if (!url.startsWith('http')) url = 'https://' + url
 
+    identifyLead({ email: lead.email, name: lead.name, source: 'website-audit' })
+    trackEvent('lead_submitted', { source: 'website-audit', url })
+    trackEvent('website_audit_started', { url })
+
     /* Capture lead via EmailJS */
     emailjs.send(SERVICE_ID, TEMPLATE_ID, {
       from_name: lead.name,
@@ -158,9 +163,11 @@ export default function AuditPage() {
         overall_score: scores.overall,
       }).then(({ error }) => { if (error) console.error('Supabase audit save error:', error) })
 
+      trackEvent('website_audit_completed', { url, overall_score: scores.overall })
       setAuditData({ mobile, desktop, design, url })
       setPhase('report')
     } catch (err) {
+      trackEvent('website_audit_failed', { url, error: err.message })
       setErrorMsg(err.message || 'Something went wrong. Please try again.')
       setPhase('form')
     }

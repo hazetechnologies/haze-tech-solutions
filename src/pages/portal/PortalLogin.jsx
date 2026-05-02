@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { User } from 'lucide-react'
+import { trackEvent } from '../../lib/telemetry'
 
 export default function PortalLogin() {
   const navigate = useNavigate()
@@ -20,8 +21,10 @@ export default function PortalLogin() {
     setError(null)
     setLoading(true)
     try {
+      trackEvent('portal_login_attempted', { surface: 'portal' })
       const { data, error: authError } = await signIn(email.trim(), password)
       if (authError) {
+        trackEvent('portal_login_failed', { surface: 'portal', error_code: authError.message })
         setError(authError.message || 'Invalid credentials.')
         return
       }
@@ -37,6 +40,7 @@ export default function PortalLogin() {
         return
       }
 
+      trackEvent('portal_login_succeeded', { surface: 'portal' })
       navigate('/portal/dashboard')
     } catch (err) {
       setError('An unexpected error occurred.')

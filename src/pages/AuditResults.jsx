@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { trackEvent } from '../lib/telemetry'
 
 const POLL_INTERVAL_MS = 2000
 const MAX_POLL_MS = 5 * 60 * 1000
@@ -48,9 +49,18 @@ export default function AuditResults() {
         if (cancelled) return
         setState(data)
 
-        if (data.status === 'completed' || data.status === 'failed') return
+        if (data.status === 'completed') {
+          const duration_ms = Date.now() - startedAt.current
+          trackEvent('social_audit_completed', { audit_id: id, duration_ms })
+          return
+        }
+        if (data.status === 'failed') {
+          trackEvent('social_audit_failed', { audit_id: id, error: data.error })
+          return
+        }
         if (Date.now() - startedAt.current > MAX_POLL_MS) {
           setStalled(true)
+          trackEvent('social_audit_failed', { audit_id: id, error: 'stalled' })
           return
         }
         timer = setTimeout(poll, POLL_INTERVAL_MS)

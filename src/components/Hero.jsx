@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { ArrowRight, ChevronDown, Sparkles, Globe } from 'lucide-react'
+import { trackCta } from '../lib/telemetry'
 
 // Animation variants
 const containerVariants = {
@@ -146,7 +147,7 @@ export default function Hero() {
             className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
             <motion.button
-              onClick={() => handleScroll('#contact')}
+              onClick={() => { trackCta('hero-get-started', 'hero'); handleScroll('#contact') }}
               className="btn-primary text-sm"
               whileHover={{ scale: 1.06, boxShadow: '0 0 30px rgba(0,212,255,0.5)' }}
               whileTap={{ scale: 0.97 }}
@@ -162,6 +163,7 @@ export default function Hero() {
             >
               <Link
                 to="/free-social-audit"
+                onClick={() => trackCta('hero-free-social-audit', 'hero')}
                 className="text-sm"
                 style={{
                   fontFamily: 'Orbitron, sans-serif',
@@ -193,6 +195,7 @@ export default function Hero() {
             >
               <Link
                 to="/audit"
+                onClick={() => trackCta('hero-free-website-audit', 'hero')}
                 className="text-sm"
                 style={{
                   fontFamily: 'Orbitron, sans-serif',
@@ -218,7 +221,7 @@ export default function Hero() {
             </motion.div>
 
             <motion.button
-              onClick={() => handleScroll('#portfolio')}
+              onClick={() => { trackCta('hero-see-our-work', 'hero'); handleScroll('#portfolio') }}
               className="btn-secondary text-sm"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}

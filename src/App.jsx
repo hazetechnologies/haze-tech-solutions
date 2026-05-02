@@ -34,11 +34,22 @@ import PortalDashboard from './pages/portal/PortalDashboard'
 import PortalProject   from './pages/portal/PortalProject'
 import PortalInvoices  from './pages/portal/PortalInvoices'
 
+import * as Sentry from '@sentry/react'
+import SentryFallback from './components/SentryFallback'
+import useTelemetryIdentity from './hooks/useTelemetryIdentity'
+
+function TelemetryIdentityMount() {
+  useTelemetryIdentity()
+  return null
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryFallback resetError={resetError} />}>
+      <AuthProvider>
+        <TelemetryIdentityMount />
+        <BrowserRouter>
+          <Routes>
           {/* Public */}
           <Route path="/"       element={<MainSite />} />
           <Route path="/audit"  element={<AuditPage />} />
@@ -87,8 +98,9 @@ export default function App() {
             <Route path="projects/:projectId"  element={<PortalProject />} />
             <Route path="invoices"             element={<PortalInvoices />} />
           </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </Sentry.ErrorBoundary>
   )
 }

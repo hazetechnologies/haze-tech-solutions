@@ -6,6 +6,7 @@ import { fetchYouTube } from './lib/fetch-youtube.ts'
 import { buildPrompt, REPORT_JSON_SCHEMA } from './lib/build-prompt.ts'
 import { renderMarkdown } from './lib/render-markdown.ts'
 import type { RawData, AuditReport } from './lib/types.ts'
+import { trackedOpenAi } from '../_shared/tracked-openai.ts'
 
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY')!
 
@@ -66,7 +67,7 @@ async function processAudit(audit_id: string): Promise<void> {
     await update({ status: 'analyzing', progress_message: 'Analyzing content with AI…', raw_data: raw })
 
     const { systemPrompt, userContent } = await buildPrompt(inputs, raw)
-    const aiRes = await callOpenAI(systemPrompt, userContent)
+    const aiRes = await callOpenAI(systemPrompt, userContent, audit_id)
     const report: AuditReport = JSON.parse(aiRes)
     const markdown = renderMarkdown(report)
 
@@ -82,27 +83,25 @@ async function processAudit(audit_id: string): Promise<void> {
   }
 }
 
-async function callOpenAI(systemPrompt: string, userContent: any[]): Promise<string> {
-  const body = {
-    model: 'gpt-4o-mini',
-    response_format: { type: 'json_schema', json_schema: REPORT_JSON_SCHEMA },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent },
-    ],
-  }
-
+async function callOpenAI(systemPrompt: string, userContent: any[], auditId: string): Promise<string> {
   const attempt = async () => {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
-      body: JSON.stringify(body),
+    const { data, status } = await trackedOpenAi({
+      apiKey: OPENAI_KEY,
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      params: {
+        response_format: { type: 'json_schema', json_schema: REPORT_JSON_SCHEMA },
+      },
+      distinctId: auditId,
+      eventProperties: { surface: 'social-audit', audit_id: auditId },
     })
-    if (!res.ok) {
-      const errText = await res.text()
-      throw new Error(`OpenAI ${res.status}: ${errText.slice(0, 500)}`)
+    if (status !== 200) {
+      const errText = JSON.stringify(data).slice(0, 500)
+      throw new Error(`OpenAI ${status}: ${errText}`)
     }
-    const data = await res.json()
     return data.choices?.[0]?.message?.content ?? ''
   }
 
