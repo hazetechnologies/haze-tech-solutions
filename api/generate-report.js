@@ -1,3 +1,5 @@
+import { trackedOpenAi } from './_lib/tracked-openai.js'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -216,24 +218,18 @@ Create a comprehensive automation plan with:
 6. RECOMMENDED PACKAGE & PRICING TIER`
 
   try {
-    const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2500,
-        temperature: 0.7,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
+    const { data: aiData } = await trackedOpenAi({
+      apiKey: openaiKey,
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      params: { max_tokens: 2500, temperature: 0.7 },
+      distinctId: req.body?.lead_id ?? req.body?.email ?? 'anonymous',
+      eventProperties: { surface: 'automation-report' },
     })
 
-    const aiData = await aiRes.json()
     const report = aiData.choices?.[0]?.message?.content
 
     if (!report) {

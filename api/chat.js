@@ -1,3 +1,5 @@
+import { trackedOpenAi } from './_lib/tracked-openai.js'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -96,24 +98,18 @@ export default async function handler(req, res) {
 
   // ── Call OpenAI ──
   try {
-    const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        temperature: 0.7,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages.slice(-10),
-        ],
-      }),
+    const { data: aiData } = await trackedOpenAi({
+      apiKey: openaiKey,
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages.slice(-10),
+      ],
+      params: { max_tokens: maxTokens, temperature: 0.7 },
+      distinctId: sessionId || 'anonymous',
+      eventProperties: { surface: 'chatbot' },
     })
 
-    const aiData = await aiRes.json()
     let reply = aiData.choices?.[0]?.message?.content || 'Sorry, something went wrong.'
 
     // ── Check for trigger tags and fire webhooks ──
