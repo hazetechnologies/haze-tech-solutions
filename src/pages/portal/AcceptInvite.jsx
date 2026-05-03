@@ -14,28 +14,37 @@ export default function AcceptInvite() {
   useEffect(() => {
     let cancelled = false
 
-    // Supabase JS auto-detects session in URL hash. We watch for SIGNED_IN
-    // and verify the URL hash contains type=invite (vs a normal login).
-    const hash = window.location.hash || ''
-    const isInvite = hash.includes('type=invite') || hash.includes('type=recovery')
+    // Supabase JS auto-detects session in URL hash. Parse properly to avoid
+    // substring false-positives, then watch for SIGNED_IN to confirm.
+    const params = new URLSearchParams((window.location.hash || '').replace(/^#/, ''))
+    const isInvite = params.get('type') === 'invite'
 
     // Give the supabase client a brief moment to process the URL hash, then check session.
+    // On slow networks, the listener may fire later — only mark 'invalid' if there's
+    // no invite hash at all. With an invite hash, trust the listener.
     const timer = setTimeout(async () => {
       if (cancelled) return
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session && isInvite) {
-        setView('ready')
-      } else if (session && !isInvite) {
-        // Already logged in (returning visitor) — bounce to portal
-        navigate('/portal', { replace: true })
-      } else {
-        setView('invalid')
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session && isInvite) {
+          setView(v => (v === 'verifying' ? 'ready' : v))
+        } else if (session && !isInvite) {
+          // Already logged in (returning visitor) — bounce to portal
+          navigate('/portal', { replace: true })
+        } else if (!isInvite) {
+          // No invite hash and no session — definitely not a valid invite landing
+          setView('invalid')
+        }
+        // else: isInvite but no session yet — wait for the listener
+      } catch (e) {
+        console.error('AcceptInvite getSession failed:', e)
+        if (!isInvite) setView('invalid')
       }
     }, 600)
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return
-      if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && session && isInvite) {
+      if (event === 'SIGNED_IN' && session && isInvite) {
         setView('ready')
       }
     })
