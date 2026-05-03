@@ -195,7 +195,7 @@ function AddClientModal({ onClose, onCreated }) {
         body: JSON.stringify(form),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Failed to create client')
+      if (!res.ok) throw new Error(result.message || result.error || 'Failed to create client')
       onCreated(result.client)
     } catch (err) {
       setError(err.message)
