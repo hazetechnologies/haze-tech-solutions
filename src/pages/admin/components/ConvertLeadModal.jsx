@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { trackEvent } from '../../../lib/telemetry'
 import { X, Send, Link2, CheckCircle2, AlertCircle } from 'lucide-react'
@@ -24,6 +25,8 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
   const [error, setError] = useState(null)
 
   // form fields — name and company prefilled, email locked
+  // Parent (Leads.jsx) only mounts this when a lead is selected, so
+  // `lead` is always non-null on first render.
   const [form, setForm] = useState({
     name: lead?.name || '',
     company: lead?.business_name || '',
@@ -53,7 +56,11 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
       },
       body: JSON.stringify(payload),
     })
-    const data = await res.json()
+    // Tolerate non-JSON 5xx responses (Vercel HTML error pages, gateway errors).
+    const text = await res.text()
+    let data = {}
+    try { data = text ? JSON.parse(text) : {} } catch { /* leave empty */ }
+    if (!data.message && !res.ok) data.message = `Server error (${res.status})`
     return { res, data }
   }
 
@@ -152,8 +159,13 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
     }
   }
 
+  // Block dismiss while a request is in-flight: clicking the overlay or X
+  // mid-submit would unmount the modal but the fetch keeps running, leaving
+  // a ghost client + no badge in UI.
+  const safeClose = submitting ? undefined : onClose
+
   return (
-    <div onClick={onClose} style={overlay}>
+    <div onClick={safeClose} style={overlay}>
       <div onClick={e => e.stopPropagation()} style={modal}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
@@ -165,7 +177,7 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
               {lead.name} · {lead.email}
             </div>
           </div>
-          <button onClick={onClose} style={closeBtn}><X size={18} /></button>
+          <button onClick={safeClose} disabled={submitting} style={{ ...closeBtn, opacity: submitting ? 0.4 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }}><X size={18} /></button>
         </div>
 
         {/* Error banner */}
@@ -246,9 +258,9 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={onClose} style={ghostBtn}>Close</button>
-              <a href={`/admin/clients/${result.client_id}`} style={{ ...primaryBtn, textDecoration: 'none' }}>
+              <Link to={`/admin/clients/${result.client_id}`} style={{ ...primaryBtn, textDecoration: 'none' }}>
                 Open client
-              </a>
+              </Link>
             </div>
           </div>
         )}
