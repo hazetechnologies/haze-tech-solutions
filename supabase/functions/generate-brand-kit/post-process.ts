@@ -2,7 +2,7 @@
 //
 // Uses imagescript (pure JS) instead of sharp because sharp's native binary
 // fails to load in the Supabase Deno Edge Runtime.
-import { Image } from 'npm:imagescript@^1.3.0'
+import { Image } from 'https://deno.land/x/imagescript@1.2.17/mod.ts'
 import type { SizeSpec } from './sizes.ts'
 
 /** Resize/crop a generated image to its final platform dimensions. */
