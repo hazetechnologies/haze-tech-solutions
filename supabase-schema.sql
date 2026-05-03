@@ -96,16 +96,5 @@ INSERT INTO portfolio_items (title, client, industry, problem, result, service_t
   ('Social Media Growth Campaign', 'Ember Boutique', 'Retail', 'Stagnant Instagram presence with low engagement and 12K followers', '12K → 47K Instagram followers in 90 days, 4× engagement rate', 'Social Media', 'case_study', true, 2),
   ('Website Redesign & SEO', 'Summit Legal Group', 'Professional Services', 'Outdated website with high bounce rate and poor search rankings', '210% organic traffic increase, 55% lower bounce rate in 90 days', 'Website Dev', 'case_study', true, 3);
 
--- ─── Lead → Client conversion (2026-05-03) ────────────────────────────
--- Forward link from a converted lead to the client it became.
--- ON DELETE SET NULL: if a client is removed, the lead remains as
--- historical record but the link clears.
--- NOTE: Requires `clients` table from supabase-portal-schema.sql — run that
--- file first when bootstrapping a fresh environment, or this FK will fail.
-ALTER TABLE leads
-  ADD COLUMN IF NOT EXISTS converted_to_client_id uuid
-  REFERENCES clients(id) ON DELETE SET NULL;
-
--- Partial index — most leads will not be converted, so keep index small.
-CREATE INDEX IF NOT EXISTS leads_converted_to_client_id_idx
-  ON leads(converted_to_client_id) WHERE converted_to_client_id IS NOT NULL;
+-- NOTE: The leads.converted_to_client_id FK lives in supabase-portal-schema.sql
+-- since it references the `clients` table defined there.
