@@ -1,11 +1,5 @@
 // api/start-brand-kit.js
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
-)
+import { requireAdmin } from './_lib/require-admin'
 
 const REQUIRED_PATH3_FIELDS = [
   'business_name', 'business_description', 'industry', 'audience',
@@ -19,25 +13,12 @@ const REQUIRED_PATH1_FIELDS = [
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
-    return res.status(405).json({ error: 'Method not allowed' })
+    return res.status(405).json({ error: 'method_not_allowed', message: 'POST only' })
   }
 
-  // Auth: bearer token from admin session
-  const authHeader = req.headers.authorization
-  if (!authHeader) return res.status(401).json({ error: 'Missing authorization header' })
-
-  const userClient = createClient(
-    process.env.SUPABASE_URL,
-    process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
-  )
-  const { data: { user: caller }, error: authError } =
-    await userClient.auth.getUser(authHeader.replace('Bearer ', ''))
-  if (authError || !caller) return res.status(401).json({ error: 'Invalid token' })
-
-  // Confirm caller is admin (NOT a row in clients) — same gate as create-client.js
-  const { data: callerClient } = await supabase
-    .from('clients').select('id').eq('user_id', caller.id).maybeSingle()
-  if (callerClient) return res.status(403).json({ error: 'Only admins can generate brand kits' })
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const supabase = ctx.adminClient
 
   const { client_id, source_audit_id, inputs } = req.body || {}
   if (!client_id) return res.status(400).json({ error: 'client_id required' })
