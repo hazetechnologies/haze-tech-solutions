@@ -100,6 +100,8 @@ INSERT INTO portfolio_items (title, client, industry, problem, result, service_t
 -- Forward link from a converted lead to the client it became.
 -- ON DELETE SET NULL: if a client is removed, the lead remains as
 -- historical record but the link clears.
+-- NOTE: Requires `clients` table from supabase-portal-schema.sql — run that
+-- file first when bootstrapping a fresh environment, or this FK will fail.
 ALTER TABLE leads
   ADD COLUMN IF NOT EXISTS converted_to_client_id uuid
   REFERENCES clients(id) ON DELETE SET NULL;
