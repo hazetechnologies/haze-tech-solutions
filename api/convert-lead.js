@@ -133,6 +133,20 @@ async function runHandler(req, res) {
   if (clientErr) {
     // Rollback: delete the invited auth user
     await adminClient.auth.admin.deleteUser(newUserId).catch(e => console.error('rollback delete failed:', e))
+
+    // Postgres unique-violation on clients_email_unique_idx — a concurrent
+    // request beat the pre-flight check. Re-resolve and return the same 409
+    // client_exists shape the frontend already handles.
+    if (clientErr.code === '23505') {
+      const { data: raced } = await adminClient
+        .from('clients').select('id, name').eq('email', lead.email).maybeSingle()
+      if (raced) {
+        return err(res, 409, 'client_exists', 'A client with this email already exists', {
+          existing_client_id: raced.id,
+          existing_client_name: raced.name,
+        })
+      }
+    }
     return err(res, 500, 'client_insert_failed', clientErr.message)
   }
 

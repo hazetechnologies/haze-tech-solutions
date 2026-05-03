@@ -128,3 +128,10 @@ CREATE POLICY "admin_all_invoices" ON invoices FOR ALL
   USING (is_admin());
 CREATE POLICY "client_read_own_invoices" ON invoices FOR SELECT
   USING (EXISTS (SELECT 1 FROM clients WHERE user_id = auth.uid() AND id = client_id));
+
+-- ─── Case-insensitive email uniqueness on clients (2026-05-03) ─────────
+-- Hardens convert-lead and create-client against the TOCTOU race where two
+-- concurrent admin requests could both pass the pre-flight email-collision
+-- check and create duplicate auth users + client rows.
+CREATE UNIQUE INDEX IF NOT EXISTS clients_email_unique_idx
+  ON clients (lower(email));

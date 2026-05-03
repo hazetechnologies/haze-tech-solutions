@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { trackEvent } from '../../lib/telemetry'
 import { CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function AcceptInvite() {
@@ -63,14 +64,16 @@ export default function AcceptInvite() {
     if (password !== confirm) { setError('Passwords do not match'); return }
 
     setView('submitting')
-    const { error: updateErr } = await supabase.auth.updateUser({ password })
+    const { data: updateData, error: updateErr } = await supabase.auth.updateUser({ password })
     if (updateErr) {
       setError(updateErr.message)
       setView('ready')
+      trackEvent('invite_accept_failed', { error: updateErr.message })
       return
     }
 
     setView('success')
+    trackEvent('invite_accepted', { user_id: updateData?.user?.id })
     setTimeout(() => navigate('/portal', { replace: true }), 1200)
   }
 
