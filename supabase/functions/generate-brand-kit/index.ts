@@ -29,7 +29,7 @@ const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY')!
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const OPUS_MODEL = 'claude-opus-4-7'
 const MINI_MODEL = 'gpt-4o-mini'
-const IMAGE_RETRY_DELAYS_MS = [30_000, 60_000, 120_000]  // 3 retry attempts
+const IMAGE_RETRY_DELAYS_MS = [10_000, 20_000, 40_000]  // 3 retry attempts (tighter — wall time matters)
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -80,9 +80,13 @@ async function processBrandKit(kit_id: string): Promise<void> {
     // ── Text generation (parallel) ──
     const textAssets = await generateAllText(inputs, kit_id)
 
-    await update({ progress_message: 'Drafting copy done. Generating images…' })
+    // Persist text assets immediately so we don't lose them if image gen times out
+    await update({
+      progress_message: 'Drafting copy done. Generating images…',
+      assets: { ...textAssets },
+    })
 
-    // ── Image generation (serial with retry-on-rate-limit) ──
+    // ── Image generation (parallel — all 9 fired at once, retry-with-backoff per image) ──
     const images = await generateAllImages(inputs, textAssets.color_palette, client_id, kit_id)
 
     const assets: Partial<BrandKitAssets> = {
@@ -238,22 +242,27 @@ async function generateAllImages(
   kitId: string,
 ): Promise<Record<ImageAssetId, ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
 
-  for (const assetId of ALL_ASSET_IDS) {
-    const spec = SIZES[assetId]
-    const prompt = buildImagePrompt(assetId, inputs, palette)
-    const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
-    const resized = await resizeToFinalDims(generated, spec)
-    const uploaded = await uploadImage({
-      bytes: resized,
-      clientId,
-      timestamp,
-      assetId,
+  // Fire all 9 image generations in parallel. Each has its own retry-with-backoff
+  // for 429 rate-limit errors. Wall time ~30-60 sec instead of 90-270 sec serial.
+  const results = await Promise.all(
+    ALL_ASSET_IDS.map(async (assetId) => {
+      const spec = SIZES[assetId]
+      const prompt = buildImagePrompt(assetId, inputs, palette)
+      const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
+      const resized = await resizeToFinalDims(generated, spec)
+      const uploaded = await uploadImage({
+        bytes: resized,
+        clientId,
+        timestamp,
+        assetId,
+      })
+      return [assetId, uploaded] as const
     })
-    out[assetId] = uploaded
-  }
+  )
 
+  const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
+  for (const [assetId, uploaded] of results) out[assetId] = uploaded
   return out as Record<ImageAssetId, ImageAssetRef>
 }
 
