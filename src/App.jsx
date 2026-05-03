@@ -33,6 +33,7 @@ import PortalLayout    from './pages/portal/PortalLayout'
 import PortalDashboard from './pages/portal/PortalDashboard'
 import PortalProject   from './pages/portal/PortalProject'
 import PortalInvoices  from './pages/portal/PortalInvoices'
+import AcceptInvite    from './pages/portal/AcceptInvite'
 
 import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/audit"  element={<AuditPage />} />
           <Route path="/audit/:id" element={<AuditResults />} />
           <Route path="/free-social-audit" element={<FreeSocialAudit />} />
+          <Route path="/portal/accept-invite" element={<AcceptInvite />} />
           <Route path="/blog"   element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
 
