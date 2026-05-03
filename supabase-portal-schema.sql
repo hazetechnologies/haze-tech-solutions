@@ -135,3 +135,17 @@ CREATE POLICY "client_read_own_invoices" ON invoices FOR SELECT
 -- check and create duplicate auth users + client rows.
 CREATE UNIQUE INDEX IF NOT EXISTS clients_email_unique_idx
   ON clients (lower(email));
+
+-- ─── Lead → Client conversion (2026-05-03) ────────────────────────────
+-- Forward link from a converted lead to the client it became. Lives here
+-- (next to `clients`) rather than in supabase-schema.sql so the FK target
+-- is always defined when this file is run.
+-- ON DELETE SET NULL: if a client is removed, the lead remains as
+-- historical record but the link clears.
+ALTER TABLE leads
+  ADD COLUMN IF NOT EXISTS converted_to_client_id uuid
+  REFERENCES clients(id) ON DELETE SET NULL;
+
+-- Partial index — most leads will not be converted, so keep index small.
+CREATE INDEX IF NOT EXISTS leads_converted_to_client_id_idx
+  ON leads(converted_to_client_id) WHERE converted_to_client_id IS NOT NULL;
