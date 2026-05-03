@@ -38,9 +38,22 @@ export async function requireAdmin(req, res) {
     return null
   }
 
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader)
+  if (!m) {
+    res.status(401).json({ error: 'unauthorized', message: 'Authorization header must be "Bearer <token>"' })
+    return null
+  }
+  const token = m[1].trim()
+
   const userClient = createClient(url, anonKey)
-  const { data: { user: caller }, error: authErr } =
-    await userClient.auth.getUser(authHeader.replace('Bearer ', ''))
+  let caller, authErr
+  try {
+    ;({ data: { user: caller }, error: authErr } = await userClient.auth.getUser(token))
+  } catch (e) {
+    console.error('require-admin: getUser threw:', e)
+    res.status(401).json({ error: 'unauthorized', message: 'Token verification failed' })
+    return null
+  }
   if (authErr || !caller) {
     res.status(401).json({ error: 'unauthorized', message: 'Invalid token' })
     return null
