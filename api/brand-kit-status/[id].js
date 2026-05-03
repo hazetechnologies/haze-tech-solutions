@@ -1,31 +1,15 @@
 // api/brand-kit-status/[id].js
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
-)
+import { requireAdmin } from '../_lib/require-admin'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
-    return res.status(405).json({ error: 'Method not allowed' })
+    return res.status(405).json({ error: 'method_not_allowed', message: 'GET only' })
   }
 
-  // Auth: bearer token from admin session (same as start endpoint)
-  const authHeader = req.headers.authorization
-  if (!authHeader) return res.status(401).json({ error: 'Missing authorization header' })
-  const userClient = createClient(
-    process.env.SUPABASE_URL,
-    process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
-  )
-  const { data: { user: caller }, error: authError } =
-    await userClient.auth.getUser(authHeader.replace('Bearer ', ''))
-  if (authError || !caller) return res.status(401).json({ error: 'Invalid token' })
-  const { data: callerClient } = await supabase
-    .from('clients').select('id').eq('user_id', caller.id).maybeSingle()
-  if (callerClient) return res.status(403).json({ error: 'Only admins can read brand kits' })
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const supabase = ctx.adminClient
 
   const { id } = req.query
   if (!id) return res.status(400).json({ error: 'id required' })
