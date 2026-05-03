@@ -12,6 +12,15 @@ export default async function handler(req, res) {
     return err(res, 405, 'method_not_allowed', 'POST only')
   }
 
+  try {
+    return await runHandler(req, res)
+  } catch (e) {
+    console.error('convert-lead unexpected error:', e)
+    return err(res, 500, 'internal_error', e?.message || 'Unexpected error')
+  }
+}
+
+async function runHandler(req, res) {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
@@ -57,7 +66,8 @@ export default async function handler(req, res) {
       .from('clients').select('id, email, name').eq('id', existing_client_id).single()
     if (exErr || !existing) return err(res, 404, 'client_not_found', 'Existing client not found')
 
-    if (existing.email !== lead.email) {
+    const normEmail = (s) => (s || '').trim().toLowerCase()
+    if (normEmail(existing.email) !== normEmail(lead.email)) {
       return err(res, 400, 'email_mismatch', 'Existing client email does not match lead email')
     }
 
