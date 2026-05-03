@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import ConvertLeadModal from './components/ConvertLeadModal'
 import {
   Users, Search, Download, RefreshCw, AlertCircle,
   ChevronDown, FileX, Filter, BarChart2, X, ExternalLink, FileText,
+  CheckCircle2, UserPlus,
 } from 'lucide-react'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -332,6 +334,7 @@ export default function Leads() {
   const [refreshing, setRefreshing] = useState(false)
   const [selectedAudit, setSelectedAudit] = useState(null)
   const [selectedReport, setSelectedReport] = useState(null)
+  const [convertingLead, setConvertingLead] = useState(null)
 
   // filters
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -343,7 +346,7 @@ export default function Leads() {
     try {
       const { data, error: err } = await supabase
         .from('leads')
-        .select('id, name, email, business_name, service_interest, source, url, perf_score, seo_score, mobile_score, security_score, cro_score, overall_score, status, notes, created_at')
+        .select('id, name, email, business_name, service_interest, source, url, perf_score, seo_score, mobile_score, security_score, cro_score, overall_score, status, notes, created_at, converted_to_client_id')
         .order('created_at', { ascending: false })
       if (err) throw err
       setLeads(data ?? [])
@@ -391,6 +394,16 @@ export default function Leads() {
 
       <AuditScoresModal lead={selectedAudit} onClose={() => setSelectedAudit(null)} />
       <AutomationReportModal lead={selectedReport} onClose={() => setSelectedReport(null)} />
+      <ConvertLeadModal
+        lead={convertingLead}
+        onClose={() => setConvertingLead(null)}
+        onConverted={(client_id) => {
+          if (convertingLead) {
+            handleUpdate(convertingLead.id, 'converted_to_client_id', client_id)
+            handleUpdate(convertingLead.id, 'status', 'closed')
+          }
+        }}
+      />
 
       {/* ── Header ── */}
       <div style={styles.topRow}>
@@ -485,7 +498,7 @@ export default function Leads() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {['Name', 'Email', 'Business', 'Service Interest', 'Source', 'Date', 'Status', 'Notes', 'Report'].map(h => (
+                {['Name', 'Email', 'Business', 'Service Interest', 'Source', 'Date', 'Status', 'Notes', 'Actions'].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
               </tr>
@@ -540,10 +553,29 @@ export default function Leads() {
                       <NotesCell lead={lead} onUpdate={handleUpdate} />
                     </td>
                     <td style={styles.td}>
+                      {lead.converted_to_client_id ? (
+                        <a
+                          href={`/admin/clients/${lead.converted_to_client_id}`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 7, color: '#4ADE80', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap', marginBottom: 4 }}
+                          title="Open the client this lead was converted to"
+                        >
+                          <CheckCircle2 size={12} /> Converted
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => setConvertingLead(lead)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: 7, color: '#00D4FF', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: 4 }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.22)' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.12)' }}
+                          title="Convert this lead to a client"
+                        >
+                          <UserPlus size={12} /> Convert
+                        </button>
+                      )}
                       {lead.source === 'audit' && (
                         <button
                           onClick={() => setSelectedAudit(lead)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '7px', color: '#A78BFA', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: '4px' }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, color: '#A78BFA', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: 4 }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.22)' }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.12)' }}
                         >
@@ -553,7 +585,7 @@ export default function Leads() {
                       {(lead.service_interest === 'AI Automation' || lead.service_interest === 'All Three') && (
                         <button
                           onClick={() => setSelectedReport(lead)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: '7px', color: '#00D4FF', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: 7, color: '#00D4FF', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.22)' }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.12)' }}
                         >
