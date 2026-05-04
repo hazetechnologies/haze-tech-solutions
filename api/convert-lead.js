@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from './_lib/require-admin'
 
 const SITE_URL = process.env.VITE_SITE_URL || 'https://www.hazetechsolutions.com'
 
@@ -21,26 +21,9 @@ export default async function handler(req, res) {
 }
 
 async function runHandler(req, res) {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
-
-  if (!serviceKey) return err(res, 500, 'config_error', 'Service role key not configured')
-
-  const authHeader = req.headers.authorization
-  if (!authHeader) return err(res, 401, 'unauthorized', 'Missing authorization header')
-
-  const userClient = createClient(supabaseUrl, anonKey)
-  const { data: { user: caller }, error: authError } =
-    await userClient.auth.getUser(authHeader.replace('Bearer ', ''))
-  if (authError || !caller) return err(res, 401, 'unauthorized', 'Invalid token')
-
-  const adminClient = createClient(supabaseUrl, serviceKey)
-
-  // Admin gate: caller must NOT be a row in clients
-  const { data: callerClient } = await adminClient
-    .from('clients').select('id').eq('user_id', caller.id).maybeSingle()
-  if (callerClient) return err(res, 403, 'forbidden', 'Only admins can convert leads')
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { adminClient } = ctx
 
   const body = req.body || {}
   const { lead_id, link_only, existing_client_id } = body

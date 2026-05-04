@@ -80,7 +80,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`)
+      if (!res.ok) throw new Error(data.message || data.error || `Request failed: ${res.status}`)
       onStarted(data.kit_id)
     } catch (err) {
       setError(err.message || 'Something went wrong')
