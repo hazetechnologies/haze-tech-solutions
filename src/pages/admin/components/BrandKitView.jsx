@@ -11,11 +11,12 @@ const IMAGE_LABELS = {
   banner_fb: { label: 'Facebook cover', dims: '820×312' },
   banner_yt: { label: 'YouTube banner', dims: '2560×1440' },
   banner_x: { label: 'X header', dims: '1500×500' },
-  banner_tiktok: { label: 'TikTok profile', dims: '200×200' },
+  banner_tiktok:         { label: 'TikTok profile',        dims: '200×200' },
+  banner_linkedin_cover: { label: 'LinkedIn cover',         dims: '1128×191' },
 }
 
 const BIO_LIMITS = {
-  instagram: 150, tiktok: 80, youtube: 1000, x: 160, facebook: 255,
+  instagram: 150, tiktok: 80, youtube: 1000, x: 160, facebook: 255, linkedin: 2000,
 }
 
 export default function BrandKitView({ kit, onRegenerate }) {

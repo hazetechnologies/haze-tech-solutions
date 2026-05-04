@@ -43,9 +43,10 @@ export type ImageAssetId =
   | 'banner_yt'
   | 'banner_x'
   | 'banner_tiktok'
+  | 'banner_linkedin_cover'
 
 export interface BrandKitAssets {
-  bios: { instagram: string; tiktok: string; youtube: string; x: string; facebook: string }
+  bios: { instagram: string; tiktok: string; youtube: string; x: string; facebook: string; linkedin: string }
   voice_tone: string                       // markdown
   hashtags: string[]
   content_pillars: ContentPillar[]

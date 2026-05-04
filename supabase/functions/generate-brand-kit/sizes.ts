@@ -22,7 +22,8 @@ export const SIZES: Record<ImageAssetId, SizeSpec> = {
   banner_fb:       { generationSize: '1536x1024', finalWidth: 820,  finalHeight: 312,  fit: 'cover' },
   banner_yt:       { generationSize: '1536x1024', finalWidth: 2560, finalHeight: 1440, fit: 'cover' },
   banner_x:        { generationSize: '1536x1024', finalWidth: 1500, finalHeight: 500,  fit: 'cover' },
-  banner_tiktok:   { generationSize: '1024x1024', finalWidth: 200,  finalHeight: 200,  fit: 'cover' },
+  banner_tiktok:        { generationSize: '1024x1024', finalWidth: 200,  finalHeight: 200,  fit: 'cover' },
+  banner_linkedin_cover:{ generationSize: '1536x1024', finalWidth: 1128, finalHeight: 191,  fit: 'cover' },
 }
 
 export const ALL_ASSET_IDS: ImageAssetId[] = Object.keys(SIZES) as ImageAssetId[]

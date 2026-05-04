@@ -29,13 +29,14 @@ export const STRUCTURED_SCHEMA = {
       bios: {
         type: 'object',
         additionalProperties: false,
-        required: ['instagram', 'tiktok', 'youtube', 'x', 'facebook'],
+        required: ['instagram', 'tiktok', 'youtube', 'x', 'facebook', 'linkedin'],
         properties: {
           instagram: { type: 'string', maxLength: 150 },
           tiktok:    { type: 'string', maxLength: 80 },
           youtube:   { type: 'string', maxLength: 1000 },
           x:         { type: 'string', maxLength: 160 },
           facebook:  { type: 'string', maxLength: 255 },
+          linkedin:  { type: 'string', maxLength: 2000 },
         },
       },
       hashtags: {
@@ -57,7 +58,7 @@ export function buildStructuredSystemPrompt(): string {
   return [
     'You are a senior social media strategist. You write tight, on-brand copy.',
     'Always output ONLY the JSON specified by the schema. No markdown, no prose, no commentary.',
-    'For bios: use plain text (no emoji unless the brand vibe is playful), respect platform character limits, lead with what the brand DOES, end with a soft CTA where space allows.',
+    'For bios: use plain text (no emoji unless the brand vibe is playful), respect platform character limits, lead with what the brand DOES, end with a soft CTA where space allows. LinkedIn bio (2000 chars max): write a professional company page "About" section with 2-3 short paragraphs covering what the company does, who it serves, and its key differentiators.',
     'For hashtags: mix 3 broad (>1M posts) + 4 niche (~100k posts) + 3 ultra-niche (<10k posts). All lowercase. No spaces. Brand-relevant.',
     'For handles (Path 3 only): 5 candidates the team can check for availability. Mix variants: brand name, brand+industry, brand+region/HQ, brand+function (e.g. "_official", "hq"), creative twist. Keep 3-30 chars, lowercase, alphanumeric + underscore only.',
     'For platform_priority (Path 3 only): one paragraph (max 80 words). Recommend ONE platform to launch first based on the audience and industry. Justify briefly.',
@@ -155,6 +156,8 @@ export function buildImagePrompt(assetId: string, inputs: BrandKitInputs, palett
       return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors, focal point off-center to the right. ${baseStyle}`
     case 'banner_tiktok':
       return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. ${baseStyle}`
+    case 'banner_linkedin_cover':
+      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, focal element left-aligned, generous empty space for text overlay. ${baseStyle}`
     default:
       return baseStyle
   }

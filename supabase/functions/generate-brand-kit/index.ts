@@ -23,13 +23,30 @@ import { uploadImage } from '../_shared/r2-upload.ts'
 import { resizeToFinalDims } from './post-process.ts'
 import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
 
-const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY')!
+const OPENAI_KEY    = Deno.env.get('OPENAI_API_KEY')!
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
-const OPUS_MODEL = 'claude-opus-4-7'
-const MINI_MODEL = 'gpt-4o-mini'
-const IMAGE_RETRY_DELAYS_MS = [15_000, 30_000, 60_000]  // 3 retry attempts with longer back-off for rate limits
-const IMAGE_BATCH_SIZE = 3       // fire 3 at a time; gpt-image-2 limit is 5 input-images/min
-const IMAGE_BATCH_DELAY_MS = 25_000  // gap between batches keeps us well under the per-minute cap
+const KIE_API_KEY   = Deno.env.get('KIE_API_KEY')!
+const KIE_BASE      = 'https://api.kie.ai/api/v1'
+const OPUS_MODEL    = 'claude-opus-4-7'
+const MINI_MODEL    = 'gpt-4o-mini'
+const IMAGE_RETRY_DELAYS_MS = [15_000, 30_000, 60_000]
+
+// Logos are generated first via OpenAI direct (fast, consistent quality).
+// Banners + profile pic use KIE AI img2img with logo_primary as reference.
+const LOGO_ASSET_IDS: ImageAssetId[] = ['logo_primary', 'logo_icon', 'logo_monochrome']
+const REFERENCE_ASSET_IDS: ImageAssetId[] = [
+  'profile_picture', 'banner_ig', 'banner_fb', 'banner_yt',
+  'banner_x', 'banner_tiktok', 'banner_linkedin_cover',
+]
+const KIE_ASPECT_RATIOS: Record<string, string> = {
+  profile_picture:      '1:1',
+  banner_ig:            '9:16',
+  banner_fb:            '16:9',
+  banner_yt:            '16:9',
+  banner_x:             '16:9',
+  banner_tiktok:        '1:1',
+  banner_linkedin_cover:'16:9',
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -147,7 +164,7 @@ async function callMiniStructured(inputs: BrandKitInputs, kitId: string, evtProp
   if (status !== 200) throw new Error(`mini structured failed: ${status}: ${JSON.stringify(data).slice(0,300)}`)
   const content = data.choices?.[0]?.message?.content ?? '{}'
   return JSON.parse(content) as {
-    bios: { instagram: string; tiktok: string; youtube: string; x: string; facebook: string }
+    bios: { instagram: string; tiktok: string; youtube: string; x: string; facebook: string; linkedin: string }
     hashtags: string[]
     handles: string[]
     platform_priority: string
@@ -209,7 +226,10 @@ async function callOpusPalette(inputs: BrandKitInputs, kitId: string, evtProps: 
   return parsed.palette
 }
 
-// ── Image generation (serial with retry-on-rate-limit) ──
+// ── Image generation ──
+// Step 1: logos via OpenAI direct (3 parallel, low rate-limit pressure)
+// Step 2: banners + profile pic via KIE AI img2img with logo_primary as reference
+//         → all 7 fired simultaneously as async tasks, polled in parallel
 
 async function generateAllImages(
   inputs: BrandKitInputs,
@@ -218,30 +238,111 @@ async function generateAllImages(
   kitId: string,
 ): Promise<Record<ImageAssetId, ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
 
-  // Fire images in batches of IMAGE_BATCH_SIZE to stay under the 5 input-images/min cap.
-  const results: Array<readonly [ImageAssetId, ImageAssetRef]> = []
-  for (let i = 0; i < ALL_ASSET_IDS.length; i += IMAGE_BATCH_SIZE) {
-    const batch = ALL_ASSET_IDS.slice(i, i + IMAGE_BATCH_SIZE)
-    const batchResults = await Promise.all(
-      batch.map(async (assetId) => {
-        const spec = SIZES[assetId]
-        const prompt = buildImagePrompt(assetId, inputs, palette)
-        const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
-        const resized = await resizeToFinalDims(generated, spec)
-        const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
-        return [assetId, uploaded] as const
-      })
-    )
-    results.push(...batchResults)
-    if (i + IMAGE_BATCH_SIZE < ALL_ASSET_IDS.length) {
-      await new Promise(r => setTimeout(r, IMAGE_BATCH_DELAY_MS))
+  // ── Step 1: generate logos in parallel via OpenAI ──
+  const logoResults = await Promise.all(
+    LOGO_ASSET_IDS.map(async (assetId) => {
+      const spec = SIZES[assetId]
+      const prompt = buildImagePrompt(assetId, inputs, palette)
+      const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
+      const resized = await resizeToFinalDims(generated, spec)
+      const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+      return [assetId, uploaded] as const
+    })
+  )
+  for (const [assetId, uploaded] of logoResults) out[assetId] = uploaded
+
+  // ── Step 2: banners + profile pic via KIE AI img2img ──
+  const logoPrimaryUrl = out['logo_primary']!.public_url
+
+  const referenceResults = await Promise.all(
+    REFERENCE_ASSET_IDS.map(async (assetId) => {
+      const spec = SIZES[assetId]
+      const prompt = buildImagePrompt(assetId, inputs, palette)
+      const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
+
+      // Create KIE AI task
+      const taskId = await createKieTask(prompt, aspectRatio, logoPrimaryUrl, kitId, assetId)
+      // Poll until done
+      const resultUrl = await pollKieTask(taskId, assetId)
+      // Download + resize + upload to R2
+      const raw = await downloadRemoteImage(resultUrl, assetId)
+      const resized = await resizeToFinalDims(raw, spec)
+      const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+      return [assetId, uploaded] as const
+    })
+  )
+  for (const [assetId, uploaded] of referenceResults) out[assetId] = uploaded
+
+  return out as Record<ImageAssetId, ImageAssetRef>
+}
+
+// ── KIE AI helpers ──
+
+async function createKieTask(
+  prompt: string,
+  aspectRatio: string,
+  logoUrl: string,
+  kitId: string,
+  assetId: string,
+): Promise<string> {
+  const res = await fetch(`${KIE_BASE}/jobs/createTask`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${KIE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-image-2-image-to-image',
+      input: {
+        prompt,
+        input_urls: [logoUrl],
+        aspect_ratio: aspectRatio,
+        resolution: '1K',
+      },
+    }),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`KIE createTask ${res.status} on ${assetId}: ${txt.slice(0, 300)}`)
+  }
+  const json = await res.json() as { data?: { taskId?: string } }
+  const taskId = json.data?.taskId
+  if (!taskId) throw new Error(`KIE createTask: no taskId returned for ${assetId}`)
+  return taskId
+}
+
+async function pollKieTask(taskId: string, assetId: string): Promise<string> {
+  // Poll every 5s for up to 5 minutes
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 5_000))
+    const res = await fetch(`${KIE_BASE}/jobs/recordInfo?taskId=${taskId}`, {
+      headers: { 'Authorization': `Bearer ${KIE_API_KEY}` },
+    })
+    if (!res.ok) continue
+    const json = await res.json() as { data?: { state?: string; resultJson?: string; resultUrl?: string; failMsg?: string } }
+    const d = json.data
+    if (!d) continue
+    if (d.state === 'fail') throw new Error(`KIE task failed for ${assetId}: ${d.failMsg ?? 'unknown'}`)
+    if (d.state === 'success') {
+      // resultJson is a stringified JSON with resultUrls array
+      if (d.resultJson) {
+        const parsed = JSON.parse(d.resultJson) as { resultUrls?: string[] }
+        const url = parsed.resultUrls?.[0]
+        if (url) return url
+      }
+      if (d.resultUrl) return d.resultUrl
+      throw new Error(`KIE task succeeded but no result URL for ${assetId}`)
     }
   }
+  throw new Error(`KIE task timed out for ${assetId} (taskId: ${taskId})`)
+}
 
-  const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
-  for (const [assetId, uploaded] of results) out[assetId] = uploaded
-  return out as Record<ImageAssetId, ImageAssetRef>
+async function downloadRemoteImage(url: string, assetId: string): Promise<Uint8Array> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`failed to download KIE result for ${assetId}: ${res.status}`)
+  return new Uint8Array(await res.arrayBuffer())
 }
 
 async function generateImageWithRetry(
