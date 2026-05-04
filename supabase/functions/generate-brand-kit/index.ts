@@ -27,7 +27,9 @@ const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY')!
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const OPUS_MODEL = 'claude-opus-4-7'
 const MINI_MODEL = 'gpt-4o-mini'
-const IMAGE_RETRY_DELAYS_MS = [10_000, 20_000, 40_000]  // 3 retry attempts (tighter — wall time matters)
+const IMAGE_RETRY_DELAYS_MS = [15_000, 30_000, 60_000]  // 3 retry attempts with longer back-off for rate limits
+const IMAGE_BATCH_SIZE = 3       // fire 3 at a time; gpt-image-2 limit is 5 input-images/min
+const IMAGE_BATCH_DELAY_MS = 25_000  // gap between batches keeps us well under the per-minute cap
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -217,23 +219,25 @@ async function generateAllImages(
 ): Promise<Record<ImageAssetId, ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 
-  // Fire all 9 image generations in parallel. Each has its own retry-with-backoff
-  // for 429 rate-limit errors. Wall time ~30-60 sec instead of 90-270 sec serial.
-  const results = await Promise.all(
-    ALL_ASSET_IDS.map(async (assetId) => {
-      const spec = SIZES[assetId]
-      const prompt = buildImagePrompt(assetId, inputs, palette)
-      const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
-      const resized = await resizeToFinalDims(generated, spec)
-      const uploaded = await uploadImage({
-        bytes: resized,
-        clientId,
-        timestamp,
-        assetId,
+  // Fire images in batches of IMAGE_BATCH_SIZE to stay under the 5 input-images/min cap.
+  const results: Array<readonly [ImageAssetId, ImageAssetRef]> = []
+  for (let i = 0; i < ALL_ASSET_IDS.length; i += IMAGE_BATCH_SIZE) {
+    const batch = ALL_ASSET_IDS.slice(i, i + IMAGE_BATCH_SIZE)
+    const batchResults = await Promise.all(
+      batch.map(async (assetId) => {
+        const spec = SIZES[assetId]
+        const prompt = buildImagePrompt(assetId, inputs, palette)
+        const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
+        const resized = await resizeToFinalDims(generated, spec)
+        const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+        return [assetId, uploaded] as const
       })
-      return [assetId, uploaded] as const
-    })
-  )
+    )
+    results.push(...batchResults)
+    if (i + IMAGE_BATCH_SIZE < ALL_ASSET_IDS.length) {
+      await new Promise(r => setTimeout(r, IMAGE_BATCH_DELAY_MS))
+    }
+  }
 
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
   for (const [assetId, uploaded] of results) out[assetId] = uploaded

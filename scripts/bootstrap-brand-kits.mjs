@@ -2,9 +2,19 @@
 // Run: node scripts/bootstrap-brand-kits.mjs
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { readFileSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+try {
+  const envPath = resolve(dirname(fileURLToPath(import.meta.url)), '../.env')
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const m = line.match(/^([^#=]+)=(.*)$/)
+    if (m && !process.env[m[1].trim()]) process.env[m[1].trim()] = m[2].trim()
+  }
+} catch {}
 
-const SUPABASE_URL = 'https://ioxpfvxcsclgmwyslxjj.supabase.co'
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlveHBmdnhjc2NsZ213eXNseGpqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDYyMTUyOCwiZXhwIjoyMDkwMTk3NTI4fQ.nKjezrfNhL9I-Ll5TcvmvMZzCqTeJrt-2OQsZXNpZHM'
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const EDGE_FN_BASE = `${SUPABASE_URL}/functions/v1`
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
