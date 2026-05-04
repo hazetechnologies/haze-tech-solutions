@@ -117,21 +117,6 @@ export function buildContentPillarsPrompt(inputs: BrandKitInputs): { system: str
   }
 }
 
-export function buildContentCalendarPrompt(inputs: BrandKitInputs, pillarNames: string[]): { system: string; user: string } {
-  return {
-    system: 'You are a senior content strategist. Output ONLY valid JSON matching this schema: { "calendar": [{ "day": <1-14>, "platform": "instagram"|"tiktok"|"youtube"|"x"|"facebook", "pillar": "<one of the provided pillars>", "hook": "<post hook, max 200 chars>" }] }. Exactly 14 entries. No markdown, no preamble.',
-    user: [
-      'Generate a 14-day content calendar.',
-      `Use these pillars: ${pillarNames.join(', ')}.`,
-      'Mix platforms (lean toward IG and TikTok unless audience suggests otherwise).',
-      'Each "hook" is the first line/headline of a post — make them scroll-stopping.',
-      '',
-      'Brand context:',
-      clientContext(inputs),
-    ].join('\n'),
-  }
-}
-
 export function buildColorPalettePrompt(inputs: BrandKitInputs): { system: string; user: string } {
   return {
     system: 'You are a senior brand designer. Output ONLY valid JSON matching this schema: { "palette": [{ "name": "primary"|"secondary"|"accent"|"dark"|"light", "hex": "#RRGGBB", "use": "..." }] }. Exactly 5 colors in that exact order. No markdown, no preamble.',

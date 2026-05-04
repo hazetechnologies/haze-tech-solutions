@@ -8,7 +8,6 @@ import {
   buildStructuredUserPrompt,
   buildVoiceTonePrompt,
   buildContentPillarsPrompt,
-  buildContentCalendarPrompt,
   buildColorPalettePrompt,
   buildImagePrompt,
 } from './prompts.ts'
@@ -17,7 +16,6 @@ import type {
   BrandKitAssets,
   ColorPaletteEntry,
   ContentPillar,
-  ContentCalendarEntry,
   ImageAssetId,
   ImageAssetRef,
 } from './types.ts'
@@ -119,9 +117,6 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
     callOpusPalette(inputs, kit_id, evtProps),
   ])
 
-  // Calendar depends on pillar names — call after pillars resolves
-  const calendar = await callOpusCalendar(inputs, pillarsResp.map(p => p.name), kit_id, evtProps)
-
   return {
     bios: structured.bios,
     hashtags: structured.hashtags,
@@ -129,7 +124,6 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
     platform_priority: inputs.path === 'cold_start' ? structured.platform_priority : undefined,
     voice_tone: voiceTone,
     content_pillars: pillarsResp,
-    content_calendar: calendar,
     color_palette: palette,
   }
 }
@@ -191,26 +185,6 @@ async function callOpusPillars(inputs: BrandKitInputs, kitId: string, evtProps: 
     throw new Error('opus pillars: malformed JSON (no .pillars array)')
   }
   return parsed.pillars
-}
-
-async function callOpusCalendar(inputs: BrandKitInputs, pillarNames: string[], kitId: string, evtProps: Record<string, unknown>): Promise<ContentCalendarEntry[]> {
-  const { system, user } = buildContentCalendarPrompt(inputs, pillarNames)
-  const { data, status } = await trackedClaude({
-    apiKey: ANTHROPIC_KEY,
-    model: OPUS_MODEL,
-    system,
-    messages: [{ role: 'user', content: user }],
-    params: { max_tokens: 4000 },
-    distinctId: kitId,
-    eventProperties: evtProps,
-  })
-  if (status !== 200) throw new Error(`opus calendar failed: ${status}: ${JSON.stringify(data).slice(0,300)}`)
-  const text = extractText(data)
-  const parsed = JSON.parse(text) as { calendar: ContentCalendarEntry[] }
-  if (!parsed.calendar || !Array.isArray(parsed.calendar)) {
-    throw new Error('opus calendar: malformed JSON (no .calendar array)')
-  }
-  return parsed.calendar
 }
 
 async function callOpusPalette(inputs: BrandKitInputs, kitId: string, evtProps: Record<string, unknown>): Promise<ColorPaletteEntry[]> {

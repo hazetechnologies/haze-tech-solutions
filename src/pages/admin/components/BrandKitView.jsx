@@ -139,31 +139,6 @@ export default function BrandKitView({ kit, onRegenerate }) {
         </Section>
       )}
 
-      {/* Content calendar */}
-      <Section title="14-day content calendar">
-        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead style={{ background: 'rgba(0,207,255,0.06)' }}>
-              <tr>
-                <th style={th}>Day</th>
-                <th style={th}>Platform</th>
-                <th style={th}>Pillar</th>
-                <th style={th}>Hook</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(a.content_calendar || []).map((entry, i) => (
-                <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                  <td style={td}>{entry.day}</td>
-                  <td style={{ ...td, textTransform: 'capitalize' }}>{entry.platform}</td>
-                  <td style={td}>{entry.pillar}</td>
-                  <td style={td}>{entry.hook}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
     </div>
   )
 }
@@ -202,6 +177,3 @@ const btnSecondary = {
   display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
   textDecoration: 'none',
 }
-
-const th = { padding: '10px 12px', textAlign: 'left', color: '#94A3B8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }
-const td = { padding: '10px 12px', color: '#CBD5E1' }

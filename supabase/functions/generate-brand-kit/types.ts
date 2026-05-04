@@ -27,12 +27,6 @@ export interface ContentPillar {
   description: string
 }
 
-export interface ContentCalendarEntry {
-  day: number
-  platform: string
-  pillar: string
-  hook: string
-}
 
 export interface ImageAssetRef {
   r2_key: string
@@ -57,7 +51,6 @@ export interface BrandKitAssets {
   content_pillars: ContentPillar[]
   handles?: string[]                        // Path 3 only
   platform_priority?: string                // Path 3 only
-  content_calendar: ContentCalendarEntry[]
   color_palette: ColorPaletteEntry[]
   images: Record<ImageAssetId, ImageAssetRef>
 }
