@@ -28,12 +28,13 @@ import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
 
-import PortalLogin     from './pages/portal/PortalLogin'
-import PortalLayout    from './pages/portal/PortalLayout'
-import PortalDashboard from './pages/portal/PortalDashboard'
-import PortalProject   from './pages/portal/PortalProject'
-import PortalInvoices  from './pages/portal/PortalInvoices'
-import AcceptInvite    from './pages/portal/AcceptInvite'
+import PortalLogin          from './pages/portal/PortalLogin'
+import PortalLayout         from './pages/portal/PortalLayout'
+import PortalDashboard      from './pages/portal/PortalDashboard'
+import PortalProject        from './pages/portal/PortalProject'
+import PortalInvoices       from './pages/portal/PortalInvoices'
+import AcceptInvite         from './pages/portal/AcceptInvite'
+import PortalWebsiteIntake  from './pages/portal/PortalWebsiteIntake'
 
 import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
@@ -99,6 +100,7 @@ export default function App() {
             <Route path="dashboard"            element={<PortalDashboard />} />
             <Route path="projects/:projectId"  element={<PortalProject />} />
             <Route path="invoices"             element={<PortalInvoices />} />
+            <Route path="website-intake"       element={<PortalWebsiteIntake />} />
           </Route>
           </Routes>
         </BrowserRouter>
