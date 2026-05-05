@@ -68,7 +68,7 @@ export default function PortalWebsiteIntake() {
     setSubmitting(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/submit-website-intake', {
+      const res = await fetch('/api/website?action=intake', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({

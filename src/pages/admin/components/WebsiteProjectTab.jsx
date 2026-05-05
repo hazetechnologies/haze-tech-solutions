@@ -30,7 +30,7 @@ export default function WebsiteProjectTab({ client }) {
     async function poll() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch(`/api/website-scaffold-status/${project.id}`, {
+        const res = await fetch(`/api/website?action=status&id=${project.id}`, {
           headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
         })
         const data = await res.json()
@@ -57,7 +57,7 @@ export default function WebsiteProjectTab({ client }) {
     setWorking(true); setError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/activate-website-project', {
+      const res = await fetch('/api/website?action=activate', {
         method:'POST',
         headers:{ Authorization:`Bearer ${session.access_token}`, 'Content-Type':'application/json' },
         body: JSON.stringify({ client_id: client.id }),
@@ -72,7 +72,7 @@ export default function WebsiteProjectTab({ client }) {
     setWorking(true); setError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/start-website-scaffold', {
+      const res = await fetch('/api/website?action=start', {
         method:'POST',
         headers:{ Authorization:`Bearer ${session.access_token}`, 'Content-Type':'application/json' },
         body: JSON.stringify({ project_id: project.id }),
