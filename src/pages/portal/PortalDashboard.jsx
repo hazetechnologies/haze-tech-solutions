@@ -21,6 +21,7 @@ export default function PortalDashboard() {
   const [invoiceStats, setInvoiceStats] = useState({ total: 0, paid: 0, pending: 0 })
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
+  const [websiteProject, setWebsiteProject] = useState(null)
 
   const fetchData = useCallback(async () => {
     setError(null)
@@ -51,6 +52,18 @@ export default function PortalDashboard() {
   }, [client.id])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: clientData } = await supabase.from('clients').select('id').eq('user_id', user.id).maybeSingle()
+      if (!clientData) return
+      const { data: wp } = await supabase
+        .from('website_projects').select('id, status, repo_url').eq('client_id', clientData.id).maybeSingle()
+      setWebsiteProject(wp || null)
+    })()
+  }, [])
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -87,6 +100,31 @@ export default function PortalDashboard() {
         <KpiCard icon={Receipt} color="#F59E0B" label="Pending Invoices" value={`$${invoiceStats.pending.toLocaleString()}`} />
         <KpiCard icon={TrendingUp} color="#00D4FF" label="Total Invested" value={`$${invoiceStats.total.toLocaleString()}`} />
       </div>
+
+      {/* Website project */}
+      {websiteProject && (
+        <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 18, marginBottom: 20 }}>
+          <div style={{ color:'#F1F5F9', fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Website project</div>
+          {websiteProject.status === 'intake_pending' && (
+            <>
+              <p style={{ color:'#CBD5E1', fontSize: 13, margin: '4px 0 12px' }}>We need a few details to get started.</p>
+              <a href="/portal/website-intake" style={{ background:'#00CFFF', color:'#0F172A', padding:'8px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration:'none', display: 'inline-block' }}>Fill intake form</a>
+            </>
+          )}
+          {websiteProject.status === 'intake_submitted' && (
+            <p style={{ color:'#CBD5E1', fontSize: 13 }}>Intake received. Your team will start your site shortly.</p>
+          )}
+          {websiteProject.status === 'generating' && (
+            <p style={{ color:'#CBD5E1', fontSize: 13 }}>In progress — your team is setting up your site.</p>
+          )}
+          {websiteProject.status === 'done' && (
+            <p style={{ color:'#CBD5E1', fontSize: 13 }}>Ready — your dev team has your files.</p>
+          )}
+          {websiteProject.status === 'failed' && (
+            <p style={{ color:'#F87171', fontSize: 13 }}>Something went wrong. Your team has been notified.</p>
+          )}
+        </div>
+      )}
 
       {/* Projects */}
       <div>
