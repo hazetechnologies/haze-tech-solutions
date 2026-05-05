@@ -7,6 +7,7 @@ import {
   AlertCircle, Sparkles,
 } from 'lucide-react'
 import BrandKitTab from './components/BrandKitTab'
+import WebsiteProjectTab from './components/WebsiteProjectTab'
 
 function fmtDate(d) {
   if (!d) return '--'
@@ -19,6 +20,7 @@ const tabList = [
   { key: 'deliverables', label: 'Deliverables', icon: FileText },
   { key: 'invoices',     label: 'Invoices',     icon: Receipt },
   { key: 'brandkit',     label: 'Brand Kit',    icon: Sparkles },
+  { key: 'website',      label: 'Website',      icon: Sparkles },
 ]
 
 const PROJECT_STATUSES = ['not_started', 'in_progress', 'review', 'completed']
@@ -89,7 +91,7 @@ export default function ClientDetail() {
 
   const tabSingular = tab.slice(0, -1)
   const addLabel = tabSingular.charAt(0).toUpperCase() + tabSingular.slice(1)
-  const counts = { projects: projects.length, milestones: milestones.length, deliverables: deliverables.length, invoices: invoices.length, brandkit: '' }
+  const counts = { projects: projects.length, milestones: milestones.length, deliverables: deliverables.length, invoices: invoices.length, brandkit: '', website: '' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -217,6 +219,8 @@ export default function ClientDetail() {
       />}
 
       {tab === 'brandkit' && <BrandKitTab client={client} />}
+
+      {tab === 'website' && <WebsiteProjectTab client={client} />}
 
       {/* Modals */}
       {modal && modal.type === 'projects' && (
