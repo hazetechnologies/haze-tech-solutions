@@ -19,6 +19,38 @@ export default function WebsiteProjectTab({ client }) {
     setLoading(false)
   }
 
+  // Poll while generating/pending
+  useEffect(() => {
+    if (!project) return
+    if (project.status !== 'generating' && project.status !== 'pending') return
+
+    let cancelled = false
+    let timer
+
+    async function poll() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch(`/api/website-scaffold-status/${project.id}`, {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+        })
+        const data = await res.json()
+        if (cancelled) return
+        setProject(prev => ({ ...prev, ...data }))
+
+        if (data.status === 'done' || data.status === 'failed') {
+          setWorking(false)
+          return
+        }
+        timer = setTimeout(poll, 3000)
+      } catch {
+        if (!cancelled) timer = setTimeout(poll, 3000 * 2)
+      }
+    }
+
+    timer = setTimeout(poll, 3000)
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
+  }, [project?.id, project?.status])
+
   async function activate() {
     setWorking(true); setError(null)
     try {
@@ -45,24 +77,8 @@ export default function WebsiteProjectTab({ client }) {
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.message || j.error)
-      // Poll until done/failed
-      pollStatus(session.access_token)
+      await loadProject()
     } catch (e) { setError(e.message); setWorking(false) }
-  }
-
-  async function pollStatus(token) {
-    const interval = setInterval(async () => {
-      const res = await fetch(`/api/website-scaffold-status/${project.id}`, {
-        headers:{ Authorization:`Bearer ${token}` },
-      })
-      if (!res.ok) return
-      const data = await res.json()
-      setProject(data)
-      if (data.status === 'done' || data.status === 'failed') {
-        clearInterval(interval)
-        setWorking(false)
-      }
-    }, 3000)
   }
 
   if (loading) return <p style={{ color:'#94A3B8' }}>Loading…</p>
