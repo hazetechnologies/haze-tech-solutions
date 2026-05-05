@@ -9,6 +9,16 @@ const GITHUB_PAT    = Deno.env.get('GITHUB_PAT')!
 const SONNET_MODEL  = 'claude-sonnet-4-6'
 const GH_ORG        = 'hazetechnologies'
 
+function utf8ToBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s)
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
   const { project_id } = await req.json().catch(() => ({}))
@@ -163,7 +173,7 @@ async function commitContent(repoName: string, aiContent: AiContent): Promise<vo
   // Commit (PUT — update if SHA known, create if not)
   const body: Record<string, unknown> = {
     message: 'feat: AI-generated initial site content',
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(aiContent, null, 2)))),
+    content: utf8ToBase64(JSON.stringify(aiContent, null, 2)),
   }
   if (sha) body.sha = sha
 

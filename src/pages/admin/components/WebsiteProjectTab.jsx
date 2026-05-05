@@ -49,6 +49,8 @@ export default function WebsiteProjectTab({ client }) {
 
     timer = setTimeout(poll, 3000)
     return () => { cancelled = true; if (timer) clearTimeout(timer) }
+    // Only id+status drive polling lifecycle; including `project` would restart the timer on every poll's setProject.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, project?.status])
 
   async function activate() {

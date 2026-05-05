@@ -54,16 +54,13 @@ export default function PortalDashboard() {
   useEffect(() => { fetchData() }, [fetchData])
 
   useEffect(() => {
+    if (!client?.id) return
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: clientData } = await supabase.from('clients').select('id').eq('user_id', user.id).maybeSingle()
-      if (!clientData) return
       const { data: wp } = await supabase
-        .from('website_projects').select('id, status, repo_url').eq('client_id', clientData.id).maybeSingle()
+        .from('website_projects').select('id, status, repo_url').eq('client_id', client.id).maybeSingle()
       setWebsiteProject(wp || null)
     })()
-  }, [])
+  }, [client?.id])
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

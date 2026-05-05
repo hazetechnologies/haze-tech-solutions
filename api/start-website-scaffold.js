@@ -1,7 +1,7 @@
 // api/start-website-scaffold.js
 import { requireAdmin } from './_lib/require-admin'
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export default async function handler(req, res) {
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     .eq('id', project_id)
 
   // Fire-and-forget invoke edge function
-  const invoke = await fetch(`${SUPABASE_URL}/functions/v1/generate-website-scaffold`, {
+  const invoke = await fetch(`${EDGE_FN}/generate-website-scaffold`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,

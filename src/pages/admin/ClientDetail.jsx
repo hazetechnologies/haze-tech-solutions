@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import {
   ArrowLeft, Plus, X, Edit2, Trash2,
   FolderKanban, CheckCircle, FileText, Receipt,
-  AlertCircle, Sparkles,
+  AlertCircle, Sparkles, Globe,
 } from 'lucide-react'
 import BrandKitTab from './components/BrandKitTab'
 import WebsiteProjectTab from './components/WebsiteProjectTab'
@@ -20,7 +20,7 @@ const tabList = [
   { key: 'deliverables', label: 'Deliverables', icon: FileText },
   { key: 'invoices',     label: 'Invoices',     icon: Receipt },
   { key: 'brandkit',     label: 'Brand Kit',    icon: Sparkles },
-  { key: 'website',      label: 'Website',      icon: Sparkles },
+  { key: 'website',      label: 'Website',      icon: Globe },
 ]
 
 const PROJECT_STATUSES = ['not_started', 'in_progress', 'review', 'completed']
