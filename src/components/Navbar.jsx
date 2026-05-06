@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import logoIcon from '../assets/logo/haze-logo-icon.svg'
+import logoIcon from '../assets/logo/haze-logo-icon.png'
 import { trackCta } from '../lib/telemetry'
 
 const navLinks = [

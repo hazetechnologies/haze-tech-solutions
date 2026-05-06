@@ -67,8 +67,25 @@ async function runHandler(req, res) {
   }
 
   // ─── Full convert mode ──────────────────────────────────────────
-  const { name, company, phone, product, price, subscription_terms } = body
+  const { name, company, phone, product_id, subscription_plan_id, price } = body
   if (!name) return err(res, 400, 'bad_request', 'name required')
+
+  // Resolve product + plan and denormalize names into the legacy text columns
+  // so existing reports/portal queries continue to render without joins.
+  let productName = null, planName = null, planTerms = null
+  if (product_id) {
+    const { data: prod } = await adminClient
+      .from('products').select('name, base_price').eq('id', product_id).maybeSingle()
+    if (!prod) return err(res, 400, 'bad_request', 'product_id not found')
+    productName = prod.name
+  }
+  if (subscription_plan_id) {
+    const { data: plan } = await adminClient
+      .from('subscription_plans').select('name, billing_cycle').eq('id', subscription_plan_id).maybeSingle()
+    if (!plan) return err(res, 400, 'bad_request', 'subscription_plan_id not found')
+    planName = plan.name
+    planTerms = plan.billing_cycle
+  }
 
   // Pre-flight email collision check
   const { data: existingByEmail } = await adminClient
@@ -106,9 +123,11 @@ async function runHandler(req, res) {
       email: lead.email,
       company: company || null,
       phone: phone || null,
-      product: product || null,
+      product_id: product_id || null,
+      subscription_plan_id: subscription_plan_id || null,
+      product: productName,                     // denormalized from products.name
       price: price != null && price !== '' ? Number(price) : null,
-      subscription_terms: subscription_terms || null,
+      subscription_terms: planTerms,            // denormalized from subscription_plans.billing_cycle
     })
     .select('id')
     .single()

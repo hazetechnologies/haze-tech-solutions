@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { trackEvent } from '../../../lib/telemetry'
@@ -31,10 +31,41 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
     name: lead?.name || '',
     company: lead?.business_name || '',
     phone: '',
-    product: '',
-    price: '',
-    subscription_terms: '',
+    product_id: '',
+    subscription_plan_id: '',
+    price: '',  // editable, auto-filled from product * plan but admin can override
   })
+
+  // Catalog state — loaded once on mount
+  const [products, setProducts] = useState([])
+  const [plans, setPlans] = useState([])
+  const [catalogLoading, setCatalogLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const [pRes, plRes] = await Promise.all([
+        supabase.from('products').select('id, name, base_price').eq('active', true).order('display_order'),
+        supabase.from('subscription_plans').select('id, name, billing_cycle, duration_months, discount_percent').eq('active', true).order('display_order'),
+      ])
+      if (cancelled) return
+      setProducts(pRes.data ?? [])
+      setPlans(plRes.data ?? [])
+      setCatalogLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // Auto-fill price when product or plan changes
+  const selectedProduct = useMemo(() => products.find(p => p.id === form.product_id), [products, form.product_id])
+  const selectedPlan    = useMemo(() => plans.find(p => p.id === form.subscription_plan_id), [plans, form.subscription_plan_id])
+  useEffect(() => {
+    if (!selectedProduct) return
+    const base = Number(selectedProduct.base_price) || 0
+    const discountPct = Number(selectedPlan?.discount_percent ?? 0)
+    const computed = (base * (1 - discountPct / 100)).toFixed(2)
+    setForm(prev => ({ ...prev, price: computed }))
+  }, [selectedProduct, selectedPlan])
 
   // collision state
   const [collision, setCollision] = useState(null)  // { existing_client_id, existing_client_name }
@@ -79,9 +110,9 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
         name: form.name,
         company: form.company || null,
         phone: form.phone || null,
-        product: form.product || null,
+        product_id: form.product_id || null,
+        subscription_plan_id: form.subscription_plan_id || null,
         price: form.price || null,
-        subscription_terms: form.subscription_terms || null,
       })
 
       if (res.status === 409 && data.error === 'client_exists') {
@@ -209,15 +240,27 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
               </div>
               <div>
                 <label style={labelStyle}>Product</label>
-                <input style={inputStyle} value={form.product} onChange={e => setField('product', e.target.value)} />
+                <select style={inputStyle} value={form.product_id} onChange={e => setField('product_id', e.target.value)} disabled={catalogLoading}>
+                  <option value="">— None —</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} (${Number(p.base_price).toFixed(0)})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Plan</label>
+                <select style={inputStyle} value={form.subscription_plan_id} onChange={e => setField('subscription_plan_id', e.target.value)} disabled={catalogLoading}>
+                  <option value="">— None —</option>
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}{Number(p.discount_percent) > 0 ? ` (-${p.discount_percent}%)` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label style={labelStyle}>Price ($)</label>
-                <input style={inputStyle} type="number" step="0.01" value={form.price} onChange={e => setField('price', e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Subscription Terms</label>
-                <input style={inputStyle} value={form.subscription_terms} onChange={e => setField('subscription_terms', e.target.value)} placeholder="monthly, annual, one-time…" />
+                <input style={inputStyle} type="number" step="0.01" value={form.price} onChange={e => setField('price', e.target.value)} placeholder="auto-filled from product × plan" />
               </div>
             </div>
 

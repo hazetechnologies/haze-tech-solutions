@@ -134,7 +134,7 @@ export default function ClientManager() {
 }
 
 function AddClientModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', company: '', phone: '', product: '', price: '', subscription_terms: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', company: '', phone: '', product_id: '', subscription_plan_id: '', price: '' })
   const [products, setProducts] = useState([])
   const [plans, setPlans]       = useState([])
   const [saving, setSaving]     = useState(false)
@@ -150,32 +150,24 @@ function AddClientModal({ onClose, onCreated }) {
     })
   }, [])
 
-  const selectedProduct = products.find(p => p.name === form.product)
-  const filteredPlans = selectedProduct ? plans.filter(p => p.product_id === selectedProduct.id) : []
+  const selectedProduct = products.find(p => p.id === form.product_id)
+  const selectedPlan    = plans.find(p => p.id === form.subscription_plan_id)
+  // Plans are not filtered by product (subscription_plans.product_id is NULL in seed data — they're global)
+  const availablePlans = plans
 
-  const handleProductChange = (productName) => {
-    const prod = products.find(p => p.name === productName)
-    setForm(prev => ({
-      ...prev,
-      product: productName,
-      price: prod?.base_price ? String(prod.base_price) : '',
-      subscription_terms: '',
-    }))
+  const handleProductChange = (productId) => {
+    const prod = products.find(p => p.id === productId)
+    const planDisc = Number(selectedPlan?.discount_percent ?? 0)
+    const newPrice = prod?.base_price ? (Number(prod.base_price) * (1 - planDisc / 100)).toFixed(2) : ''
+    setForm(prev => ({ ...prev, product_id: productId, price: newPrice }))
   }
 
-  const handlePlanChange = (planName) => {
-    const plan = plans.find(p => p.name === planName)
-    const basePrice = selectedProduct?.base_price ? Number(selectedProduct.base_price) : Number(form.price)
-    if (plan && plan.discount_percent > 0 && basePrice) {
-      const discounted = basePrice * (1 - plan.discount_percent / 100)
-      setForm(prev => ({ ...prev, subscription_terms: planName, price: String(discounted.toFixed(2)) }))
-    } else {
-      if (selectedProduct?.base_price) {
-        setForm(prev => ({ ...prev, subscription_terms: planName, price: String(selectedProduct.base_price) }))
-      } else {
-        setForm(prev => ({ ...prev, subscription_terms: planName }))
-      }
-    }
+  const handlePlanChange = (planId) => {
+    const plan = plans.find(p => p.id === planId)
+    const basePrice = Number(selectedProduct?.base_price ?? 0)
+    const planDisc = Number(plan?.discount_percent ?? 0)
+    const newPrice = basePrice ? (basePrice * (1 - planDisc / 100)).toFixed(2) : form.price
+    setForm(prev => ({ ...prev, subscription_plan_id: planId, price: newPrice }))
   }
 
   const handleSubmit = async (e) => {
@@ -225,25 +217,25 @@ function AddClientModal({ onClose, onCreated }) {
 
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Product / Service</label>
-              <select value={form.product} onChange={e => handleProductChange(e.target.value)} style={selectStyle}>
+              <select value={form.product_id} onChange={e => handleProductChange(e.target.value)} style={selectStyle}>
                 <option value="">-- Select a product --</option>
                 {products.map(p => (
-                  <option key={p.id} value={p.name}>{p.name}{p.base_price ? ` — $${Number(p.base_price).toLocaleString()}` : ''}</option>
+                  <option key={p.id} value={p.id}>{p.name}{p.base_price ? ` — $${Number(p.base_price).toLocaleString()}` : ''}</option>
                 ))}
               </select>
             </div>
-
-            <Field label="Price ($)" value={form.price} onChange={v => set('price', v)} placeholder="Auto-filled from product" type="number" />
 
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Subscription Plan</label>
-              <select value={form.subscription_terms} onChange={e => handlePlanChange(e.target.value)} style={selectStyle} disabled={!form.product}>
-                <option value="">{form.product ? '-- Select a plan --' : '-- Select a product first --'}</option>
-                {filteredPlans.map(p => (
-                  <option key={p.id} value={p.name}>{p.name}{p.discount_percent > 0 ? ` (${p.discount_percent}% off)` : ''}</option>
+              <select value={form.subscription_plan_id} onChange={e => handlePlanChange(e.target.value)} style={selectStyle}>
+                <option value="">-- Select a plan --</option>
+                {availablePlans.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}{p.discount_percent > 0 ? ` (${p.discount_percent}% off)` : ''}</option>
                 ))}
               </select>
             </div>
+
+            <Field label="Price ($)" value={form.price} onChange={v => set('price', v)} placeholder="Auto-filled from product × plan" type="number" />
           </div>
 
           {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '10px', color: '#FCA5A5', fontSize: '12px', marginBottom: '16px' }}>{error}</div>}
