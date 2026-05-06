@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Bot, Key, CreditCard } from 'lucide-react'
+import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Bot, Key, CreditCard, Zap } from 'lucide-react'
 
 const MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (Best quality)' },
@@ -22,6 +22,26 @@ export default function Settings() {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
   const [showKey, setShowKey] = useState(false)
+  const [stripeTest, setStripeTest] = useState(null)   // null | { ok, … } | { ok: false, message }
+  const [stripeTesting, setStripeTesting] = useState(false)
+
+  async function testStripeConnection() {
+    setStripeTesting(true); setStripeTest(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=stripe-test', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const json = await res.json()
+      setStripeTest(res.ok ? json : { ok: false, message: json.message || json.error || 'Unknown error' })
+    } catch (e) {
+      setStripeTest({ ok: false, message: e.message })
+    } finally {
+      setStripeTesting(false)
+    }
+  }
 
   const fetchSettings = useCallback(async () => {
     setError(null)
@@ -264,6 +284,47 @@ export default function Settings() {
               style={styles.input}
             />
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
+            <button
+              type="button"
+              onClick={testStripeConnection}
+              disabled={stripeTesting || !settings.stripe_secret_key}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.3)',
+                borderRadius: 8, color: '#A5B4FC', fontSize: 12, fontWeight: 600,
+                cursor: stripeTesting || !settings.stripe_secret_key ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', opacity: stripeTesting || !settings.stripe_secret_key ? 0.5 : 1,
+              }}
+              title={!settings.stripe_secret_key ? 'Enter a secret key first' : 'Hit Stripe with the saved key + report what it resolves to'}
+            >
+              {stripeTesting
+                ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Testing…</>
+                : <><Zap size={13} /> Test connection</>}
+            </button>
+            <span style={{ fontSize: 11, color: '#475569' }}>
+              {!settings.stripe_secret_key ? 'Save the secret key first' : 'Hits Stripe + reports back what your key resolves to'}
+            </span>
+          </div>
+
+          {stripeTest && stripeTest.ok && (
+            <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, padding: 12, fontSize: 12, lineHeight: 1.6, color: '#86EFAC' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, marginBottom: 6 }}>
+                <CheckCircle size={14} /> Connected as <strong>{stripeTest.account_name}</strong> · <span style={{ padding: '1px 6px', borderRadius: 4, background: stripeTest.key_mode === 'live' ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)', color: stripeTest.key_mode === 'live' ? '#FCA5A5' : '#FCD34D', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{stripeTest.key_mode}</span>
+              </div>
+              <div style={{ color: '#94A3B8' }}>
+                Account: <code style={{ color: '#CBD5E1' }}>{stripeTest.account_id}</code>{stripeTest.account_email ? <> · {stripeTest.account_email}</> : null}
+                <br/>Products in Stripe: {stripeTest.products_in_stripe === 0 ? <span style={{ color: '#FCD34D' }}>none yet — create them in Stripe + paste the IDs into /admin/products</span> : `${stripeTest.products_in_stripe}+ found`}
+              </div>
+            </div>
+          )}
+          {stripeTest && !stripeTest.ok && (
+            <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: 12, fontSize: 12, color: '#FCA5A5', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <AlertCircle size={14} style={{ marginTop: 2, flexShrink: 0 }} />
+              <div>{stripeTest.message}</div>
+            </div>
+          )}
+
           <p style={{ fontSize: 12, color: '#64748B', margin: 0, lineHeight: 1.5 }}>
             Next: head to <a href="/admin/products" style={{ color: '#00D4FF' }}>Products &amp; Subscriptions</a> and paste a <code style={{ color: '#94A3B8' }}>price_…</code> ID into each plan you want to bill (Edit → Stripe Price ID). Create the Products + Prices in <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener noreferrer" style={{ color: '#00D4FF' }}>Stripe</a> first.
             <br/>
