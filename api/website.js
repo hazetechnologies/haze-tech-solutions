@@ -8,7 +8,7 @@
 // needs raw body for signature verification.
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from './_lib/require-admin'
-import { getStripe, siteUrl } from './_lib/stripe'
+import { getStripe, getSetting, siteUrl } from './_lib/stripe'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -26,6 +26,7 @@ export default async function handler(req, res) {
     case 'stripe-checkout':     return req.method === 'POST' ? stripeCheckout(req, res)   : methodNotAllowed(res, 'POST')
     case 'stripe-portal':       return req.method === 'POST' ? stripePortal(req, res)     : methodNotAllowed(res, 'POST')
     case 'stripe-send-invoice': return req.method === 'POST' ? stripeSendInvoice(req, res): methodNotAllowed(res, 'POST')
+    case 'stripe-test':         return req.method === 'POST' ? stripeTest(req, res)       : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -404,4 +405,37 @@ async function stripeSendInvoice(req, res) {
     stripe_invoice_id: finalized.id,
     payment_link: finalized.hosted_invoice_url,
   })
+}
+
+// POST ?action=stripe-test — admin clicks "Test connection" in Settings.
+// Hits Stripe with the saved key + reports back what it resolves to so
+// the user knows the creds are good and which mode (test vs live) they are
+// using before they wire up checkout. Doesn't write anything.
+async function stripeTest(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) { return res.status(400).json({ ok: false, error: 'no_secret', message: e.message }) }
+
+  const secret = await getSetting('stripe_secret_key', 'STRIPE_SECRET_KEY')
+  const isTestKey = !!secret && secret.startsWith('sk_test_')
+
+  try {
+    const [account, products] = await Promise.all([
+      stripe.accounts.retrieve(),
+      stripe.products.list({ limit: 1, active: true }),
+    ])
+    return res.status(200).json({
+      ok: true,
+      account_name:  account.business_profile?.name || account.settings?.dashboard?.display_name || account.id,
+      account_email: account.email,
+      account_id:    account.id,
+      key_mode:      isTestKey ? 'test' : 'live',
+      products_in_stripe: products.data.length, // 0 = none yet, sample only
+    })
+  } catch (e) {
+    return res.status(400).json({ ok: false, error: 'stripe_call_failed', message: e.message })
+  }
 }
