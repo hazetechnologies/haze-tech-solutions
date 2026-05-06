@@ -35,6 +35,7 @@ import PortalProject        from './pages/portal/PortalProject'
 import PortalInvoices       from './pages/portal/PortalInvoices'
 import AcceptInvite         from './pages/portal/AcceptInvite'
 import PortalWebsiteIntake  from './pages/portal/PortalWebsiteIntake'
+import PortalBrandKit       from './pages/portal/PortalBrandKit'
 
 import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="projects/:projectId"  element={<PortalProject />} />
             <Route path="invoices"             element={<PortalInvoices />} />
             <Route path="website-intake"       element={<PortalWebsiteIntake />} />
+            <Route path="brand-kit"            element={<PortalBrandKit />} />
           </Route>
           </Routes>
         </BrowserRouter>

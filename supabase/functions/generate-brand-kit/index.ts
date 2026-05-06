@@ -55,8 +55,13 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({})) as {
     kit_id?: string
     existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>
+    phase?: 'all' | 'logos_then_pause' | 'banners'
   }
   const { kit_id, existing_logos } = body
+  // Default phase = 'logos_then_pause' so new kits stop after logos for client approval.
+  // Pass phase: 'all' from internal scripts that want the full end-to-end flow without a gate.
+  // Pass phase: 'banners' after the client approves a logo (via api/website?action=approve-logo).
+  const phase = body.phase ?? 'logos_then_pause'
   if (!kit_id) {
     return new Response(JSON.stringify({ error: 'kit_id required' }), {
       status: 400, headers: { 'Content-Type': 'application/json' },
@@ -64,15 +69,16 @@ Deno.serve(async (req) => {
   }
 
   // @ts-ignore EdgeRuntime is a Supabase global
-  EdgeRuntime.waitUntil(processBrandKit(kit_id, existing_logos))
+  EdgeRuntime.waitUntil(processBrandKit(kit_id, phase, existing_logos))
 
-  return new Response(JSON.stringify({ ok: true, kit_id }), {
+  return new Response(JSON.stringify({ ok: true, kit_id, phase }), {
     headers: { 'Content-Type': 'application/json' },
   })
 })
 
 async function processBrandKit(
   kit_id: string,
+  phase: 'all' | 'logos_then_pause' | 'banners',
   existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
 ): Promise<void> {
   const supabase = createClient(
@@ -87,7 +93,7 @@ async function processBrandKit(
   try {
     const { data: row, error: readErr } = await supabase
       .from('brand_kits')
-      .select('inputs, client_id')
+      .select('inputs, client_id, assets, approved_logo_asset_id')
       .eq('id', kit_id)
       .single()
 
@@ -98,32 +104,59 @@ async function processBrandKit(
 
     const inputs = row.inputs as BrandKitInputs
     const client_id = row.client_id as string
+    const existingAssets = (row.assets || {}) as Partial<BrandKitAssets>
+    const approvedLogoKey = (row.approved_logo_asset_id as ImageAssetId | null) ?? 'logo_primary'
 
+    if (phase === 'banners') {
+      // ── Banner-only phase: client has approved a logo; generate banners using it as ref ──
+      const existingImages = (existingAssets.images || {}) as Partial<Record<ImageAssetId, ImageAssetRef>>
+      const approvedRef = existingImages[approvedLogoKey]
+      if (!approvedRef?.public_url) {
+        await update({ status: 'failed', error: `approved logo asset (${approvedLogoKey}) not found` })
+        return
+      }
+      await update({ status: 'generating', progress_message: 'Generating banners…' })
+      const banners = await generateBanners(inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url)
+      const mergedImages = { ...existingImages, ...banners }
+      await update({
+        status: 'done',
+        progress_message: null,
+        assets: { ...existingAssets, images: mergedImages },
+      })
+      return
+    }
+
+    // ── Phases 'all' and 'logos_then_pause' both start with text + logos ──
     await update({ status: 'generating', progress_message: 'Drafting copy…' })
 
-    // ── Text generation (parallel) ──
     const textAssets = await generateAllText(inputs, kit_id)
-
-    // Persist text assets immediately so we don't lose them if image gen times out
     await update({
-      progress_message: 'Drafting copy done. Generating images…',
+      progress_message: 'Drafting copy done. Generating logos…',
       assets: { ...textAssets },
     })
 
-    // ── Image generation (parallel — all 9 fired at once, retry-with-backoff per image) ──
-    // If existing_logos is provided, those are used instead of OpenAI logo generation
-    // (so banners are img2img'd against the user's chosen logos, not freshly generated ones).
-    const images = await generateAllImages(inputs, textAssets.color_palette, client_id, kit_id, existing_logos)
+    const logos = await generateLogos(inputs, textAssets.color_palette, client_id, kit_id, existing_logos)
 
-    const assets: Partial<BrandKitAssets> = {
-      ...textAssets,
-      images: images as any,
+    if (phase === 'logos_then_pause') {
+      // Pause for client approval. Banners will be triggered by api/website?action=approve-logo.
+      await update({
+        status: 'awaiting_logo_approval',
+        progress_message: 'Logos ready — awaiting client approval',
+        assets: { ...textAssets, images: logos as any },
+      })
+      return
     }
 
+    // phase === 'all' — keep going through banners (used by regen scripts that bypass the gate)
+    await update({
+      progress_message: 'Logos done. Generating banners…',
+      assets: { ...textAssets, images: logos as any },
+    })
+    const banners = await generateBanners(inputs, textAssets.color_palette, client_id, kit_id, logos.logo_primary.public_url)
     await update({
       status: 'done',
       progress_message: null,
-      assets,
+      assets: { ...textAssets, images: { ...logos, ...banners } as any },
     })
   } catch (err) {
     await update({
@@ -240,17 +273,16 @@ async function callOpusPalette(inputs: BrandKitInputs, kitId: string, evtProps: 
 // Step 2: banners + profile pic via KIE AI img2img with logo_primary as reference
 //         → all 7 fired simultaneously as async tasks, polled in parallel
 
-async function generateAllImages(
+async function generateLogos(
   inputs: BrandKitInputs,
   palette: ColorPaletteEntry[],
   clientId: string,
   kitId: string,
   existingLogos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
-): Promise<Record<ImageAssetId, ImageAssetRef>> {
+): Promise<Record<'logo_primary' | 'logo_icon' | 'logo_monochrome', ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
 
-  // ── Step 1: logos — either reuse provided ones, or generate via OpenAI ──
   const allProvided = existingLogos
     && LOGO_ASSET_IDS.every((id) => existingLogos[id]?.public_url)
   if (allProvided) {
@@ -269,8 +301,18 @@ async function generateAllImages(
     for (const [assetId, uploaded] of logoResults) out[assetId] = uploaded
   }
 
-  // ── Step 2: banners + profile pic via KIE AI img2img ──
-  const logoPrimaryUrl = out['logo_primary']!.public_url
+  return out as Record<'logo_primary' | 'logo_icon' | 'logo_monochrome', ImageAssetRef>
+}
+
+async function generateBanners(
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  clientId: string,
+  kitId: string,
+  approvedLogoUrl: string,
+): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
 
   const referenceResults = await Promise.all(
     REFERENCE_ASSET_IDS.map(async (assetId) => {
@@ -278,11 +320,8 @@ async function generateAllImages(
       const prompt = buildImagePrompt(assetId, inputs, palette)
       const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
 
-      // Create KIE AI task
-      const taskId = await createKieTask(prompt, aspectRatio, logoPrimaryUrl, kitId, assetId)
-      // Poll until done
+      const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
       const resultUrl = await pollKieTask(taskId, assetId)
-      // Download + resize + upload to R2
       const raw = await downloadRemoteImage(resultUrl, assetId)
       const resized = await resizeToFinalDims(raw, spec)
       const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
@@ -291,7 +330,7 @@ async function generateAllImages(
   )
   for (const [assetId, uploaded] of referenceResults) out[assetId] = uploaded
 
-  return out as Record<ImageAssetId, ImageAssetRef>
+  return out as Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>
 }
 
 // ── KIE AI helpers ──
