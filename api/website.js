@@ -1,10 +1,14 @@
 // api/website.js
 // Consolidated router for cross-feature endpoints, dispatched by ?action=.
 // Reduces serverless-function count (Hobby plan caps at 12).
-// Currently hosts: website-funnel (activate/intake/start/status) and
-// brand-kit logo approval (approve-logo).
+// Currently hosts: website-funnel (activate/intake/start/status),
+// brand-kit logo approval (approve-logo), and Stripe billing
+// (stripe-checkout/stripe-portal/stripe-send-invoice).
+// The Stripe webhook lives separately (api/stripe-webhook.js) because it
+// needs raw body for signature verification.
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from './_lib/require-admin'
+import { getStripe, siteUrl } from './_lib/stripe'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -14,12 +18,15 @@ const APPROVABLE_LOGO_KEYS = ['logo_primary', 'logo_icon', 'logo_monochrome']
 export default async function handler(req, res) {
   const action = (req.query?.action || '').toString()
   switch (action) {
-    case 'activate':     return req.method === 'POST' ? activate(req, res)     : methodNotAllowed(res, 'POST')
-    case 'intake':       return req.method === 'POST' ? intake(req, res)       : methodNotAllowed(res, 'POST')
-    case 'start':        return req.method === 'POST' ? start(req, res)        : methodNotAllowed(res, 'POST')
-    case 'status':       return req.method === 'GET'  ? status(req, res)       : methodNotAllowed(res, 'GET')
-    case 'approve-logo': return req.method === 'POST' ? approveLogo(req, res)  : methodNotAllowed(res, 'POST')
-    default:             return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
+    case 'activate':            return req.method === 'POST' ? activate(req, res)         : methodNotAllowed(res, 'POST')
+    case 'intake':              return req.method === 'POST' ? intake(req, res)           : methodNotAllowed(res, 'POST')
+    case 'start':               return req.method === 'POST' ? start(req, res)            : methodNotAllowed(res, 'POST')
+    case 'status':              return req.method === 'GET'  ? status(req, res)           : methodNotAllowed(res, 'GET')
+    case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
+    case 'stripe-checkout':     return req.method === 'POST' ? stripeCheckout(req, res)   : methodNotAllowed(res, 'POST')
+    case 'stripe-portal':       return req.method === 'POST' ? stripePortal(req, res)     : methodNotAllowed(res, 'POST')
+    case 'stripe-send-invoice': return req.method === 'POST' ? stripeSendInvoice(req, res): methodNotAllowed(res, 'POST')
+    default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
 
@@ -243,4 +250,158 @@ async function approveLogo(req, res) {
   }
 
   return res.status(200).json({ kit_id, approved_logo_key })
+}
+
+// ─── Stripe ──────────────────────────────────────────────────────────────
+
+// POST ?action=stripe-checkout — admin generates a Checkout Session URL for
+// a client + plan. Lazily creates a Stripe Customer if missing, writes
+// stripe_customer_id back to clients. Returns the Checkout URL for the
+// admin to send to the client.
+// Body: { client_id, subscription_plan_id }
+async function stripeCheckout(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { adminClient } = ctx
+
+  const { client_id, subscription_plan_id } = req.body || {}
+  if (!client_id || !subscription_plan_id) {
+    return res.status(400).json({ error: 'bad_request', message: 'client_id and subscription_plan_id required' })
+  }
+
+  const { data: client, error: clientErr } = await adminClient
+    .from('clients').select('id, name, email, stripe_customer_id').eq('id', client_id).maybeSingle()
+  if (clientErr || !client) return res.status(404).json({ error: 'not_found', message: 'Client not found' })
+
+  const { data: plan } = await adminClient
+    .from('subscription_plans').select('stripe_price_id, name, billing_cycle').eq('id', subscription_plan_id).maybeSingle()
+  if (!plan?.stripe_price_id) {
+    return res.status(409).json({ error: 'price_not_synced', message: `Plan "${plan?.name ?? subscription_plan_id}" has no stripe_price_id. Run scripts/sync-stripe-catalog.mjs.` })
+  }
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
+
+  // Lazy-create the customer
+  let customerId = client.stripe_customer_id
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: client.email, name: client.name, metadata: { client_id: client.id },
+    })
+    customerId = customer.id
+    await adminClient.from('clients').update({ stripe_customer_id: customerId }).eq('id', client.id)
+  }
+
+  const isOneTime = plan.billing_cycle === 'one-time'
+  const session = await stripe.checkout.sessions.create({
+    mode: isOneTime ? 'payment' : 'subscription',
+    customer: customerId,
+    line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
+    success_url: `${siteUrl()}/portal/dashboard?checkout=success`,
+    cancel_url: `${siteUrl()}/portal/dashboard?checkout=canceled`,
+    metadata: { client_id: client.id, subscription_plan_id },
+  })
+
+  return res.status(200).json({ url: session.url, customer_id: customerId })
+}
+
+// POST ?action=stripe-portal — client clicks "Manage subscription" in their
+// portal; we generate a Stripe Billing Portal session and return the URL.
+// Body: {} — caller is identified by their JWT.
+async function stripePortal(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  const authHeader = req.headers.authorization
+  if (!authHeader) return res.status(401).json({ error: 'unauthorized', message: 'Missing authorization header' })
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader)
+  if (!m) return res.status(401).json({ error: 'unauthorized', message: 'Bearer token required' })
+
+  const userClient = createClient(url, anonKey)
+  const { data: { user: caller }, error: authErr } = await userClient.auth.getUser(m[1].trim())
+  if (authErr || !caller) return res.status(401).json({ error: 'unauthorized', message: 'Invalid token' })
+
+  const adminClient = createClient(url, SERVICE_ROLE_KEY)
+  const { data: client } = await adminClient
+    .from('clients').select('id, stripe_customer_id').eq('user_id', caller.id).maybeSingle()
+  if (!client?.stripe_customer_id) {
+    return res.status(409).json({ error: 'no_customer', message: 'No Stripe customer linked. Complete checkout first.' })
+  }
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
+
+  const session = await stripe.billingPortal.sessions.create({
+    customer: client.stripe_customer_id,
+    return_url: `${siteUrl()}/portal/dashboard`,
+  })
+  return res.status(200).json({ url: session.url })
+}
+
+// POST ?action=stripe-send-invoice — admin clicks "Send via Stripe" on a
+// pending invoice row. Creates a Stripe Invoice + Item from our DB row,
+// finalizes, sends (Stripe emails the hosted payment link).
+// Body: { invoice_id }
+async function stripeSendInvoice(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { adminClient } = ctx
+
+  const { invoice_id } = req.body || {}
+  if (!invoice_id) return res.status(400).json({ error: 'bad_request', message: 'invoice_id required' })
+
+  const { data: inv, error: invErr } = await adminClient
+    .from('invoices').select('*').eq('id', invoice_id).maybeSingle()
+  if (invErr || !inv) return res.status(404).json({ error: 'not_found', message: 'Invoice not found' })
+  if (inv.status === 'paid') return res.status(409).json({ error: 'already_paid' })
+  if (inv.stripe_invoice_id) return res.status(409).json({ error: 'already_sent', stripe_invoice_id: inv.stripe_invoice_id })
+
+  const { data: client } = await adminClient
+    .from('clients').select('id, name, email, stripe_customer_id').eq('id', inv.client_id).maybeSingle()
+  if (!client) return res.status(404).json({ error: 'client_not_found' })
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
+
+  // Lazy-create customer
+  let customerId = client.stripe_customer_id
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: client.email, name: client.name, metadata: { client_id: client.id },
+    })
+    customerId = customer.id
+    await adminClient.from('clients').update({ stripe_customer_id: customerId }).eq('id', client.id)
+  }
+
+  // Create draft invoice → add item → finalize → send (Stripe emails payment link)
+  const stripeInvoice = await stripe.invoices.create({
+    customer: customerId,
+    collection_method: 'send_invoice',
+    days_until_due: 14,
+    description: inv.description || inv.invoice_number || `Invoice ${inv.id}`,
+    metadata: { invoice_id: inv.id, client_id: client.id },
+  })
+  await stripe.invoiceItems.create({
+    customer: customerId,
+    invoice: stripeInvoice.id,
+    amount: Math.round(Number(inv.amount) * 100), // cents
+    currency: 'usd',
+    description: inv.description || inv.invoice_number || `Invoice ${inv.id}`,
+  })
+  const finalized = await stripe.invoices.finalizeInvoice(stripeInvoice.id)
+  await stripe.invoices.sendInvoice(finalized.id)
+
+  await adminClient.from('invoices').update({
+    stripe_invoice_id: finalized.id,
+    stripe_payment_link: finalized.hosted_invoice_url,
+  }).eq('id', inv.id)
+
+  return res.status(200).json({
+    stripe_invoice_id: finalized.id,
+    payment_link: finalized.hosted_invoice_url,
+  })
 }

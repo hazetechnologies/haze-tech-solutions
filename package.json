@@ -28,7 +28,8 @@
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.2",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "stripe": "^22.1.0"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.1041.0",

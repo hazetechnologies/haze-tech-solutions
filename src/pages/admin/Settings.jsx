@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Bot, Key } from 'lucide-react'
+import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Bot, Key, CreditCard } from 'lucide-react'
 
 const MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (Best quality)' },
@@ -215,6 +215,58 @@ export default function Settings() {
               </span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── Stripe Configuration ── */}
+      <div style={styles.card}>
+        <div style={styles.cardHeader}>
+          <div style={{ ...styles.cardIcon, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
+            <CreditCard size={18} color="#818CF8" />
+          </div>
+          <div>
+            <h3 style={styles.cardTitle}>Stripe Configuration</h3>
+            <p style={styles.cardDesc}>Secret key + webhook secret for billing</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div>
+            <label style={styles.label}>Stripe Secret Key</label>
+            <p style={styles.fieldDesc}>From dashboard.stripe.com/apikeys (sk_live_… or sk_test_…)</p>
+            <input
+              type="password"
+              value={settings.stripe_secret_key || ''}
+              onChange={e => set('stripe_secret_key', e.target.value)}
+              placeholder="sk_..."
+              style={styles.input}
+            />
+          </div>
+          <div>
+            <label style={styles.label}>Stripe Publishable Key</label>
+            <p style={styles.fieldDesc}>Safe to expose; used by client-side Stripe.js if/when needed</p>
+            <input
+              type="text"
+              value={settings.stripe_publishable_key || ''}
+              onChange={e => set('stripe_publishable_key', e.target.value)}
+              placeholder="pk_..."
+              style={styles.input}
+            />
+          </div>
+          <div>
+            <label style={styles.label}>Stripe Webhook Secret</label>
+            <p style={styles.fieldDesc}>From dashboard.stripe.com/webhooks → endpoint signing secret (whsec_…). Endpoint URL: <code style={{ color: '#94A3B8' }}>https://www.hazetechsolutions.com/api/stripe-webhook</code></p>
+            <input
+              type="password"
+              value={settings.stripe_webhook_secret || ''}
+              onChange={e => set('stripe_webhook_secret', e.target.value)}
+              placeholder="whsec_..."
+              style={styles.input}
+            />
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
+            After saving, run <code style={{ color: '#94A3B8' }}>node scripts/sync-stripe-catalog.mjs</code> from the project root to create Stripe Products + Prices for all active subscription plans. This populates the <code style={{ color: '#94A3B8' }}>stripe_price_id</code> column on each plan, which is required before any client can be sent a checkout link.
+          </p>
         </div>
       </div>
 
