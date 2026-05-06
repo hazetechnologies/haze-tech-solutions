@@ -7,8 +7,8 @@
 // The Stripe webhook lives separately (api/stripe-webhook.js) because it
 // needs raw body for signature verification.
 import { createClient } from '@supabase/supabase-js'
-import { requireAdmin } from './_lib/require-admin'
-import { getStripe, getSetting, siteUrl } from './_lib/stripe'
+import { requireAdmin } from './_lib/require-admin.js'
+import { getStripe, getSetting, siteUrl } from './_lib/stripe.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY

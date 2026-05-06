@@ -3,7 +3,7 @@
 // verification, so we disable Vercel's bodyParser at the file level — the
 // reason this lives in its own file rather than under api/website.js.
 import { createClient } from '@supabase/supabase-js'
-import { getStripe, getWebhookSecret } from './_lib/stripe'
+import { getStripe, getWebhookSecret } from './_lib/stripe.js'
 
 export const config = { api: { bodyParser: false } }
 

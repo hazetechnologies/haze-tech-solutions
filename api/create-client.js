@@ -1,4 +1,4 @@
-import { requireAdmin } from './_lib/require-admin'
+import { requireAdmin } from './_lib/require-admin.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

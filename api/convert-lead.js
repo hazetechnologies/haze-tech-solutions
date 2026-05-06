@@ -1,4 +1,4 @@
-import { requireAdmin } from './_lib/require-admin'
+import { requireAdmin } from './_lib/require-admin.js'
 
 const SITE_URL = process.env.VITE_SITE_URL || 'https://www.hazetechsolutions.com'
 

@@ -1,5 +1,5 @@
 // api/start-brand-kit.js
-import { requireAdmin } from './_lib/require-admin'
+import { requireAdmin } from './_lib/require-admin.js'
 
 const REQUIRED_PATH3_FIELDS = [
   'business_name', 'business_description', 'industry', 'audience',
