@@ -36,10 +36,14 @@ export default function BrandKitTab({ client }) {
 
   useEffect(() => { loadInitial() }, [loadInitial])
 
-  // Poll while pending/generating
+  // Poll while pending/generating/awaiting_logo_approval (the last keeps us
+  // in sync with the client's approval — slower cadence since it can sit
+  // for hours).
   useEffect(() => {
     if (!latestKit) return
-    if (latestKit.status !== 'pending' && latestKit.status !== 'generating') return
+    const isPolling = ['pending', 'generating', 'awaiting_logo_approval'].includes(latestKit.status)
+    if (!isPolling) return
+    const intervalMs = latestKit.status === 'awaiting_logo_approval' ? 10_000 : POLL_INTERVAL_MS
 
     let cancelled = false
     let timer
@@ -70,15 +74,16 @@ export default function BrandKitTab({ client }) {
           })
           return
         }
-        timer = setTimeout(poll, POLL_INTERVAL_MS)
+        timer = setTimeout(poll, intervalMs)
       } catch {
-        if (!cancelled) timer = setTimeout(poll, POLL_INTERVAL_MS * 2)
+        if (!cancelled) timer = setTimeout(poll, intervalMs * 2)
       }
     }
 
-    timer = setTimeout(poll, POLL_INTERVAL_MS)
+    timer = setTimeout(poll, intervalMs)
     return () => { cancelled = true; if (timer) clearTimeout(timer) }
-  }, [latestKit, client.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestKit?.id, latestKit?.status, client.id])
 
   // Called by intake form on successful POST
   const handleStarted = useCallback((kit_id) => {
@@ -122,6 +127,33 @@ export default function BrandKitTab({ client }) {
         </div>
         <div style={{ color: '#475569', fontSize: 12 }}>
           Usually takes 90-120 seconds.
+        </div>
+      </div>
+    )
+  }
+
+  // Awaiting client logo approval
+  if (latestKit.status === 'awaiting_logo_approval') {
+    const images = latestKit.assets?.images || {}
+    return (
+      <div style={{ padding: 24 }}>
+        <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 10, padding: 14, color: '#FACC15', fontSize: 13, marginBottom: 18 }}>
+          Logos generated. Waiting for the client to approve one in their portal — banners will start automatically once they pick.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+          {['logo_primary', 'logo_icon', 'logo_monochrome'].map((key) => {
+            const ref = images[key]
+            return (
+              <div key={key} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ aspectRatio: '1 / 1', background: '#0B1120', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+                  {ref?.public_url
+                    ? <img src={ref.public_url} alt={key} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    : <span style={{ color: '#475569', fontSize: 12 }}>(missing)</span>}
+                </div>
+                <div style={{ padding: '8px 10px', fontSize: 11, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{key.replace(/_/g, ' ')}</div>
+              </div>
+            )
+          })}
         </div>
       </div>
     )

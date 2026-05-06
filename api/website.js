@@ -1,21 +1,25 @@
 // api/website.js
-// Consolidated router for the website-funnel feature, dispatched by ?action=
+// Consolidated router for cross-feature endpoints, dispatched by ?action=.
 // Reduces serverless-function count (Hobby plan caps at 12).
+// Currently hosts: website-funnel (activate/intake/start/status) and
+// brand-kit logo approval (approve-logo).
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from './_lib/require-admin'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const VALID_TEMPLATES = ['service-business','local-business','creative-portfolio','saas-landing','travel-agency']
+const APPROVABLE_LOGO_KEYS = ['logo_primary', 'logo_icon', 'logo_monochrome']
 
 export default async function handler(req, res) {
   const action = (req.query?.action || '').toString()
   switch (action) {
-    case 'activate': return req.method === 'POST' ? activate(req, res) : methodNotAllowed(res, 'POST')
-    case 'intake':   return req.method === 'POST' ? intake(req, res)   : methodNotAllowed(res, 'POST')
-    case 'start':    return req.method === 'POST' ? start(req, res)    : methodNotAllowed(res, 'POST')
-    case 'status':   return req.method === 'GET'  ? status(req, res)   : methodNotAllowed(res, 'GET')
-    default:         return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
+    case 'activate':     return req.method === 'POST' ? activate(req, res)     : methodNotAllowed(res, 'POST')
+    case 'intake':       return req.method === 'POST' ? intake(req, res)       : methodNotAllowed(res, 'POST')
+    case 'start':        return req.method === 'POST' ? start(req, res)        : methodNotAllowed(res, 'POST')
+    case 'status':       return req.method === 'GET'  ? status(req, res)       : methodNotAllowed(res, 'GET')
+    case 'approve-logo': return req.method === 'POST' ? approveLogo(req, res)  : methodNotAllowed(res, 'POST')
+    default:             return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
 
@@ -170,4 +174,73 @@ async function status(req, res) {
   if (!data) return res.status(404).json({ error: 'not_found', message: 'Project not found' })
 
   return res.status(200).json(data)
+}
+
+// POST ?action=approve-logo — client picks one of the 3 logo variants and
+// triggers the banner-generation phase of the brand-kit edge function.
+async function approveLogo(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  const authHeader = req.headers.authorization
+  if (!authHeader) return res.status(401).json({ error: 'unauthorized', message: 'Missing authorization header' })
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader)
+  if (!m) return res.status(401).json({ error: 'unauthorized', message: 'Bearer token required' })
+
+  const userClient = createClient(url, anonKey)
+  const { data: { user: caller }, error: authErr } = await userClient.auth.getUser(m[1].trim())
+  if (authErr || !caller) return res.status(401).json({ error: 'unauthorized', message: 'Invalid token' })
+
+  const adminClient = createClient(url, SERVICE_ROLE_KEY)
+  const { kit_id, approved_logo_key } = req.body || {}
+  if (!kit_id) return res.status(400).json({ error: 'bad_request', message: 'kit_id required' })
+  if (!APPROVABLE_LOGO_KEYS.includes(approved_logo_key)) {
+    return res.status(400).json({ error: 'bad_request', message: `approved_logo_key must be one of ${APPROVABLE_LOGO_KEYS.join(', ')}` })
+  }
+
+  // Verify caller owns this kit (kit's client.user_id == caller.id)
+  const { data: kit } = await adminClient
+    .from('brand_kits')
+    .select('id, status, client_id, assets, clients!inner(user_id)')
+    .eq('id', kit_id).maybeSingle()
+  if (!kit) return res.status(404).json({ error: 'not_found', message: 'Brand kit not found' })
+  if (kit.clients.user_id !== caller.id) return res.status(403).json({ error: 'forbidden', message: 'Not your brand kit' })
+  if (kit.status !== 'awaiting_logo_approval') {
+    return res.status(409).json({ error: 'wrong_status', message: `Kit is in status: ${kit.status}` })
+  }
+  const approvedRef = (kit.assets?.images || {})[approved_logo_key]
+  if (!approvedRef?.public_url) {
+    return res.status(409).json({ error: 'logo_missing', message: `Logo asset ${approved_logo_key} is not present in this kit` })
+  }
+
+  // Mark approval and flip status
+  const { error: updErr } = await adminClient
+    .from('brand_kits')
+    .update({
+      approved_logo_asset_id: approved_logo_key,
+      status: 'generating',
+      progress_message: 'Logo approved — generating banners…',
+      error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', kit_id)
+  if (updErr) return res.status(500).json({ error: 'update_failed', message: updErr.message })
+
+  // Fire-and-forget invoke edge function in banners-only mode
+  const invoke = await fetch(`${EDGE_FN}/generate-brand-kit`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kit_id, phase: 'banners' }),
+  })
+  if (!invoke.ok) {
+    const txt = await invoke.text().catch(() => '')
+    await adminClient.from('brand_kits').update({
+      status: 'failed',
+      error: `edge invoke failed: ${invoke.status}: ${txt.slice(0, 200)}`,
+    }).eq('id', kit_id)
+    return res.status(500).json({ error: 'invoke_failed', message: 'Banner-phase invocation failed' })
+  }
+
+  return res.status(200).json({ kit_id, approved_logo_key })
 }
