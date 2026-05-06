@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import logoIcon from '../assets/logo/haze-logo-icon.svg'
+import logoIcon from '../assets/logo/haze-logo-icon.png'
 
 // Simple inline social icons to avoid extra deps
 const InstagramIcon = () => (
