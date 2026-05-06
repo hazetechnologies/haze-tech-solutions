@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { trackEvent } from '../../../lib/telemetry'
-import { X, Send, Link2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Send, Link2, CheckCircle2, AlertCircle, CreditCard, Copy } from 'lucide-react'
 
 const inputStyle = {
   width: '100%', boxSizing: 'border-box',
@@ -72,6 +72,11 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
 
   // success state
   const [result, setResult] = useState(null)  // { client_id, mode }
+
+  // checkout-link state (post-conversion)
+  const [checkoutLink, setCheckoutLink] = useState(null)
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
+  const [checkoutError, setCheckoutError] = useState(null)
 
   if (!lead) return null
 
@@ -190,6 +195,25 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
     }
   }
 
+  async function generateCheckoutLink() {
+    setCheckoutBusy(true); setCheckoutError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=stripe-checkout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: result.client_id, subscription_plan_id: form.subscription_plan_id }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.message || json.error)
+      setCheckoutLink(json.url)
+    } catch (e) {
+      setCheckoutError(e.message)
+    } finally {
+      setCheckoutBusy(false)
+    }
+  }
+
   // Block dismiss while a request is in-flight: clicking the overlay or X
   // mid-submit would unmount the modal but the fetch keeps running, leaving
   // a ghost client + no badge in UI.
@@ -299,6 +323,43 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
                 ? 'Lead linked to existing client.'
                 : `Invite sent to ${lead.email}. Client created.`}
             </div>
+
+            {/* Checkout-link generator (only if a subscription plan was picked at convert time) */}
+            {result.mode !== 'link_only' && form.subscription_plan_id && (
+              <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#A5B4FC', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+                  <CreditCard size={14} /> Stripe checkout
+                </div>
+                {!checkoutLink && (
+                  <>
+                    <p style={{ color: '#94A3B8', fontSize: 12, margin: '0 0 10px' }}>
+                      Generate a Stripe checkout link the client can use to set up recurring billing for the plan you picked.
+                    </p>
+                    <button onClick={generateCheckoutLink} disabled={checkoutBusy} style={{ ...primaryBtn, background: 'linear-gradient(135deg, #818CF8, #6366F1)' }}>
+                      {checkoutBusy ? 'Generating…' : 'Generate checkout link'}
+                    </button>
+                    {checkoutError && <div style={{ color: '#FCA5A5', fontSize: 12, marginTop: 8 }}>{checkoutError}</div>}
+                  </>
+                )}
+                {checkoutLink && (
+                  <div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                      <input readOnly value={checkoutLink}
+                             onClick={(e) => e.target.select()}
+                             style={{ flex: 1, background: 'transparent', border: 'none', color: '#CBD5E1', fontSize: 11, fontFamily: 'monospace', outline: 'none' }} />
+                      <button onClick={() => navigator.clipboard.writeText(checkoutLink)}
+                              style={{ ...ghostBtn, padding: '4px 8px', fontSize: 11 }}>
+                        <Copy size={11} /> Copy
+                      </button>
+                    </div>
+                    <p style={{ color: '#64748B', fontSize: 11, margin: 0 }}>
+                      Send this link to {lead.email} via your preferred channel. Once they pay, the subscription appears in their portal automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={onClose} style={ghostBtn}>Close</button>
               <Link to={`/admin/clients/${result.client_id}`} style={{ ...primaryBtn, textDecoration: 'none' }}>

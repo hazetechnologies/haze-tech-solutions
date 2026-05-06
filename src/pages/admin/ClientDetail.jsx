@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import {
   ArrowLeft, Plus, X, Edit2, Trash2,
   FolderKanban, CheckCircle, FileText, Receipt,
-  AlertCircle, Sparkles, Globe,
+  AlertCircle, Sparkles, Globe, Send, ExternalLink,
 } from 'lucide-react'
 import BrandKitTab from './components/BrandKitTab'
 import WebsiteProjectTab from './components/WebsiteProjectTab'
@@ -212,7 +212,12 @@ export default function ClientDetail() {
             <td style={styles.td}><StatusBadge status={inv.status} /></td>
             <td style={{ ...styles.td, color: '#64748B', whiteSpace: 'nowrap' }}>{fmtDate(inv.due_date)}</td>
             <td style={{ ...styles.td, color: '#64748B', whiteSpace: 'nowrap' }}>{fmtDate(inv.paid_date)}</td>
-            <td style={styles.td}><Actions onEdit={() => setModal({ type: 'invoices', data: inv })} onDelete={() => handleDelete('invoices', inv.id)} /></td>
+            <td style={styles.td}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <SendStripeInvoiceBtn inv={inv} onSent={handleSaved} />
+                <Actions onEdit={() => setModal({ type: 'invoices', data: inv })} onDelete={() => handleDelete('invoices', inv.id)} />
+              </div>
+            </td>
           </tr>
         )}
         emptyIcon={Receipt} emptyText="No invoices yet."
@@ -339,6 +344,53 @@ function Actions({ onEdit, onDelete }) {
         <Trash2 size={13} />
       </button>
     </div>
+  )
+}
+
+function SendStripeInvoiceBtn({ inv, onSent }) {
+  const [busy, setBusy] = useState(false)
+  // If already sent, show a "view" link to the hosted payment page
+  if (inv.stripe_invoice_id && inv.stripe_payment_link) {
+    return (
+      <a href={inv.stripe_payment_link} target="_blank" rel="noopener noreferrer"
+         title="View Stripe payment link"
+         style={{ ...styles.actionBtn, color: '#818CF8', textDecoration: 'none' }}
+         onMouseEnter={e => { e.currentTarget.style.borderColor = '#818CF8' }}
+         onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}>
+        <ExternalLink size={13} />
+      </a>
+    )
+  }
+  // Don't offer Send for paid invoices
+  if (inv.status === 'paid') return null
+
+  async function send() {
+    if (!confirm(`Send invoice ${inv.invoice_number} via Stripe?\n\nClient will receive an email with a hosted payment link.`)) return
+    setBusy(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=stripe-send-invoice', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: inv.id }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.message || json.error)
+      onSent?.()
+    } catch (e) {
+      alert(`Send failed: ${e.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button onClick={send} disabled={busy}
+            title="Send via Stripe (creates hosted invoice + emails client)"
+            style={{ ...styles.actionBtn, color: '#818CF8', opacity: busy ? 0.5 : 1, cursor: busy ? 'wait' : 'pointer' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#818CF8' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}>
+      <Send size={13} />
+    </button>
   )
 }
 

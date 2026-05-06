@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import {
   FolderKanban, CheckCircle, Clock, AlertCircle,
-  TrendingUp, Receipt, ChevronRight,
+  TrendingUp, Receipt, ChevronRight, CreditCard, ExternalLink,
 } from 'lucide-react'
 
 const statusConfig = {
@@ -22,6 +22,8 @@ export default function PortalDashboard() {
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
   const [websiteProject, setWebsiteProject] = useState(null)
+  const [subscription, setSubscription] = useState(null)
+  const [billingPortalLoading, setBillingPortalLoading] = useState(false)
 
   const fetchData = useCallback(async () => {
     setError(null)
@@ -56,11 +58,34 @@ export default function PortalDashboard() {
   useEffect(() => {
     if (!client?.id) return
     (async () => {
-      const { data: wp } = await supabase
-        .from('website_projects').select('id, status, repo_url').eq('client_id', client.id).maybeSingle()
+      const [{ data: wp }, { data: sub }] = await Promise.all([
+        supabase.from('website_projects').select('id, status, repo_url').eq('client_id', client.id).maybeSingle(),
+        supabase.from('subscriptions').select('id, status, current_period_end, cancel_at_period_end, stripe_price_id')
+          .eq('client_id', client.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
       setWebsiteProject(wp || null)
+      setSubscription(sub || null)
     })()
   }, [client?.id])
+
+  async function openBillingPortal() {
+    setBillingPortalLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=stripe-portal', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.message || json.error)
+      window.location.href = json.url
+    } catch (e) {
+      setError(`Couldn't open Stripe billing portal: ${e.message}`)
+    } finally {
+      setBillingPortalLoading(false)
+    }
+  }
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -120,6 +145,30 @@ export default function PortalDashboard() {
           {websiteProject.status === 'failed' && (
             <p style={{ color:'#F87171', fontSize: 13 }}>Something went wrong. Your team has been notified.</p>
           )}
+        </div>
+      )}
+
+      {/* Subscription / billing */}
+      {subscription && (
+        <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: 18, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <CreditCard size={18} color="#818CF8" />
+            <div>
+              <div style={{ color:'#F1F5F9', fontSize: 14, fontWeight: 700 }}>
+                Subscription · <span style={{ color: subscription.status === 'active' ? '#22c55e' : '#F59E0B' }}>{subscription.status}</span>
+                {subscription.cancel_at_period_end && <span style={{ color: '#F59E0B', marginLeft: 8 }}>· cancels at period end</span>}
+              </div>
+              {subscription.current_period_end && (
+                <div style={{ color: '#94A3B8', fontSize: 12, marginTop: 2 }}>
+                  {subscription.cancel_at_period_end ? 'Ends' : 'Renews'} {new Date(subscription.current_period_end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </div>
+              )}
+            </div>
+          </div>
+          <button onClick={openBillingPortal} disabled={billingPortalLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'rgba(129,140,248,0.15)', border: '1px solid rgba(129,140,248,0.4)', borderRadius: 8, color: '#A5B4FC', fontSize: 12, fontWeight: 600, cursor: billingPortalLoading ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: billingPortalLoading ? 0.6 : 1 }}>
+            {billingPortalLoading ? 'Opening…' : <>Manage billing <ExternalLink size={12} /></>}
+          </button>
         </div>
       )}
 
