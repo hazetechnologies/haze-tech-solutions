@@ -10,13 +10,26 @@ export default async function handler(req, res) {
   if (!ctx) return
   const { adminClient } = ctx
 
-  const { name, email, password, company, phone, product, price, subscription_terms } = req.body || {}
+  const { name, email, password, company, phone, product_id, subscription_plan_id, price } = req.body || {}
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'bad_request', message: 'Name, email, and password are required' })
   }
 
   try {
+    // Resolve product + plan to denormalize their names into legacy text columns
+    let productName = null, planTerms = null
+    if (product_id) {
+      const { data: prod } = await adminClient.from('products').select('name').eq('id', product_id).maybeSingle()
+      if (!prod) return res.status(400).json({ error: 'bad_request', message: 'product_id not found' })
+      productName = prod.name
+    }
+    if (subscription_plan_id) {
+      const { data: plan } = await adminClient.from('subscription_plans').select('billing_cycle').eq('id', subscription_plan_id).maybeSingle()
+      if (!plan) return res.status(400).json({ error: 'bad_request', message: 'subscription_plan_id not found' })
+      planTerms = plan.billing_cycle
+    }
+
     // Create auth user
     const { data: authData, error: createError } = await adminClient.auth.admin.createUser({
       email,
@@ -37,9 +50,11 @@ export default async function handler(req, res) {
         email,
         company: company || null,
         phone: phone || null,
-        product: product || null,
+        product_id: product_id || null,
+        subscription_plan_id: subscription_plan_id || null,
+        product: productName,
         price: price ? Number(price) : null,
-        subscription_terms: subscription_terms || null,
+        subscription_terms: planTerms,
       })
       .select()
       .single()
