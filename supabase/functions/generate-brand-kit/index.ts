@@ -52,7 +52,11 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
   }
-  const { kit_id } = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({})) as {
+    kit_id?: string
+    existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>
+  }
+  const { kit_id, existing_logos } = body
   if (!kit_id) {
     return new Response(JSON.stringify({ error: 'kit_id required' }), {
       status: 400, headers: { 'Content-Type': 'application/json' },
@@ -60,14 +64,17 @@ Deno.serve(async (req) => {
   }
 
   // @ts-ignore EdgeRuntime is a Supabase global
-  EdgeRuntime.waitUntil(processBrandKit(kit_id))
+  EdgeRuntime.waitUntil(processBrandKit(kit_id, existing_logos))
 
   return new Response(JSON.stringify({ ok: true, kit_id }), {
     headers: { 'Content-Type': 'application/json' },
   })
 })
 
-async function processBrandKit(kit_id: string): Promise<void> {
+async function processBrandKit(
+  kit_id: string,
+  existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
+): Promise<void> {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -104,7 +111,9 @@ async function processBrandKit(kit_id: string): Promise<void> {
     })
 
     // ── Image generation (parallel — all 9 fired at once, retry-with-backoff per image) ──
-    const images = await generateAllImages(inputs, textAssets.color_palette, client_id, kit_id)
+    // If existing_logos is provided, those are used instead of OpenAI logo generation
+    // (so banners are img2img'd against the user's chosen logos, not freshly generated ones).
+    const images = await generateAllImages(inputs, textAssets.color_palette, client_id, kit_id, existing_logos)
 
     const assets: Partial<BrandKitAssets> = {
       ...textAssets,
@@ -236,22 +245,29 @@ async function generateAllImages(
   palette: ColorPaletteEntry[],
   clientId: string,
   kitId: string,
+  existingLogos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
 ): Promise<Record<ImageAssetId, ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
 
-  // ── Step 1: generate logos in parallel via OpenAI ──
-  const logoResults = await Promise.all(
-    LOGO_ASSET_IDS.map(async (assetId) => {
-      const spec = SIZES[assetId]
-      const prompt = buildImagePrompt(assetId, inputs, palette)
-      const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
-      const resized = await resizeToFinalDims(generated, spec)
-      const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
-      return [assetId, uploaded] as const
-    })
-  )
-  for (const [assetId, uploaded] of logoResults) out[assetId] = uploaded
+  // ── Step 1: logos — either reuse provided ones, or generate via OpenAI ──
+  const allProvided = existingLogos
+    && LOGO_ASSET_IDS.every((id) => existingLogos[id]?.public_url)
+  if (allProvided) {
+    for (const id of LOGO_ASSET_IDS) out[id] = existingLogos![id]!
+  } else {
+    const logoResults = await Promise.all(
+      LOGO_ASSET_IDS.map(async (assetId) => {
+        const spec = SIZES[assetId]
+        const prompt = buildImagePrompt(assetId, inputs, palette)
+        const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
+        const resized = await resizeToFinalDims(generated, spec)
+        const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+        return [assetId, uploaded] as const
+      })
+    )
+    for (const [assetId, uploaded] of logoResults) out[assetId] = uploaded
+  }
 
   // ── Step 2: banners + profile pic via KIE AI img2img ──
   const logoPrimaryUrl = out['logo_primary']!.public_url
