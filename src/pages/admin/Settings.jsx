@@ -264,8 +264,10 @@ export default function Settings() {
               style={styles.input}
             />
           </div>
-          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
-            After saving, run <code style={{ color: '#94A3B8' }}>node scripts/sync-stripe-catalog.mjs</code> from the project root to create Stripe Products + Prices for all active subscription plans. This populates the <code style={{ color: '#94A3B8' }}>stripe_price_id</code> column on each plan, which is required before any client can be sent a checkout link.
+          <p style={{ fontSize: 12, color: '#64748B', margin: 0, lineHeight: 1.5 }}>
+            Next: head to <a href="/admin/products" style={{ color: '#00D4FF' }}>Products &amp; Subscriptions</a> and paste a <code style={{ color: '#94A3B8' }}>price_…</code> ID into each plan you want to bill (Edit → Stripe Price ID). Create the Products + Prices in <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener noreferrer" style={{ color: '#00D4FF' }}>Stripe</a> first.
+            <br/>
+            <span style={{ color: '#475569' }}>Bulk alternative: <code style={{ color: '#94A3B8' }}>node scripts/sync-stripe-catalog.mjs</code> auto-creates and links them in one shot.</span>
           </p>
         </div>
       </div>

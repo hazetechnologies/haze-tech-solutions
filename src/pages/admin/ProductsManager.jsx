@@ -152,6 +152,7 @@ export default function ProductsManager() {
             { key: 'description', label: 'Description', type: 'textarea', placeholder: 'What this service includes...' },
             { key: 'base_price', label: 'Base Price ($)', type: 'number', placeholder: '1500.00' },
             { key: 'display_order', label: 'Display Order', type: 'number' },
+            { key: 'stripe_product_id', label: 'Stripe Product ID', placeholder: 'prod_…  (from dashboard.stripe.com/products)', hint: 'Optional. Set this so checkout sessions can reference the right Stripe Product.' },
             { key: 'active', label: 'Active', type: 'toggle' },
           ]}
           initial={modal.data || { active: true, display_order: 0 }}
@@ -166,6 +167,7 @@ export default function ProductsManager() {
             { key: 'duration_months', label: 'Duration (months)', type: 'number', placeholder: 'Leave empty for one-time' },
             { key: 'discount_percent', label: 'Discount %', type: 'number', placeholder: '0' },
             { key: 'display_order', label: 'Display Order', type: 'number' },
+            { key: 'stripe_price_id', label: 'Stripe Price ID', placeholder: 'price_…  (from dashboard.stripe.com/prices)', hint: 'Required before this plan can be sent to checkout. Create the Price in Stripe first, then paste the price_… ID here.' },
             { key: 'active', label: 'Active', type: 'toggle' },
           ]}
           initial={modal.data || { active: true, billing_cycle: 'monthly', discount_percent: 0, display_order: 0 }}
@@ -248,6 +250,7 @@ function FormModal({ title, onClose, onSaved, fields, initial, table, extraData 
             {fields.map(f => (
               <div key={f.key}>
                 <label style={styles.fieldLabel}>{f.label}</label>
+                {f.hint && <p style={{ fontSize: 11, color: '#475569', margin: '0 0 6px', lineHeight: 1.4 }}>{f.hint}</p>}
                 {f.type === 'textarea' ? (
                   <textarea value={form[f.key] || ''} onChange={e => set(f.key, e.target.value)} placeholder={f.placeholder} rows={3} style={{ ...styles.fieldInput, resize: 'vertical' }} />
                 ) : f.type === 'select' ? (
