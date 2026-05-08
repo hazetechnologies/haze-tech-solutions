@@ -46,7 +46,7 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
     ;(async () => {
       const [pRes, plRes] = await Promise.all([
         supabase.from('products').select('id, name, base_price').eq('active', true).order('display_order'),
-        supabase.from('subscription_plans').select('id, name, billing_cycle, duration_months, discount_percent').eq('active', true).order('display_order'),
+        supabase.from('subscription_plans').select('id, product_id, name, billing_cycle, duration_months, discount_percent').eq('active', true).order('display_order'),
       ])
       if (cancelled) return
       setProducts(pRes.data ?? [])
@@ -66,6 +66,22 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
     const computed = (base * (1 - discountPct / 100)).toFixed(2)
     setForm(prev => ({ ...prev, price: computed }))
   }, [selectedProduct, selectedPlan])
+
+  // Plan dropdown is scoped to the selected product:
+  //   - product chosen + dedicated plans exist → show only dedicated plans
+  //   - otherwise → show legacy global plans (product_id = null)
+  const visiblePlans = useMemo(() => {
+    if (!form.product_id) return plans.filter(p => !p.product_id)
+    const dedicated = plans.filter(p => p.product_id === form.product_id)
+    return dedicated.length > 0 ? dedicated : plans.filter(p => !p.product_id)
+  }, [plans, form.product_id])
+
+  // If selected plan disappears from the visible set after a product switch, clear it.
+  useEffect(() => {
+    if (form.subscription_plan_id && !visiblePlans.find(p => p.id === form.subscription_plan_id)) {
+      setForm(prev => ({ ...prev, subscription_plan_id: '' }))
+    }
+  }, [visiblePlans, form.subscription_plan_id])
 
   // collision state
   const [collision, setCollision] = useState(null)  // { existing_client_id, existing_client_name }
@@ -275,7 +291,7 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
                 <label style={labelStyle}>Plan</label>
                 <select style={inputStyle} value={form.subscription_plan_id} onChange={e => setField('subscription_plan_id', e.target.value)} disabled={catalogLoading}>
                   <option value="">— None —</option>
-                  {plans.map(p => (
+                  {visiblePlans.map(p => (
                     <option key={p.id} value={p.id}>
                       {p.name}{Number(p.discount_percent) > 0 ? ` (-${p.discount_percent}%)` : ''}
                     </option>
