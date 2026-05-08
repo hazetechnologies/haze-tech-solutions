@@ -59,37 +59,37 @@ update products set display_order = 6 where id = 'd7349be2-654a-405a-86c3-e0bf2d
 insert into subscription_plans (product_id, name, billing_cycle, duration_months, discount_percent, active, display_order)
 select p.id, 'Monthly', 'monthly', 1, 0, true, 1
 from products p
-where p.name = 'Social Media — Starter'
+where p.name = 'Social Media — Starter' and p.active = true
   and not exists (select 1 from subscription_plans s where s.product_id = p.id and s.billing_cycle = 'monthly' and s.active = true);
 
 insert into subscription_plans (product_id, name, billing_cycle, duration_months, discount_percent, active, display_order)
 select p.id, 'Annual (15% off)', 'annual', 12, 15, true, 2
 from products p
-where p.name = 'Social Media — Starter'
+where p.name = 'Social Media — Starter' and p.active = true
   and not exists (select 1 from subscription_plans s where s.product_id = p.id and s.billing_cycle = 'annual' and s.active = true);
 
 insert into subscription_plans (product_id, name, billing_cycle, duration_months, discount_percent, active, display_order)
 select p.id, 'Monthly', 'monthly', 1, 0, true, 1
 from products p
-where p.name = 'Social Media — Growth'
+where p.name = 'Social Media — Growth' and p.active = true
   and not exists (select 1 from subscription_plans s where s.product_id = p.id and s.billing_cycle = 'monthly' and s.active = true);
 
 insert into subscription_plans (product_id, name, billing_cycle, duration_months, discount_percent, active, display_order)
 select p.id, 'Annual (15% off)', 'annual', 12, 15, true, 2
 from products p
-where p.name = 'Social Media — Growth'
+where p.name = 'Social Media — Growth' and p.active = true
   and not exists (select 1 from subscription_plans s where s.product_id = p.id and s.billing_cycle = 'annual' and s.active = true);
 
 insert into subscription_plans (product_id, name, billing_cycle, duration_months, discount_percent, active, display_order)
 select p.id, 'Monthly', 'monthly', 1, 0, true, 1
 from products p
-where p.name = 'Social Media — Pro'
+where p.name = 'Social Media — Pro' and p.active = true
   and not exists (select 1 from subscription_plans s where s.product_id = p.id and s.billing_cycle = 'monthly' and s.active = true);
 
 insert into subscription_plans (product_id, name, billing_cycle, duration_months, discount_percent, active, display_order)
 select p.id, 'Annual (15% off)', 'annual', 12, 15, true, 2
 from products p
-where p.name = 'Social Media — Pro'
+where p.name = 'Social Media — Pro' and p.active = true
   and not exists (select 1 from subscription_plans s where s.product_id = p.id and s.billing_cycle = 'annual' and s.active = true);
 
 commit;
