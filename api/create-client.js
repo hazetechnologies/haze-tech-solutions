@@ -25,8 +25,13 @@ export default async function handler(req, res) {
       productName = prod.name
     }
     if (subscription_plan_id) {
-      const { data: plan } = await adminClient.from('subscription_plans').select('billing_cycle').eq('id', subscription_plan_id).maybeSingle()
+      const { data: plan } = await adminClient.from('subscription_plans').select('billing_cycle, product_id').eq('id', subscription_plan_id).maybeSingle()
       if (!plan) return res.status(400).json({ error: 'bad_request', message: 'subscription_plan_id not found' })
+      // If the plan is product-scoped, it must match the submitted product_id.
+      // Legacy global plans (product_id IS NULL) are allowed against any product or no product.
+      if (plan.product_id && plan.product_id !== product_id) {
+        return res.status(400).json({ error: 'plan_product_mismatch', message: 'Selected plan does not belong to the selected product' })
+      }
       planTerms = plan.billing_cycle
     }
 
