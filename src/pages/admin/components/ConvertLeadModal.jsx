@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { trackEvent } from '../../../lib/telemetry'
+import { effectivePrice } from '../../../lib/pricing'
 import { X, Send, Link2, CheckCircle2, AlertCircle, CreditCard, Copy } from 'lucide-react'
 
 const inputStyle = {
@@ -46,7 +47,7 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
     ;(async () => {
       const [pRes, plRes] = await Promise.all([
         supabase.from('products').select('id, name, base_price').eq('active', true).order('display_order'),
-        supabase.from('subscription_plans').select('id, product_id, name, billing_cycle, duration_months, discount_percent').eq('active', true).order('display_order'),
+        supabase.from('subscription_plans').select('id, product_id, name, billing_cycle, duration_months, discount_percent, price').eq('active', true).order('display_order'),
       ])
       if (cancelled) return
       setProducts(pRes.data ?? [])
@@ -61,9 +62,7 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
   const selectedPlan    = useMemo(() => plans.find(p => p.id === form.subscription_plan_id), [plans, form.subscription_plan_id])
   useEffect(() => {
     if (!selectedProduct) return
-    const base = Number(selectedProduct.base_price) || 0
-    const discountPct = Number(selectedPlan?.discount_percent ?? 0)
-    const computed = (base * (1 - discountPct / 100)).toFixed(2)
+    const computed = effectivePrice(selectedPlan, selectedProduct).toFixed(2)
     setForm(prev => ({ ...prev, price: computed }))
   }, [selectedProduct, selectedPlan])
 

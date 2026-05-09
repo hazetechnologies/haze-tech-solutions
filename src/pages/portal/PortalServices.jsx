@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Check, Plus, AlertCircle, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useClient } from '../../lib/PortalProtectedRoute'
+import { effectivePrice } from '../../lib/pricing'
 
 // /portal/services — logged-in client picks additional services to add to
 // their plan. Hits /api/website?action=portal-checkout (uses session, no
@@ -43,7 +44,7 @@ export default function PortalServices() {
       const [productsRes, subsRes] = await Promise.all([
         supabase
           .from('products')
-          .select('id, name, description, base_price, display_order, subscription_plans(id, name, billing_cycle, discount_percent, stripe_price_id, display_order)')
+          .select('id, name, description, base_price, display_order, subscription_plans(id, name, billing_cycle, discount_percent, price, stripe_price_id, display_order)')
           .eq('active', true)
           .order('display_order'),
         supabase
@@ -190,7 +191,7 @@ function ProductCard({ product, accent, activePriceIds, busyPlanId, onBuy }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
           <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 26, fontWeight: 800, color: '#F1F5F9' }}>
-            ${Number(product.base_price).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            ${Number(plans[0] ? effectivePrice(plans[0], product) : product.base_price).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
           </span>
           {plans[0] && (
             <span style={{ fontSize: 12, color: '#64748B' }}>

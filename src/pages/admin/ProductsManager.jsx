@@ -121,7 +121,8 @@ export default function ProductsManager() {
                               <span style={{ fontSize: '13px', fontWeight: 600, color: '#F1F5F9' }}>{plan.name}</span>
                               <span style={styles.tag}>{plan.billing_cycle}</span>
                               {plan.duration_months && <span style={styles.tagMuted}>{plan.duration_months} mo</span>}
-                              {plan.discount_percent > 0 && <span style={styles.tagGreen}>{plan.discount_percent}% off</span>}
+                              {plan.price != null && <span style={styles.tagPrice}>${Number(plan.price).toLocaleString()}</span>}
+                              {plan.price == null && plan.discount_percent > 0 && <span style={styles.tagGreen}>{plan.discount_percent}% off</span>}
                             </div>
                             <div style={{ display: 'flex', gap: '4px' }}>
                               <IconBtn icon={plan.active ? Eye : EyeOff} onClick={() => toggleActive('subscription_plans', plan.id, plan.active)} color={plan.active ? '#22C55E' : '#64748B'} />
@@ -165,7 +166,8 @@ export default function ProductsManager() {
             { key: 'name', label: 'Name *', required: true, placeholder: 'e.g. Monthly' },
             { key: 'billing_cycle', label: 'Billing Cycle', type: 'select', options: ['monthly', 'quarterly', 'semi-annual', 'annual', 'one-time'] },
             { key: 'duration_months', label: 'Duration (months)', type: 'number', placeholder: 'Leave empty for one-time' },
-            { key: 'discount_percent', label: 'Discount %', type: 'number', placeholder: '0' },
+            { key: 'price', label: 'Price ($)', type: 'number', placeholder: 'Optional — overrides product × discount math', hint: 'Set this to display a specific price for this plan. Leave blank to derive from the product’s base price minus the discount. Stripe always charges from the Stripe Price ID below regardless of this field.' },
+            { key: 'discount_percent', label: 'Discount % (fallback)', type: 'number', placeholder: '0', hint: 'Used only when Price above is blank.' },
             { key: 'display_order', label: 'Display Order', type: 'number' },
             { key: 'stripe_price_id', label: 'Stripe Price ID', placeholder: 'price_…  (from dashboard.stripe.com/prices)', hint: 'Required before this plan can be sent to checkout. Create the Price in Stripe first, then paste the price_… ID here.' },
             { key: 'active', label: 'Active', type: 'toggle' },
@@ -287,6 +289,7 @@ const styles = {
   tag: { fontSize: '10px', fontWeight: 600, color: '#00D4FF', background: 'rgba(0,212,255,0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(0,212,255,0.2)', textTransform: 'capitalize' },
   tagMuted: { fontSize: '10px', fontWeight: 600, color: '#64748B', background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.08)' },
   tagGreen: { fontSize: '10px', fontWeight: 600, color: '#4ADE80', background: 'rgba(34,197,94,0.12)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(34,197,94,0.25)' },
+  tagPrice: { fontSize: '10px', fontWeight: 700, color: '#00D4FF', background: 'rgba(0,212,255,0.12)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(0,212,255,0.25)' },
   errorBanner: { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', padding: '14px', color: '#FCA5A5', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' },
   overlay: { position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,8,23,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' },
   modal: { background: '#0F172A', border: '1px solid rgba(0,212,255,0.15)', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' },

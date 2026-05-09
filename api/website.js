@@ -350,7 +350,7 @@ async function publicCheckout(req, res) {
   // enforce active=true on both the plan AND its product ourselves.
   const { data: plan } = await adminClient
     .from('subscription_plans')
-    .select('id, name, billing_cycle, discount_percent, stripe_price_id, product_id, active, products:product_id(id, name, base_price, active)')
+    .select('id, name, billing_cycle, discount_percent, price, stripe_price_id, product_id, active, products:product_id(id, name, base_price, active)')
     .eq('id', subscription_plan_id).maybeSingle()
   if (!plan || !plan.active || !plan.products?.active) {
     return res.status(404).json({ error: 'plan_not_found', message: 'Subscription plan not found or inactive' })
@@ -379,10 +379,17 @@ async function publicCheckout(req, res) {
   }
 
   // Insert clients row (denormalized product/terms for back-compat with legacy reads).
+  // Plan-level price (set per-plan in /admin/products) wins over the legacy
+  // product.base_price × discount fallback.
   const productName = plan.products?.name ?? null
-  const basePrice = Number(plan.products?.base_price ?? 0)
-  const discount = Number(plan.discount_percent ?? 0)
-  const computedPrice = basePrice ? Number((basePrice * (1 - discount / 100)).toFixed(2)) : null
+  let computedPrice
+  if (plan.price != null) {
+    computedPrice = Number(plan.price)
+  } else {
+    const basePrice = Number(plan.products?.base_price ?? 0)
+    const discount = Number(plan.discount_percent ?? 0)
+    computedPrice = basePrice ? Number((basePrice * (1 - discount / 100)).toFixed(2)) : null
+  }
 
   const { data: client, error: clientErr } = await adminClient
     .from('clients')

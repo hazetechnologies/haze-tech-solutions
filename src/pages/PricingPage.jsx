@@ -4,6 +4,7 @@ import { Check, TrendingUp, Users, BarChart3, Search } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import PurchaseModal from '../components/PurchaseModal'
 import { supabase } from '../lib/supabase'
+import { effectivePrice } from '../lib/pricing'
 
 // Maps a product's display_order to its grouping section.
 // 1–3 SMM, 4 AI Automation, 5–7 Web Setup, 8 SEO. Maintenance products
@@ -37,7 +38,7 @@ export default function PricingPage() {
     ;(async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, base_price, display_order, subscription_plans(id, name, billing_cycle, discount_percent, stripe_price_id, display_order)')
+        .select('id, name, description, base_price, display_order, subscription_plans(id, name, billing_cycle, discount_percent, price, stripe_price_id, display_order)')
         .eq('active', true)
         .not('name', 'ilike', 'Website Maintenance%')
         .order('display_order')
@@ -209,7 +210,7 @@ function ProductCard({ product, accent, onBuy }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
           <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 32, fontWeight: 800, color: '#F1F5F9' }}>
-            ${formatPrice(product.base_price)}
+            ${formatPrice(plans[0] ? effectivePrice(plans[0], product) : product.base_price)}
           </span>
           {plans[0] && (
             <span style={{ fontSize: 13, color: '#64748B' }}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { effectivePrice } from '../../lib/pricing'
 import {
   Users, Plus, X, RefreshCw, AlertCircle, ChevronRight,
   Mail, Phone,
@@ -172,16 +173,13 @@ function AddClientModal({ onClose, onCreated }) {
 
   const handleProductChange = (productId) => {
     const prod = products.find(p => p.id === productId)
-    const planDisc = Number(selectedPlan?.discount_percent ?? 0)
-    const newPrice = prod?.base_price ? (Number(prod.base_price) * (1 - planDisc / 100)).toFixed(2) : ''
+    const newPrice = prod ? effectivePrice(selectedPlan, prod).toFixed(2) : ''
     setForm(prev => ({ ...prev, product_id: productId, price: newPrice }))
   }
 
   const handlePlanChange = (planId) => {
     const plan = plans.find(p => p.id === planId)
-    const basePrice = Number(selectedProduct?.base_price ?? 0)
-    const planDisc = Number(plan?.discount_percent ?? 0)
-    const newPrice = basePrice ? (basePrice * (1 - planDisc / 100)).toFixed(2) : form.price
+    const newPrice = selectedProduct ? effectivePrice(plan, selectedProduct).toFixed(2) : form.price
     setForm(prev => ({ ...prev, subscription_plan_id: planId, price: newPrice }))
   }
 
