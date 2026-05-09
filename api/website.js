@@ -303,6 +303,16 @@ async function createCheckoutSession({ adminClient, stripe, client, plan, planId
     await adminClient.from('clients').update({ stripe_customer_id: customerId }).eq('id', client.id)
   }
 
+  // Stripe idempotency key buckets concurrent requests for the same
+  // (client, price) into a single Checkout Session. 5-minute window catches
+  // double-clicks / multi-tab races (sub-second) without breaking a genuine
+  // cancel-and-retry, which typically takes longer than 5 minutes between
+  // the user canceling in Stripe Customer Portal and clicking buy again.
+  // Stripe Checkout Sessions and idempotency-cache entries both expire at 24h
+  // so cross-day retries naturally get fresh sessions.
+  const bucket = Math.floor(Date.now() / 300000)
+  const idempotencyKey = `checkout-${client.id}-${plan.stripe_price_id}-${bucket}`
+
   const isOneTime = plan.billing_cycle === 'one-time'
   const session = await stripe.checkout.sessions.create({
     mode: isOneTime ? 'payment' : 'subscription',
@@ -311,7 +321,7 @@ async function createCheckoutSession({ adminClient, stripe, client, plan, planId
     success_url: `${siteUrl()}/portal/dashboard?checkout=success`,
     cancel_url: cancelUrl || `${siteUrl()}/portal/dashboard?checkout=canceled`,
     metadata: { client_id: client.id, subscription_plan_id: planId },
-  })
+  }, { idempotencyKey })
 
   return { url: session.url, customer_id: customerId }
 }
