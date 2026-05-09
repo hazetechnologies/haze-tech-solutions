@@ -2,12 +2,13 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import {
-  LayoutDashboard, Receipt, Sparkles,
+  LayoutDashboard, Receipt, Sparkles, ShoppingBag,
   LogOut, ExternalLink, ChevronRight,
 } from 'lucide-react'
 
 const NAV = [
   { to: '/portal/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
+  { to: '/portal/services',  label: 'Services',   icon: ShoppingBag },
   { to: '/portal/brand-kit', label: 'Brand Kit',  icon: Sparkles },
   { to: '/portal/invoices',  label: 'Invoices',   icon: Receipt },
 ]

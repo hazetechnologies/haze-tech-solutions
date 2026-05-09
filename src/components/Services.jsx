@@ -193,18 +193,47 @@ export default function Services() {
           viewport={{ once: true }}
           transition={{ delay: 0.4, duration: 0.6 }}
         >
-          <p className="text-muted mb-4 text-sm">Not sure where to start?</p>
-          <motion.button
-            onClick={() => {
-              const el = document.querySelector('#contact')
-              if (el) el.scrollIntoView({ behavior: 'smooth' })
-            }}
-            className="btn-primary"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            Book a Consultation
-          </motion.button>
+          <p className="text-muted mb-4 text-sm">Ready to start?</p>
+          <div style={{ display: 'inline-flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px' }}>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.97 }}
+              style={{ display: 'inline-flex' }}
+            >
+              <Link
+                to="/pricing"
+                onClick={() => trackCta('services-view-pricing', 'services')}
+                className="btn-primary"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                View Pricing
+              </Link>
+            </motion.div>
+            <motion.button
+              onClick={() => {
+                trackCta('services-book-consultation', 'services')
+                const el = document.querySelector('#contact')
+                if (el) el.scrollIntoView({ behavior: 'smooth' })
+              }}
+              className="text-sm"
+              style={{
+                fontFamily: 'Orbitron, sans-serif',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                padding: '0.75rem 1.75rem',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'transparent',
+                color: '#94A3B8',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+              }}
+              whileHover={{ scale: 1.05, color: '#F1F5F9' }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Or book a consultation
+            </motion.button>
+          </div>
         </motion.div>
       </div>
     </section>

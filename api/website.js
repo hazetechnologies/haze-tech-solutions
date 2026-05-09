@@ -3,7 +3,7 @@
 // Reduces serverless-function count (Hobby plan caps at 12).
 // Currently hosts: website-funnel (activate/intake/start/status),
 // brand-kit logo approval (approve-logo), and Stripe billing
-// (stripe-checkout/stripe-portal/stripe-send-invoice).
+// (stripe-checkout/stripe-portal/stripe-send-invoice/public-checkout/portal-checkout).
 // The Stripe webhook lives separately (api/stripe-webhook.js) because it
 // needs raw body for signature verification.
 import { createClient } from '@supabase/supabase-js'
@@ -27,6 +27,8 @@ export default async function handler(req, res) {
     case 'stripe-portal':       return req.method === 'POST' ? stripePortal(req, res)     : methodNotAllowed(res, 'POST')
     case 'stripe-send-invoice': return req.method === 'POST' ? stripeSendInvoice(req, res): methodNotAllowed(res, 'POST')
     case 'stripe-test':         return req.method === 'POST' ? stripeTest(req, res)       : methodNotAllowed(res, 'POST')
+    case 'public-checkout':     return req.method === 'POST' ? publicCheckout(req, res)   : methodNotAllowed(res, 'POST')
+    case 'portal-checkout':     return req.method === 'POST' ? portalCheckout(req, res)   : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -284,7 +286,14 @@ async function stripeCheckout(req, res) {
   try { stripe = await getStripe() }
   catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
 
-  // Lazy-create the customer
+  const result = await createCheckoutSession({ adminClient, stripe, client, plan, planId: subscription_plan_id })
+  return res.status(200).json(result)
+}
+
+// Shared between stripe-checkout (admin), public-checkout (anonymous post-signup),
+// and portal-checkout (logged-in client). Lazy-creates the Stripe Customer and
+// returns the Checkout Session URL.
+async function createCheckoutSession({ adminClient, stripe, client, plan, planId, cancelUrl }) {
   let customerId = client.stripe_customer_id
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -300,11 +309,144 @@ async function stripeCheckout(req, res) {
     customer: customerId,
     line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
     success_url: `${siteUrl()}/portal/dashboard?checkout=success`,
-    cancel_url: `${siteUrl()}/portal/dashboard?checkout=canceled`,
-    metadata: { client_id: client.id, subscription_plan_id },
+    cancel_url: cancelUrl || `${siteUrl()}/portal/dashboard?checkout=canceled`,
+    metadata: { client_id: client.id, subscription_plan_id: planId },
   })
 
-  return res.status(200).json({ url: session.url, customer_id: customerId })
+  return { url: session.url, customer_id: customerId }
+}
+
+// POST ?action=public-checkout — anonymous visitor on /pricing fills a quick
+// form (name + email + password + chosen plan). We create the auth user +
+// clients row first (so the lead is captured even if they abandon Stripe),
+// then return a Stripe Checkout URL. The client can also log into /portal
+// immediately with the password they just set.
+// Body: { subscription_plan_id, name, email, password, company?, phone? }
+async function publicCheckout(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  const { subscription_plan_id, name, email, password, company, phone } = req.body || {}
+  if (!subscription_plan_id || !name || !email || !password) {
+    return res.status(400).json({ error: 'bad_request', message: 'subscription_plan_id, name, email, and password are required' })
+  }
+  if (String(password).length < 8) {
+    return res.status(400).json({ error: 'weak_password', message: 'Password must be at least 8 characters' })
+  }
+
+  const adminClient = createClient(url, SERVICE_ROLE_KEY)
+
+  // Validate the plan + pull product.
+  const { data: plan } = await adminClient
+    .from('subscription_plans')
+    .select('id, name, billing_cycle, discount_percent, stripe_price_id, product_id, products:product_id(id, name, base_price)')
+    .eq('id', subscription_plan_id).maybeSingle()
+  if (!plan) return res.status(404).json({ error: 'plan_not_found', message: 'Subscription plan not found' })
+  if (!plan.stripe_price_id) {
+    return res.status(409).json({ error: 'price_not_synced', message: `Plan "${plan.name}" has no stripe_price_id yet. Try again later.` })
+  }
+
+  // Reject if a client with that email already exists — surface a login prompt instead of duplicating.
+  const { data: existing } = await adminClient
+    .from('clients').select('id').eq('email', email).maybeSingle()
+  if (existing) {
+    return res.status(409).json({
+      error: 'client_exists',
+      message: 'An account with that email already exists. Sign in to add this product to your plan.',
+      login_url: '/portal/login',
+    })
+  }
+
+  // Create the Supabase auth user.
+  const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
+    email, password, email_confirm: true,
+  })
+  if (authErr) {
+    return res.status(400).json({ error: 'auth_create_failed', message: authErr.message })
+  }
+
+  // Insert clients row (denormalized product/terms for back-compat with legacy reads).
+  const productName = plan.products?.name ?? null
+  const basePrice = Number(plan.products?.base_price ?? 0)
+  const discount = Number(plan.discount_percent ?? 0)
+  const computedPrice = basePrice ? Number((basePrice * (1 - discount / 100)).toFixed(2)) : null
+
+  const { data: client, error: clientErr } = await adminClient
+    .from('clients')
+    .insert({
+      user_id: authData.user.id,
+      name, email,
+      company: company || null,
+      phone: phone || null,
+      product_id: plan.product_id,
+      subscription_plan_id: plan.id,
+      product: productName,
+      price: computedPrice,
+      subscription_terms: plan.billing_cycle,
+    })
+    .select('id, name, email, stripe_customer_id')
+    .single()
+
+  if (clientErr) {
+    // Roll back the auth user so re-submission isn't blocked by client_exists.
+    await adminClient.auth.admin.deleteUser(authData.user.id).catch(e => console.error('rollback delete failed:', e))
+    return res.status(500).json({ error: 'client_insert_failed', message: clientErr.message })
+  }
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
+
+  const result = await createCheckoutSession({
+    adminClient, stripe, client, plan, planId: plan.id,
+    cancelUrl: `${siteUrl()}/pricing?checkout=canceled`,
+  })
+  return res.status(200).json({ ...result, client_id: client.id })
+}
+
+// POST ?action=portal-checkout — logged-in client clicks "Add to plan" on a
+// product they don't yet have. Uses the session's user → client mapping (no
+// client_id in body) and goes straight to a Stripe Checkout Session.
+// Body: { subscription_plan_id }
+async function portalCheckout(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  const authHeader = req.headers.authorization
+  if (!authHeader) return res.status(401).json({ error: 'unauthorized', message: 'Missing authorization header' })
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader)
+  if (!m) return res.status(401).json({ error: 'unauthorized', message: 'Bearer token required' })
+
+  const userClient = createClient(url, anonKey)
+  const { data: { user: caller }, error: authErr } = await userClient.auth.getUser(m[1].trim())
+  if (authErr || !caller) return res.status(401).json({ error: 'unauthorized', message: 'Invalid token' })
+
+  const { subscription_plan_id } = req.body || {}
+  if (!subscription_plan_id) return res.status(400).json({ error: 'bad_request', message: 'subscription_plan_id required' })
+
+  const adminClient = createClient(url, SERVICE_ROLE_KEY)
+
+  const { data: client } = await adminClient
+    .from('clients').select('id, name, email, stripe_customer_id').eq('user_id', caller.id).maybeSingle()
+  if (!client) return res.status(404).json({ error: 'no_client', message: 'No client record for this user' })
+
+  const { data: plan } = await adminClient
+    .from('subscription_plans').select('id, name, billing_cycle, stripe_price_id').eq('id', subscription_plan_id).maybeSingle()
+  if (!plan) return res.status(404).json({ error: 'plan_not_found', message: 'Subscription plan not found' })
+  if (!plan.stripe_price_id) {
+    return res.status(409).json({ error: 'price_not_synced', message: `Plan "${plan.name}" has no stripe_price_id yet.` })
+  }
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
+
+  const result = await createCheckoutSession({
+    adminClient, stripe, client, plan, planId: plan.id,
+    cancelUrl: `${siteUrl()}/portal/services?checkout=canceled`,
+  })
+  return res.status(200).json(result)
 }
 
 // POST ?action=stripe-portal — client clicks "Manage subscription" in their
