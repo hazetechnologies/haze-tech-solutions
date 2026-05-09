@@ -19,6 +19,7 @@ const EMPTY_FORM = {
   service_tag: SERVICE_TAGS[0],
   type: 'case_study',
   youtube_url: '',
+  image_url: '',
   display_order: 0,
   published: false,
 }
@@ -70,7 +71,8 @@ function FormModal({ item, onClose, onSaved }) {
         result:        form.result.trim(),
         service_tag:   form.service_tag,
         type:          form.type,
-        youtube_url:   form.type === 'video' ? form.youtube_url.trim() : null,
+        youtube_url:   form.type === 'video' ? form.youtube_url.trim() || null : null,
+        image_url:     form.image_url.trim() || null,
         display_order: Number(form.display_order) || 0,
         published:     Boolean(form.published),
       }
@@ -205,6 +207,17 @@ function FormModal({ item, onClose, onSaved }) {
                 />
               </div>
             )}
+
+            {/* Image URL — applies to any item; rendered as card thumbnail on homepage */}
+            <div style={{ ...styles.field, gridColumn: '1 / -1' }}>
+              <label style={styles.label}>Image URL <span style={{ color: '#475569', textTransform: 'none', letterSpacing: 0 }}>(optional thumbnail)</span></label>
+              <input
+                value={form.image_url}
+                onChange={e => set('image_url', e.target.value)}
+                placeholder="https://… (R2 public URL, full asset URL, or leave blank)"
+                style={styles.input}
+              />
+            </div>
 
             {/* Display Order */}
             <div style={styles.field}>

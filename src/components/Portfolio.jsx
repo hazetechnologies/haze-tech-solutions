@@ -1,56 +1,58 @@
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { TrendingUp, Users, BarChart3, ArrowUpRight } from 'lucide-react'
+import { TrendingUp, Users, BarChart3, ArrowUpRight, Play } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 
-const caseStudies = [
-  {
-    client: 'Coastal Coffee Co.',
-    industry: 'Food & Beverage',
-    service: 'AI Automation',
-    serviceColor: '#00CFFF',
-    icon: TrendingUp,
-    challenge: 'Catering inquiries were falling through the cracks — slow manual follow-ups cost them bookings every week.',
-    result: '3× response rate. 40% increase in catering bookings within 60 days.',
-    metric: '+40%',
-    metricLabel: 'Bookings',
-    tags: ['CRM Integration', 'Lead Automation', 'Follow-up AI'],
-  },
-  {
-    client: 'Ember Boutique',
-    industry: 'Retail & Fashion',
-    service: 'Social Media',
-    serviceColor: '#FF6B00',
-    icon: Users,
-    challenge: 'Inconsistent posting and no content strategy left their social presence stagnant at 12K followers for over a year.',
-    result: '12K → 47K Instagram followers in 90 days with automated content scheduling.',
-    metric: '3.9×',
-    metricLabel: 'Follower Growth',
-    tags: ['Content Strategy', 'Post Automation', 'Growth Analytics'],
-  },
-  {
-    client: 'Summit Legal Group',
-    industry: 'Professional Services',
-    service: 'Web Development',
-    serviceColor: '#00CFFF',
-    icon: BarChart3,
-    challenge: 'An outdated website with poor mobile performance was driving away potential clients before they even made contact.',
-    result: '210% increase in organic traffic. 55% lower bounce rate. 2× contact form submissions.',
-    metric: '+210%',
-    metricLabel: 'Organic Traffic',
-    tags: ['SEO Optimization', 'Mobile-First', 'Conversion Design'],
-  },
-]
+const SERVICE_META = {
+  'AI Automation': { color: '#00CFFF', icon: TrendingUp },
+  'Social Media':  { color: '#FF6B00', icon: Users },
+  'Website Dev':   { color: '#00CFFF', icon: BarChart3 },
+}
+const FALLBACK_META = { color: '#94A3B8', icon: TrendingUp }
+
+function serviceMeta(tag) {
+  return SERVICE_META[tag] || FALLBACK_META
+}
+
+// Pull a YouTube video id from any common URL shape (watch?v=, youtu.be/, /embed/, /shorts/).
+function youtubeId(url) {
+  if (!url) return null
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/)
+  return m ? m[1] : null
+}
 
 const containerVariants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.15 } },
 }
-
 const cardVariants = {
   hidden: { opacity: 0, y: 40 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
 }
 
 export default function Portfolio() {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('portfolio_items')
+        .select('id, title, client, industry, problem, result, service_tag, type, youtube_url, image_url')
+        .eq('published', true)
+        .order('display_order', { ascending: true })
+      if (!cancelled) {
+        setItems(data ?? [])
+        setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // Hide section entirely if there are no published items — better than an empty grid.
+  if (!loading && items.length === 0) return null
+
   return (
     <section
       id="portfolio"
@@ -58,14 +60,12 @@ export default function Portfolio() {
       style={{ background: '#071526' }}
       aria-label="Portfolio and case studies"
     >
-      {/* Subtle top border glow */}
       <div
         className="absolute top-0 left-0 right-0 h-px"
         style={{ background: 'linear-gradient(to right, transparent, rgba(0,207,255,0.3), transparent)' }}
         aria-hidden="true"
       />
 
-      {/* Background orbs */}
       <div
         className="orb orb-cyan"
         style={{ width: 500, height: 500, bottom: '-10%', left: '-10%', opacity: 0.5 }}
@@ -73,7 +73,6 @@ export default function Portfolio() {
       />
 
       <div className="max-w-6xl mx-auto">
-        {/* Section header */}
         <motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 30 }}
@@ -95,113 +94,144 @@ export default function Portfolio() {
           </p>
         </motion.div>
 
-        {/* Cards */}
-        <motion.div
-          className="grid grid-cols-1 md:grid-cols-3 gap-6"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-        >
-          {caseStudies.map((study) => {
-            const Icon = study.icon
-            return (
-              <motion.article
-                key={study.client}
-                variants={cardVariants}
-                whileHover={{
-                  y: -6,
-                  boxShadow: `0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(0,207,255,0.1)`,
-                }}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
                 className="glass-card overflow-hidden flex flex-col"
-                style={{
-                  background: 'rgba(4, 13, 26, 0.6)',
-                  transition: 'all 0.3s ease',
-                }}
+                style={{ background: 'rgba(4, 13, 26, 0.6)', minHeight: 320 }}
               >
-                {/* Card header */}
-                <div
-                  className="px-6 py-5 flex items-start justify-between"
+                <div className="px-6 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ height: 14, width: '40%', background: 'rgba(255,255,255,0.06)', borderRadius: 6, marginBottom: 10, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <div style={{ height: 18, width: '70%', background: 'rgba(255,255,255,0.06)', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                </div>
+                <div className="px-6 py-5 flex-1">
+                  {[80, 100, 90, 60].map((w, j) => (
+                    <div key={j} style={{ height: 12, width: w + '%', background: 'rgba(255,255,255,0.05)', borderRadius: 6, marginBottom: 10, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-80px' }}
+          >
+            {items.map((item) => {
+              const { color, icon: Icon } = serviceMeta(item.service_tag)
+              const ytId = item.type === 'video' ? youtubeId(item.youtube_url) : null
+
+              return (
+                <motion.article
+                  key={item.id}
+                  variants={cardVariants}
+                  whileHover={{
+                    y: -6,
+                    boxShadow: `0 20px 50px rgba(0,0,0,0.6), 0 0 30px ${color}1A`,
+                  }}
+                  className="glass-card overflow-hidden flex flex-col"
                   style={{
-                    borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    background: `linear-gradient(135deg, ${study.serviceColor}08, transparent)`,
+                    background: 'rgba(4, 13, 26, 0.6)',
+                    transition: 'all 0.3s ease',
                   }}
                 >
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span
-                        className="text-xs font-display font-semibold px-2 py-0.5 rounded"
-                        style={{
-                          color: study.serviceColor,
-                          background: `${study.serviceColor}15`,
-                          border: `1px solid ${study.serviceColor}30`,
-                        }}
-                      >
-                        {study.service}
-                      </span>
+                  {/* Optional media — YouTube embed wins over image when both exist */}
+                  {ytId ? (
+                    <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, background: '#000' }}>
+                      <iframe
+                        src={`https://www.youtube.com/embed/${ytId}`}
+                        title={item.title}
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
+                      />
                     </div>
-                    <h3 className="font-display font-bold text-text-main text-base">
-                      {study.client}
-                    </h3>
-                    <p className="text-muted text-xs mt-0.5">{study.industry}</p>
-                  </div>
+                  ) : item.image_url ? (
+                    <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, background: '#020817', overflow: 'hidden' }}>
+                      <img
+                        src={item.image_url}
+                        alt={item.title}
+                        loading="lazy"
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      {item.type === 'video' && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
+                          <Play size={42} color="#FFF" />
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {/* Card header */}
                   <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                    className="px-6 py-5 flex items-start justify-between"
                     style={{
-                      background: `${study.serviceColor}15`,
-                      border: `1px solid ${study.serviceColor}25`,
+                      borderBottom: '1px solid rgba(255,255,255,0.06)',
+                      background: `linear-gradient(135deg, ${color}08, transparent)`,
                     }}
                   >
-                    <Icon size={18} style={{ color: study.serviceColor }} aria-hidden="true" />
-                  </div>
-                </div>
-
-                {/* Body */}
-                <div className="px-6 py-5 flex-1 flex flex-col">
-                  <p className="text-muted text-sm leading-relaxed mb-5">
-                    <span className="text-white/50 font-medium">Challenge: </span>
-                    {study.challenge}
-                  </p>
-
-                  {/* Result metric */}
-                  <div
-                    className="rounded-xl p-4 mb-5 flex items-center gap-4"
-                    style={{ background: `${study.serviceColor}08`, border: `1px solid ${study.serviceColor}18` }}
-                  >
                     <div>
-                      <div
-                        className="font-display font-black text-3xl"
-                        style={{ color: study.serviceColor }}
-                      >
-                        {study.metric}
-                      </div>
-                      <div className="text-muted text-xs">{study.metricLabel}</div>
+                      {item.service_tag && (
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className="text-xs font-display font-semibold px-2 py-0.5 rounded"
+                            style={{
+                              color,
+                              background: `${color}15`,
+                              border: `1px solid ${color}30`,
+                            }}
+                          >
+                            {item.service_tag}
+                          </span>
+                        </div>
+                      )}
+                      <h3 className="font-display font-bold text-text-main text-base">
+                        {item.client || item.title}
+                      </h3>
+                      {item.industry && <p className="text-muted text-xs mt-0.5">{item.industry}</p>}
                     </div>
-                    <p className="text-sm text-text-main/80 leading-snug">
-                      {study.result}
-                    </p>
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                      style={{
+                        background: `${color}15`,
+                        border: `1px solid ${color}25`,
+                      }}
+                    >
+                      <Icon size={18} style={{ color }} aria-hidden="true" />
+                    </div>
                   </div>
 
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-2 mt-auto">
-                    {study.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-xs px-2 py-1 rounded-md text-muted"
-                        style={{
-                          background: 'rgba(255,255,255,0.04)',
-                          border: '1px solid rgba(255,255,255,0.08)',
-                        }}
+                  {/* Body */}
+                  <div className="px-6 py-5 flex-1 flex flex-col">
+                    {item.problem && (
+                      <p className="text-muted text-sm leading-relaxed mb-5">
+                        <span className="text-white/50 font-medium">Challenge: </span>
+                        {item.problem}
+                      </p>
+                    )}
+
+                    {item.result && (
+                      <div
+                        className="rounded-xl p-4 mt-auto"
+                        style={{ background: `${color}08`, border: `1px solid ${color}18` }}
                       >
-                        {tag}
-                      </span>
-                    ))}
+                        <p className="text-sm text-text-main/85 leading-snug">
+                          {item.result}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </motion.article>
-            )
-          })}
-        </motion.div>
+                </motion.article>
+              )
+            })}
+          </motion.div>
+        )}
 
         {/* Bottom CTA */}
         <motion.div
@@ -229,7 +259,6 @@ export default function Portfolio() {
         </motion.div>
       </div>
 
-      {/* Bottom border */}
       <div
         className="absolute bottom-0 left-0 right-0 h-px"
         style={{ background: 'linear-gradient(to right, transparent, rgba(255,107,0,0.3), transparent)' }}
