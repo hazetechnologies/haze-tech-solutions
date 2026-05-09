@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
@@ -152,8 +152,23 @@ function AddClientModal({ onClose, onCreated }) {
 
   const selectedProduct = products.find(p => p.id === form.product_id)
   const selectedPlan    = plans.find(p => p.id === form.subscription_plan_id)
-  // Plans are not filtered by product (subscription_plans.product_id is NULL in seed data — they're global)
-  const availablePlans = plans
+
+  // Plan dropdown is scoped to the selected product:
+  //   - product chosen + dedicated plans exist → show only dedicated plans
+  //   - otherwise → show legacy global plans (product_id = null)
+  // Mirrors ConvertLeadModal so the two onboarding paths can't disagree.
+  const availablePlans = useMemo(() => {
+    if (!form.product_id) return plans.filter(p => !p.product_id)
+    const dedicated = plans.filter(p => p.product_id === form.product_id)
+    return dedicated.length > 0 ? dedicated : plans.filter(p => !p.product_id)
+  }, [plans, form.product_id])
+
+  // If selected plan disappears from the visible set after a product switch, clear it.
+  useEffect(() => {
+    if (form.subscription_plan_id && !availablePlans.find(p => p.id === form.subscription_plan_id)) {
+      setForm(prev => ({ ...prev, subscription_plan_id: '' }))
+    }
+  }, [availablePlans, form.subscription_plan_id])
 
   const handleProductChange = (productId) => {
     const prod = products.find(p => p.id === productId)

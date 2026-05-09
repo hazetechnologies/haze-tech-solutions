@@ -37,15 +37,17 @@ export default function Portfolio() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('portfolio_items')
         .select('id, title, client, industry, problem, result, service_tag, type, youtube_url, image_url')
         .eq('published', true)
         .order('display_order', { ascending: true })
-      if (!cancelled) {
-        setItems(data ?? [])
-        setLoading(false)
-      }
+      if (cancelled) return
+      // Surface fetch errors to the console — silently rendering an empty section
+      // would hide a real problem (RLS misconfig, missing column, network failure).
+      if (error) console.error('[Portfolio] failed to load items:', error)
+      setItems(data ?? [])
+      setLoading(false)
     })()
     return () => { cancelled = true }
   }, [])
