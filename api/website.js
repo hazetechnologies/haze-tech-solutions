@@ -336,12 +336,15 @@ async function publicCheckout(req, res) {
 
   const adminClient = createClient(url, SERVICE_ROLE_KEY)
 
-  // Validate the plan + pull product.
+  // Validate the plan + pull product. Service role bypasses RLS, so we have to
+  // enforce active=true on both the plan AND its product ourselves.
   const { data: plan } = await adminClient
     .from('subscription_plans')
-    .select('id, name, billing_cycle, discount_percent, stripe_price_id, product_id, products:product_id(id, name, base_price)')
+    .select('id, name, billing_cycle, discount_percent, stripe_price_id, product_id, active, products:product_id(id, name, base_price, active)')
     .eq('id', subscription_plan_id).maybeSingle()
-  if (!plan) return res.status(404).json({ error: 'plan_not_found', message: 'Subscription plan not found' })
+  if (!plan || !plan.active || !plan.products?.active) {
+    return res.status(404).json({ error: 'plan_not_found', message: 'Subscription plan not found or inactive' })
+  }
   if (!plan.stripe_price_id) {
     return res.status(409).json({ error: 'price_not_synced', message: `Plan "${plan.name}" has no stripe_price_id yet. Try again later.` })
   }
@@ -393,14 +396,31 @@ async function publicCheckout(req, res) {
     return res.status(500).json({ error: 'client_insert_failed', message: clientErr.message })
   }
 
+  // From this point on any failure must roll back the auth user + client row,
+  // otherwise a Stripe outage leaves a dead client_exists collision behind.
+  async function rollback() {
+    await adminClient.from('clients').delete().eq('id', client.id).catch(e => console.error('rollback client delete failed:', e))
+    await adminClient.auth.admin.deleteUser(authData.user.id).catch(e => console.error('rollback auth delete failed:', e))
+  }
+
   let stripe
   try { stripe = await getStripe() }
-  catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
+  catch (e) {
+    await rollback()
+    return res.status(500).json({ error: 'stripe_config', message: e.message })
+  }
 
-  const result = await createCheckoutSession({
-    adminClient, stripe, client, plan, planId: plan.id,
-    cancelUrl: `${siteUrl()}/pricing?checkout=canceled`,
-  })
+  let result
+  try {
+    result = await createCheckoutSession({
+      adminClient, stripe, client, plan, planId: plan.id,
+      cancelUrl: `${siteUrl()}/pricing?checkout=canceled`,
+    })
+  } catch (e) {
+    console.error('public-checkout: createCheckoutSession failed:', e)
+    await rollback()
+    return res.status(502).json({ error: 'stripe_failed', message: 'Could not start checkout — please try again.' })
+  }
   return res.status(200).json({ ...result, client_id: client.id })
 }
 
@@ -431,21 +451,51 @@ async function portalCheckout(req, res) {
     .from('clients').select('id, name, email, stripe_customer_id').eq('user_id', caller.id).maybeSingle()
   if (!client) return res.status(404).json({ error: 'no_client', message: 'No client record for this user' })
 
+  // Service role bypasses RLS — enforce active=true on plan + product ourselves
+  // so a stale UUID for an archived plan can't be purchased.
   const { data: plan } = await adminClient
-    .from('subscription_plans').select('id, name, billing_cycle, stripe_price_id').eq('id', subscription_plan_id).maybeSingle()
-  if (!plan) return res.status(404).json({ error: 'plan_not_found', message: 'Subscription plan not found' })
+    .from('subscription_plans')
+    .select('id, name, billing_cycle, stripe_price_id, active, products:product_id(active)')
+    .eq('id', subscription_plan_id).maybeSingle()
+  if (!plan || !plan.active || !plan.products?.active) {
+    return res.status(404).json({ error: 'plan_not_found', message: 'Subscription plan not found or inactive' })
+  }
   if (!plan.stripe_price_id) {
     return res.status(409).json({ error: 'price_not_synced', message: `Plan "${plan.name}" has no stripe_price_id yet.` })
+  }
+
+  // Block duplicate purchases for the same plan. The UI hides Active products,
+  // but a retry / stale tab / direct POST could still land here.
+  const { data: existingSub } = await adminClient
+    .from('subscriptions')
+    .select('id, status')
+    .eq('client_id', client.id)
+    .eq('stripe_price_id', plan.stripe_price_id)
+    .in('status', ['active', 'trialing', 'past_due'])
+    .maybeSingle()
+  if (existingSub) {
+    return res.status(409).json({
+      error: 'already_subscribed',
+      message: `You already have an active subscription for "${plan.name}".`,
+      subscription_id: existingSub.id,
+      status: existingSub.status,
+    })
   }
 
   let stripe
   try { stripe = await getStripe() }
   catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
 
-  const result = await createCheckoutSession({
-    adminClient, stripe, client, plan, planId: plan.id,
-    cancelUrl: `${siteUrl()}/portal/services?checkout=canceled`,
-  })
+  let result
+  try {
+    result = await createCheckoutSession({
+      adminClient, stripe, client, plan, planId: plan.id,
+      cancelUrl: `${siteUrl()}/portal/services?checkout=canceled`,
+    })
+  } catch (e) {
+    console.error('portal-checkout: createCheckoutSession failed:', e)
+    return res.status(502).json({ error: 'stripe_failed', message: 'Could not start checkout — please try again.' })
+  }
   return res.status(200).json(result)
 }
 
