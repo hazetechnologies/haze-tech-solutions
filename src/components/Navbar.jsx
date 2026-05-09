@@ -8,6 +8,7 @@ import { trackCta } from '../lib/telemetry'
 const navLinks = [
   { label: 'Home', href: '#home' },
   { label: 'Services', href: '#services' },
+  { label: 'Pricing', href: '/pricing', isRoute: true },
   { label: 'Portfolio', href: '#portfolio' },
   { label: 'About', href: '#about' },
   { label: 'Blog', href: '/blog', isRoute: true },

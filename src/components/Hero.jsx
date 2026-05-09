@@ -146,15 +146,21 @@ export default function Hero() {
             variants={itemVariants}
             className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
-            <motion.button
-              onClick={() => { trackCta('hero-get-started', 'hero'); handleScroll('#contact') }}
-              className="btn-primary text-sm"
+            <motion.div
               whileHover={{ scale: 1.06, boxShadow: '0 0 30px rgba(0,212,255,0.5)' }}
               whileTap={{ scale: 0.97 }}
+              style={{ display: 'inline-flex' }}
             >
-              Get Started
-              <ArrowRight size={16} aria-hidden="true" />
-            </motion.button>
+              <Link
+                to="/pricing"
+                onClick={() => trackCta('hero-get-started', 'hero')}
+                className="btn-primary text-sm"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                See Pricing
+                <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+            </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.04, boxShadow: '0 0 24px rgba(0,207,255,0.25)' }}

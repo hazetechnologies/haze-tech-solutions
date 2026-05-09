@@ -27,6 +27,7 @@ import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
+import PricingPage     from './pages/PricingPage'
 
 import PortalLogin          from './pages/portal/PortalLogin'
 import PortalLayout         from './pages/portal/PortalLayout'
@@ -36,6 +37,7 @@ import PortalInvoices       from './pages/portal/PortalInvoices'
 import AcceptInvite         from './pages/portal/AcceptInvite'
 import PortalWebsiteIntake  from './pages/portal/PortalWebsiteIntake'
 import PortalBrandKit       from './pages/portal/PortalBrandKit'
+import PortalServices       from './pages/portal/PortalServices'
 
 import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
@@ -61,6 +63,7 @@ export default function App() {
           <Route path="/portal/accept-invite" element={<AcceptInvite />} />
           <Route path="/blog"   element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/pricing" element={<PricingPage />} />
 
           {/* Admin login */}
           <Route path="/admin/login" element={<AdminLogin />} />
@@ -103,6 +106,7 @@ export default function App() {
             <Route path="invoices"             element={<PortalInvoices />} />
             <Route path="website-intake"       element={<PortalWebsiteIntake />} />
             <Route path="brand-kit"            element={<PortalBrandKit />} />
+            <Route path="services"             element={<PortalServices />} />
           </Route>
           </Routes>
         </BrowserRouter>
