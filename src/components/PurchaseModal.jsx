@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { X, AlertCircle, ArrowRight, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { trackEvent } from '../lib/telemetry'
+import { effectivePrice } from '../lib/pricing'
 
 // Quick-form modal triggered from /pricing.
 // 1. POSTs name + email + password + plan to /api/website?action=public-checkout.
@@ -23,10 +24,9 @@ export default function PurchaseModal({ product, plan, onClose }) {
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
 
-  // Display the price the form claims to charge — pulled from product × plan.
-  const base = Number(product.base_price ?? 0)
-  const discount = Number(plan.discount_percent ?? 0)
-  const displayPrice = base * (1 - discount / 100)
+  // Display the price the form claims to charge — plan-level override wins,
+  // otherwise computed from product × plan discount.
+  const displayPrice = effectivePrice(plan, product)
   const cycleLabel = plan.billing_cycle === 'one-time' ? 'one-time' : `/ ${plan.billing_cycle}`
 
   async function handleSubmit(e) {
