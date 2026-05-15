@@ -2,13 +2,15 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import {
-  LayoutDashboard, Receipt, Sparkles, ShoppingBag,
+  LayoutDashboard, Receipt, Sparkles, ShoppingBag, ShoppingCart,
   LogOut, ExternalLink, ChevronRight,
 } from 'lucide-react'
+import { useCart } from '../../lib/cart'
 
 const NAV = [
   { to: '/portal/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
   { to: '/portal/services',  label: 'Services',   icon: ShoppingBag },
+  { to: '/cart',             label: 'Cart',       icon: ShoppingCart, showBadge: true },
   { to: '/portal/brand-kit', label: 'Brand Kit',  icon: Sparkles },
   { to: '/portal/invoices',  label: 'Invoices',   icon: Receipt },
 ]
@@ -18,6 +20,7 @@ export default function PortalLayout() {
   const client = useClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const { count: cartCount } = useCart()
 
   const handleSignOut = async () => {
     await signOut()
@@ -61,9 +64,18 @@ export default function PortalLayout() {
 
           <p style={styles.navLabel}>NAVIGATION</p>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {NAV.map(({ to, label, icon: Icon }) => (
+            {NAV.map(({ to, label, icon: Icon, showBadge }) => (
               <NavLink key={to} to={to} end className={({ isActive }) => `portal-nav-link${isActive ? ' active' : ''}`}>
-                <Icon size={17} /> {label}
+                <Icon size={17} />
+                <span style={{ flex: 1 }}>{label}</span>
+                {showBadge && cartCount > 0 && (
+                  <span style={{
+                    minWidth: 18, height: 18, padding: '0 5px',
+                    background: '#FF6B00', color: '#020617',
+                    borderRadius: 999, fontSize: 10, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>{cartCount}</span>
+                )}
               </NavLink>
             ))}
           </nav>

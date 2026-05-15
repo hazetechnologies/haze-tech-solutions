@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import {
@@ -16,6 +16,15 @@ const statusConfig = {
 
 export default function PortalDashboard() {
   const client = useClient()
+  const [searchParams] = useSearchParams()
+
+  // Stripe redirects back here with checkout=success after any paid checkout.
+  // Wipe the localStorage cart so the next page load starts fresh.
+  useEffect(() => {
+    if (searchParams.get('checkout') === 'success') {
+      try { localStorage.removeItem('haze-cart-v1') } catch { /* ignore */ }
+    }
+  }, [searchParams])
   const [projects, setProjects]     = useState([])
   const [milestones, setMilestones] = useState([])
   const [invoiceStats, setInvoiceStats] = useState({ total: 0, paid: 0, pending: 0 })

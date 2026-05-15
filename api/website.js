@@ -29,6 +29,8 @@ export default async function handler(req, res) {
     case 'stripe-test':         return req.method === 'POST' ? stripeTest(req, res)       : methodNotAllowed(res, 'POST')
     case 'public-checkout':     return req.method === 'POST' ? publicCheckout(req, res)   : methodNotAllowed(res, 'POST')
     case 'portal-checkout':     return req.method === 'POST' ? portalCheckout(req, res)   : methodNotAllowed(res, 'POST')
+    case 'public-cart-checkout':return req.method === 'POST' ? publicCartCheckout(req, res): methodNotAllowed(res, 'POST')
+    case 'portal-cart-checkout':return req.method === 'POST' ? portalCartCheckout(req, res): methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -511,6 +513,247 @@ async function portalCheckout(req, res) {
     })
   } catch (e) {
     console.error('portal-checkout: createCheckoutSession failed:', e)
+    return res.status(502).json({ error: 'stripe_failed', message: 'Could not start checkout — please try again.' })
+  }
+  return res.status(200).json(result)
+}
+
+// Multi-item Stripe Checkout Session — used by *-cart-checkout endpoints.
+// Plans are validated by the caller; this helper assumes they're all active,
+// have a stripe_price_id, and share a billing cycle.
+async function createCartCheckoutSession({ adminClient, stripe, client, plans, cancelUrl }) {
+  let customerId = client.stripe_customer_id
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: client.email, name: client.name, metadata: { client_id: client.id },
+    })
+    customerId = customer.id
+    await adminClient.from('clients').update({ stripe_customer_id: customerId }).eq('id', client.id)
+  }
+
+  // Idempotency key: scoped to (client, sorted plan id set, 5-minute bucket).
+  // Same as single-item createCheckoutSession but extended for the cart contents.
+  const sortedIds = [...plans.map(p => p.id)].sort().join('+')
+  const bucket = Math.floor(Date.now() / 300000)
+  const idempotencyKey = `cart-${client.id}-${sortedIds}-${bucket}`
+
+  const isOneTime = plans[0].billing_cycle === 'one-time'
+  const session = await stripe.checkout.sessions.create({
+    mode: isOneTime ? 'payment' : 'subscription',
+    customer: customerId,
+    line_items: plans.map(p => ({ price: p.stripe_price_id, quantity: 1 })),
+    success_url: `${siteUrl()}/portal/dashboard?checkout=success`,
+    cancel_url: cancelUrl || `${siteUrl()}/cart?checkout=canceled`,
+    metadata: {
+      client_id: client.id,
+      subscription_plan_ids: sortedIds,
+      cart_size: String(plans.length),
+    },
+  }, { idempotencyKey })
+
+  return { url: session.url, customer_id: customerId }
+}
+
+// Load + validate a cart's plans from a list of plan ids. Returns either
+// { plans } (valid, same billing cycle, all have stripe_price_id) or
+// { error, status, ...details }.
+async function loadAndValidateCart(adminClient, items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { error: 'bad_request', status: 400, message: 'Cart is empty' }
+  }
+  const planIds = items.map(i => i?.plan_id).filter(Boolean)
+  if (planIds.length === 0) {
+    return { error: 'bad_request', status: 400, message: 'Cart contains no valid plan ids' }
+  }
+
+  const { data: plans } = await adminClient
+    .from('subscription_plans')
+    .select('id, name, billing_cycle, discount_percent, price, stripe_price_id, product_id, active, products:product_id(id, name, base_price, active)')
+    .in('id', planIds)
+
+  if (!plans || plans.length === 0) {
+    return { error: 'plans_not_found', status: 404, message: 'No matching plans found' }
+  }
+
+  // Reject if any plan is inactive or its product is inactive.
+  const inactive = plans.find(p => !p.active || !p.products?.active)
+  if (inactive) {
+    return { error: 'plan_inactive', status: 404, message: `Plan "${inactive.name}" is no longer available.` }
+  }
+  // Reject if any plan lacks a Stripe price.
+  const noPrice = plans.find(p => !p.stripe_price_id)
+  if (noPrice) {
+    return { error: 'price_not_synced', status: 409, message: `Plan "${noPrice.name}" is not yet configured for checkout.` }
+  }
+  // Reject mixed billing cycles (Stripe Checkout can't mix mode='payment' and 'subscription').
+  const cycles = Array.from(new Set(plans.map(p => p.billing_cycle)))
+  if (cycles.length > 1) {
+    return { error: 'mixed_cycles', status: 400, message: 'Cart contains a mix of one-time and recurring items. Check those out separately.' }
+  }
+
+  return { plans }
+}
+
+// POST ?action=public-cart-checkout — anonymous visitor checks out a cart of
+// items. Mirrors publicCheckout but with multiple line_items. The first plan
+// (by display_order) is denormalized into clients.product/price/subscription_terms
+// for legacy compatibility; the rest are tracked via subscription rows.
+// Body: { items: [{plan_id}, ...], name, email, password, company?, phone? }
+async function publicCartCheckout(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  const { items, name, email, password, company, phone } = req.body || {}
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'bad_request', message: 'name, email, and password are required' })
+  }
+  if (String(password).length < 8) {
+    return res.status(400).json({ error: 'weak_password', message: 'Password must be at least 8 characters' })
+  }
+
+  const adminClient = createClient(url, SERVICE_ROLE_KEY)
+
+  const cartResult = await loadAndValidateCart(adminClient, items)
+  if (cartResult.error) {
+    return res.status(cartResult.status).json({ error: cartResult.error, message: cartResult.message })
+  }
+  // Sort by display_order so the "primary" denorm pick is deterministic.
+  const plans = cartResult.plans.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+  const primary = plans[0]
+
+  // Reject existing-client emails — surface login prompt.
+  const { data: existing } = await adminClient
+    .from('clients').select('id').eq('email', email).maybeSingle()
+  if (existing) {
+    return res.status(409).json({
+      error: 'client_exists',
+      message: 'An account with that email already exists. Sign in to complete checkout.',
+      login_url: '/portal/login',
+    })
+  }
+
+  const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
+    email, password, email_confirm: true,
+  })
+  if (authErr) return res.status(400).json({ error: 'auth_create_failed', message: authErr.message })
+
+  // Denormalize the primary (cheapest-ranked-first) plan into legacy columns.
+  let computedPrice
+  if (primary.price != null) {
+    computedPrice = Number(primary.price)
+  } else {
+    const basePrice = Number(primary.products?.base_price ?? 0)
+    const discount = Number(primary.discount_percent ?? 0)
+    computedPrice = basePrice ? Number((basePrice * (1 - discount / 100)).toFixed(2)) : null
+  }
+
+  const { data: client, error: clientErr } = await adminClient
+    .from('clients')
+    .insert({
+      user_id: authData.user.id,
+      name, email,
+      company: company || null,
+      phone: phone || null,
+      product_id: primary.product_id,
+      subscription_plan_id: primary.id,
+      product: primary.products?.name ?? null,
+      price: computedPrice,
+      subscription_terms: primary.billing_cycle,
+    })
+    .select('id, name, email, stripe_customer_id')
+    .single()
+
+  if (clientErr) {
+    await adminClient.auth.admin.deleteUser(authData.user.id).catch(e => console.error('rollback delete failed:', e))
+    return res.status(500).json({ error: 'client_insert_failed', message: clientErr.message })
+  }
+
+  async function rollback() {
+    await adminClient.from('clients').delete().eq('id', client.id).catch(e => console.error('rollback client delete failed:', e))
+    await adminClient.auth.admin.deleteUser(authData.user.id).catch(e => console.error('rollback auth delete failed:', e))
+  }
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) {
+    await rollback()
+    return res.status(500).json({ error: 'stripe_config', message: e.message })
+  }
+
+  let result
+  try {
+    result = await createCartCheckoutSession({
+      adminClient, stripe, client, plans,
+      cancelUrl: `${siteUrl()}/cart?checkout=canceled`,
+    })
+  } catch (e) {
+    console.error('public-cart-checkout: createCartCheckoutSession failed:', e)
+    await rollback()
+    return res.status(502).json({ error: 'stripe_failed', message: 'Could not start checkout — please try again.' })
+  }
+  return res.status(200).json({ ...result, client_id: client.id })
+}
+
+// POST ?action=portal-cart-checkout — logged-in client checks out a cart of
+// items. Validates all plans, blocks any plan they already have an active
+// sub for, then creates a single multi-item Stripe Checkout Session.
+// Body: { items: [{plan_id}, ...] }
+async function portalCartCheckout(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  const authHeader = req.headers.authorization
+  if (!authHeader) return res.status(401).json({ error: 'unauthorized', message: 'Missing authorization header' })
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader)
+  if (!m) return res.status(401).json({ error: 'unauthorized', message: 'Bearer token required' })
+
+  const userClient = createClient(url, anonKey)
+  const { data: { user: caller }, error: authErr } = await userClient.auth.getUser(m[1].trim())
+  if (authErr || !caller) return res.status(401).json({ error: 'unauthorized', message: 'Invalid token' })
+
+  const { items } = req.body || {}
+  const adminClient = createClient(url, SERVICE_ROLE_KEY)
+
+  const { data: client } = await adminClient
+    .from('clients').select('id, name, email, stripe_customer_id').eq('user_id', caller.id).maybeSingle()
+  if (!client) return res.status(404).json({ error: 'no_client', message: 'No client record for this user' })
+
+  const cartResult = await loadAndValidateCart(adminClient, items)
+  if (cartResult.error) {
+    return res.status(cartResult.status).json({ error: cartResult.error, message: cartResult.message })
+  }
+  const plans = cartResult.plans
+
+  // Block if the client already has an active sub matching any cart plan.
+  const priceIds = plans.map(p => p.stripe_price_id)
+  const { data: existingSubs } = await adminClient
+    .from('subscriptions')
+    .select('id, status, stripe_price_id')
+    .eq('client_id', client.id)
+    .in('stripe_price_id', priceIds)
+    .in('status', ['active', 'trialing', 'past_due'])
+  if (existingSubs && existingSubs.length > 0) {
+    const conflict = plans.find(p => existingSubs.some(s => s.stripe_price_id === p.stripe_price_id))
+    return res.status(409).json({
+      error: 'already_subscribed',
+      message: `You already have an active subscription for "${conflict?.name}". Remove it from your cart.`,
+      conflict_plan_id: conflict?.id,
+    })
+  }
+
+  let stripe
+  try { stripe = await getStripe() }
+  catch (e) { return res.status(500).json({ error: 'stripe_config', message: e.message }) }
+
+  let result
+  try {
+    result = await createCartCheckoutSession({
+      adminClient, stripe, client, plans,
+      cancelUrl: `${siteUrl()}/cart?checkout=canceled`,
+    })
+  } catch (e) {
+    console.error('portal-cart-checkout: createCartCheckoutSession failed:', e)
     return res.status(502).json({ error: 'stripe_failed', message: 'Could not start checkout — please try again.' })
   }
   return res.status(200).json(result)

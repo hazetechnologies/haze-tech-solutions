@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Check, Plus, AlertCircle, X } from 'lucide-react'
+import { Check, Plus, AlertCircle, X, ShoppingCart, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import { effectivePrice } from '../../lib/pricing'
+import { useCart } from '../../lib/cart'
 
 // /portal/services — logged-in client picks additional services to add to
 // their plan. Hits /api/website?action=portal-checkout (uses session, no
@@ -158,6 +159,7 @@ export default function PortalServices() {
 }
 
 function ProductCard({ product, accent, activePriceIds, busyPlanId, onBuy }) {
+  const { add, remove, has } = useCart()
   const plans = (product.subscription_plans || [])
     .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
   const isActive = plans.some(p => p.stripe_price_id && activePriceIds.has(p.stripe_price_id))
@@ -223,27 +225,47 @@ function ProductCard({ product, accent, activePriceIds, busyPlanId, onBuy }) {
         ) : plans.length === 0 || !plans.some(p => p.stripe_price_id) ? (
           <div style={styles.unavailable}>Coming soon</div>
         ) : (
-          plans.filter(p => p.stripe_price_id).map(plan => (
-            <button
-              key={plan.id}
-              onClick={() => onBuy(plan)}
-              disabled={busyPlanId !== null}
-              style={{
-                ...styles.buyBtn,
-                background: busyPlanId === plan.id ? 'rgba(255,255,255,0.06)' : `${accent}15`,
-                border: `1px solid ${accent}40`,
-                color: accent,
-                cursor: busyPlanId !== null ? 'not-allowed' : 'pointer',
-                opacity: busyPlanId !== null && busyPlanId !== plan.id ? 0.4 : 1,
-              }}
-            >
-              <Plus size={13} />
-              {busyPlanId === plan.id ? 'Redirecting…' : `Add ${plan.name.replace(/\(.*\)/, '').trim()}`}
-              {plan.discount_percent > 0 && (
-                <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800 }}>-{plan.discount_percent}%</span>
-              )}
-            </button>
-          ))
+          plans.filter(p => p.stripe_price_id).map(plan => {
+            const inCart = has(plan.id)
+            return (
+              <div key={plan.id} style={{ display: 'flex', gap: 5 }}>
+                <button
+                  onClick={() => onBuy(plan)}
+                  disabled={busyPlanId !== null}
+                  style={{
+                    ...styles.buyBtn, flex: 1,
+                    background: busyPlanId === plan.id ? 'rgba(255,255,255,0.06)' : `${accent}15`,
+                    border: `1px solid ${accent}40`,
+                    color: accent,
+                    cursor: busyPlanId !== null ? 'not-allowed' : 'pointer',
+                    opacity: busyPlanId !== null && busyPlanId !== plan.id ? 0.4 : 1,
+                  }}
+                >
+                  <Plus size={13} />
+                  {busyPlanId === plan.id ? 'Redirecting…' : `Add ${plan.name.replace(/\(.*\)/, '').trim()}`}
+                  {plan.discount_percent > 0 && (
+                    <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800 }}>-{plan.discount_percent}%</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => inCart ? remove(plan.id) : add(plan.id, product.id)}
+                  title={inCart ? 'Remove from cart' : 'Add to cart'}
+                  aria-label={inCart ? 'Remove from cart' : 'Add to cart'}
+                  style={{
+                    width: 34, height: 34,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    background: inCart ? `${accent}25` : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${inCart ? accent : 'rgba(255,255,255,0.1)'}`,
+                    borderRadius: 8, cursor: 'pointer',
+                    color: inCart ? accent : '#94A3B8',
+                    flexShrink: 0,
+                  }}
+                >
+                  {inCart ? <CheckCircle2 size={13} /> : <ShoppingCart size={13} />}
+                </button>
+              </div>
+            )
+          })
         )}
       </div>
     </div>

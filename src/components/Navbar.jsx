@@ -4,6 +4,7 @@ import { Menu, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import logoIcon from '../assets/logo/haze-logo-icon.png'
 import { trackCta } from '../lib/telemetry'
+import CartIcon from './CartIcon'
 
 const navLinks = [
   { label: 'Home', href: '#home' },
@@ -103,7 +104,8 @@ export default function Navbar() {
         </ul>
 
         {/* CTA + Hamburger */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <CartIcon variant="public" />
           <motion.button
             onClick={() => { trackCta('navbar-client-login', 'navbar'); navigate('/portal/login') }}
             className="hidden md:inline-flex text-sm"
