@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Check, TrendingUp, Users, BarChart3, Search } from 'lucide-react'
+import { Check, TrendingUp, Users, BarChart3, Search, ShoppingCart, CheckCircle2 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import PurchaseModal from '../components/PurchaseModal'
 import { supabase } from '../lib/supabase'
 import { effectivePrice } from '../lib/pricing'
+import { useCart } from '../lib/cart'
 
 // Maps a product's display_order to its grouping section.
 // 1–3 SMM, 4 AI Automation, 5–7 Web Setup, 8 SEO. Maintenance products
@@ -167,6 +168,8 @@ function PricingSection({ meta, products, onBuy }) {
 }
 
 function ProductCard({ product, accent, onBuy }) {
+  const { add, remove, has } = useCart()
+
   // Sort plans so the cheapest / most-frequent appears first.
   const plans = (product.subscription_plans || [])
     .filter(p => p.stripe_price_id != null) // hide plans without Stripe IDs
@@ -242,29 +245,50 @@ function ProductCard({ product, accent, onBuy }) {
             Coming soon
           </button>
         ) : (
-          plans.map((plan) => (
-            <button
-              key={plan.id}
-              onClick={() => onBuy(product, plan)}
-              style={{
-                padding: '10px 16px',
-                borderRadius: 10, cursor: 'pointer',
-                fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
-                background: isFeatured ? `linear-gradient(135deg, ${accent}, ${accent}CC)` : 'rgba(255,255,255,0.04)',
-                color: isFeatured ? '#020617' : '#F1F5F9',
-                border: isFeatured ? 'none' : `1px solid ${accent}40`,
-                textAlign: 'left',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}
-            >
-              <span>Get {plan.name.replace(/\(.*\)/, '').trim()}</span>
-              {plan.discount_percent > 0 && (
-                <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.85 }}>
-                  -{plan.discount_percent}%
-                </span>
-              )}
-            </button>
-          ))
+          plans.map((plan) => {
+            const inCart = has(plan.id)
+            return (
+              <div key={plan.id} style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={() => onBuy(product, plan)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    borderRadius: 10, cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
+                    background: isFeatured ? `linear-gradient(135deg, ${accent}, ${accent}CC)` : 'rgba(255,255,255,0.04)',
+                    color: isFeatured ? '#020617' : '#F1F5F9',
+                    border: isFeatured ? 'none' : `1px solid ${accent}40`,
+                    textAlign: 'left',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}
+                >
+                  <span>Buy {plan.name.replace(/\(.*\)/, '').trim()}</span>
+                  {plan.discount_percent > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.85 }}>
+                      -{plan.discount_percent}%
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => inCart ? remove(plan.id) : add(plan.id, product.id)}
+                  title={inCart ? 'Remove from cart' : 'Add to cart'}
+                  aria-label={inCart ? 'Remove from cart' : 'Add to cart'}
+                  style={{
+                    width: 40, height: 40,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    background: inCart ? `${accent}25` : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${inCart ? accent : 'rgba(255,255,255,0.1)'}`,
+                    borderRadius: 10, cursor: 'pointer',
+                    color: inCart ? accent : '#94A3B8',
+                    flexShrink: 0,
+                  }}
+                >
+                  {inCart ? <CheckCircle2 size={15} /> : <ShoppingCart size={15} />}
+                </button>
+              </div>
+            )
+          })
         )}
       </div>
     </motion.div>
