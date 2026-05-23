@@ -100,6 +100,35 @@ export default function BrandKitTab({ client }) {
     setLatestKit(null)
   }
 
+  // Admin picks a logo on the client's behalf — fires the banner-phase invoke.
+  const [approving, setApproving] = useState(null)  // 'logo_primary' | 'logo_icon' | 'logo_monochrome' | null
+  const [approveErr, setApproveErr] = useState(null)
+  const handleAdminApprove = useCallback(async (logoKey) => {
+    if (!latestKit?.id) return
+    setApproving(logoKey)
+    setApproveErr(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=approve-logo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify({ kit_id: latestKit.id, approved_logo_key: logoKey }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || data.error || `Server error (${res.status})`)
+      trackEvent('brand_kit_admin_approved_logo', { kit_id: latestKit.id, logo_key: logoKey, client_id: client.id })
+      // Optimistically move into 'generating' so the existing poll picks up banner phase
+      setLatestKit(prev => ({ ...prev, status: 'generating', progress_message: 'Logo approved — generating banners…', approved_logo_asset_id: logoKey }))
+    } catch (err) {
+      setApproveErr(err.message || 'Failed to approve logo')
+    } finally {
+      setApproving(null)
+    }
+  }, [latestKit?.id, client.id])
+
   if (loading) {
     return <div style={{ color: '#64748B', fontSize: 13 }}>Loading…</div>
   }
@@ -125,24 +154,39 @@ export default function BrandKitTab({ client }) {
         <div style={{ color: '#94A3B8', fontSize: 13, marginBottom: 16 }}>
           {latestKit.progress_message || 'Working…'}
         </div>
-        <div style={{ color: '#475569', fontSize: 12 }}>
+        <div style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>
           Usually takes 90-120 seconds.
         </div>
+        <button
+          onClick={handleRegenerate}
+          style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '6px 12px', fontSize: 11.5, color: '#94A3B8', cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          ↺ Start over with different inputs
+        </button>
       </div>
     )
   }
 
-  // Awaiting client logo approval
+  // Awaiting client logo approval — admin can also pick on the client's behalf.
   if (latestKit.status === 'awaiting_logo_approval') {
     const images = latestKit.assets?.images || {}
     return (
       <div style={{ padding: 24 }}>
         <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 10, padding: 14, color: '#FACC15', fontSize: 13, marginBottom: 18 }}>
-          Logos generated. Waiting for the client to approve one in their portal — banners will start automatically once they pick.
+          Logos generated. The client can approve one from their portal, or you can pick on their behalf below. Banners start as soon as one is approved.
         </div>
+
+        {approveErr && (
+          <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: 10, color: '#FCA5A5', fontSize: 12, marginBottom: 14 }}>
+            {approveErr}
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           {['logo_primary', 'logo_icon', 'logo_monochrome'].map((key) => {
             const ref = images[key]
+            const busy = approving === key
+            const otherBusy = approving !== null && approving !== key
             return (
               <div key={key} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ aspectRatio: '1 / 1', background: '#0B1120', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -150,10 +194,39 @@ export default function BrandKitTab({ client }) {
                     ? <img src={ref.public_url} alt={key} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                     : <span style={{ color: '#475569', fontSize: 12 }}>(missing)</span>}
                 </div>
-                <div style={{ padding: '8px 10px', fontSize: 11, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ padding: '8px 10px 4px', fontSize: 11, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ padding: '0 10px 10px' }}>
+                  <button
+                    onClick={() => handleAdminApprove(key)}
+                    disabled={!ref?.public_url || busy || otherBusy}
+                    style={{
+                      width: '100%', padding: '7px 10px',
+                      background: busy ? 'rgba(0,212,255,0.4)' : 'linear-gradient(135deg, #00D4FF, #0099CC)',
+                      border: 'none', borderRadius: 8, color: '#020617',
+                      fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                      cursor: (busy || otherBusy || !ref?.public_url) ? 'not-allowed' : 'pointer',
+                      opacity: (otherBusy || !ref?.public_url) ? 0.5 : 1,
+                    }}
+                  >
+                    {busy ? 'Approving…' : 'Pick this logo'}
+                  </button>
+                </div>
               </div>
             )
           })}
+        </div>
+
+        <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
+          <button
+            onClick={handleRegenerate}
+            disabled={approving !== null}
+            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '7px 14px', fontSize: 12, color: '#94A3B8', cursor: approving !== null ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: approving !== null ? 0.5 : 1 }}
+          >
+            ↺ Start over with different inputs
+          </button>
+          <div style={{ marginTop: 6, fontSize: 11, color: '#475569' }}>
+            (creates a new brand kit; the current logos stay on the old kit row)
+          </div>
         </div>
       </div>
     )
