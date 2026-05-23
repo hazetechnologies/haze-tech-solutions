@@ -3,12 +3,14 @@ import { requireAdmin } from './_lib/require-admin.js'
 
 const REQUIRED_PATH3_FIELDS = [
   'business_name', 'business_description', 'industry', 'audience',
-  'vibe', 'color_preference', 'inspirations',
+  'vibe', 'inspirations',
 ]
 const REQUIRED_PATH1_FIELDS = [
   'business_name', 'industry', 'audience',
-  'vibe', 'color_preference', 'inspirations',
+  'vibe', 'inspirations',
 ]
+// color_preference is required UNLESS brand_colors[] is supplied (the explicit
+// hex codes replace the text description). Validated separately below.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -35,6 +37,26 @@ export default async function handler(req, res) {
     if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) {
       return res.status(400).json({ error: `inputs.${f} is required for path '${path}'` })
     }
+  }
+
+  // Either color_preference (free text) OR brand_colors[] (explicit hex) must be set.
+  const hasColorText = typeof inputs.color_preference === 'string' && inputs.color_preference.trim().length > 0
+  const hasBrandColors = Array.isArray(inputs.brand_colors) && inputs.brand_colors.length > 0
+  if (!hasColorText && !hasBrandColors) {
+    return res.status(400).json({ error: 'Provide either color_preference (text) or brand_colors[] (explicit hex)' })
+  }
+  if (hasBrandColors) {
+    for (const c of inputs.brand_colors) {
+      if (!c?.hex || !/^#[0-9a-fA-F]{6}$/.test(c.hex)) {
+        return res.status(400).json({ error: `brand_colors[].hex must be a #RRGGBB value (got "${c?.hex}")` })
+      }
+      if (!['primary', 'secondary', 'accent'].includes(c.name)) {
+        return res.status(400).json({ error: `brand_colors[].name must be 'primary', 'secondary', or 'accent' (got "${c?.name}")` })
+      }
+    }
+  }
+  if (inputs.existing_logo_url && !/^https?:\/\//.test(inputs.existing_logo_url)) {
+    return res.status(400).json({ error: 'existing_logo_url must be a full http(s):// URL' })
   }
 
   // Verify client exists

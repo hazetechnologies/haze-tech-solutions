@@ -9,11 +9,16 @@ export interface BrandKitInputs {
   industry: string
   audience: string
   vibe: string[]
-  color_preference: string
+  color_preference?: string
   inspirations: string
   voice_tone_preference?: string
   goal?: string        // Path 1 only
   challenge?: string   // Path 1 only
+
+  // Optional explicit assets — when set, the generator uses these instead of
+  // the LLM-derived alternatives.
+  brand_colors?: { name: 'primary' | 'secondary' | 'accent'; hex: string }[]
+  existing_logo_url?: string
 }
 
 export interface ColorPaletteEntry {
