@@ -135,9 +135,20 @@ async function processBrandKit(
       assets: { ...textAssets },
     })
 
-    const logos = await generateLogos(inputs, textAssets.color_palette, client_id, kit_id, existing_logos)
+    // If the admin supplied an existing logo URL, skip the 3-logo generation
+    // and the client-approval gate entirely. The same URL becomes all three
+    // variants (primary/icon/monochrome) — the admin can swap variants later.
+    let logos: Record<'logo_primary' | 'logo_icon' | 'logo_monochrome', ImageAssetRef>
+    let skippedLogoGen = false
+    if (inputs.existing_logo_url) {
+      const ref: ImageAssetRef = { r2_key: '', public_url: inputs.existing_logo_url }
+      logos = { logo_primary: ref, logo_icon: ref, logo_monochrome: ref }
+      skippedLogoGen = true
+    } else {
+      logos = await generateLogos(inputs, textAssets.color_palette, client_id, kit_id, existing_logos)
+    }
 
-    if (phase === 'logos_then_pause') {
+    if (phase === 'logos_then_pause' && !skippedLogoGen) {
       // Pause for client approval. Banners will be triggered by api/website?action=approve-logo.
       await update({
         status: 'awaiting_logo_approval',
@@ -147,10 +158,12 @@ async function processBrandKit(
       return
     }
 
-    // phase === 'all' — keep going through banners (used by regen scripts that bypass the gate)
+    // phase === 'all' OR an existing logo was supplied — keep going through banners.
     await update({
-      progress_message: 'Logos done. Generating banners…',
+      progress_message: skippedLogoGen ? 'Using supplied logo. Generating banners…' : 'Logos done. Generating banners…',
       assets: { ...textAssets, images: logos as any },
+      // When we skip the gate via existing_logo_url, mark logo_primary approved so the schema is consistent.
+      ...(skippedLogoGen ? { approved_logo_asset_id: 'logo_primary' } : {}),
     })
     const banners = await generateBanners(inputs, textAssets.color_palette, client_id, kit_id, logos.logo_primary.public_url)
     await update({
@@ -249,6 +262,21 @@ async function callOpusPillars(inputs: BrandKitInputs, kitId: string, evtProps: 
 }
 
 async function callOpusPalette(inputs: BrandKitInputs, kitId: string, evtProps: Record<string, unknown>): Promise<ColorPaletteEntry[]> {
+  // If the admin supplied explicit brand colors, use them verbatim instead of
+  // calling the LLM. We fill in 'dark' and 'light' with sensible defaults so
+  // the palette always has 5 entries (the rest of the pipeline depends on it).
+  if (inputs.brand_colors && inputs.brand_colors.length > 0) {
+    const byName: Record<string, string> = {}
+    for (const c of inputs.brand_colors) byName[c.name] = c.hex
+    return [
+      { name: 'primary',   hex: byName.primary   || '#00D4FF', use: 'Headlines, primary buttons, key brand moments' },
+      { name: 'secondary', hex: byName.secondary || '#0099CC', use: 'Supporting elements, secondary buttons, accents' },
+      { name: 'accent',    hex: byName.accent    || '#FF6B00', use: 'Highlights, calls to action, attention-grabbers' },
+      { name: 'dark',      hex: '#0F172A', use: 'Body text on light backgrounds, dark surfaces' },
+      { name: 'light',     hex: '#F8FAFC', use: 'Backgrounds, text on dark, breathing room' },
+    ]
+  }
+
   const { system, user } = buildColorPalettePrompt(inputs)
   const { data, status } = await trackedClaude({
     apiKey: ANTHROPIC_KEY,

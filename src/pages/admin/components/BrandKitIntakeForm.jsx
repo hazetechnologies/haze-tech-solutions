@@ -32,6 +32,10 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
     voice_tone_preference: '',
     goal: auditInputs.goal || '',
     challenge: auditInputs.challenge || '',
+    // Explicit hex picks; empty when the admin wants the AI to design a palette.
+    brand_colors: { primary: '', secondary: '', accent: '' },
+    // Optional URL to an existing logo — skips the 3-logo generation entirely.
+    existing_logo_url: '',
   }), [client, auditInputs])
 
   const [form, setForm] = useState(initial)
@@ -40,14 +44,20 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
 
   const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
   const toggleVibe = (v) => setField('vibe', form.vibe.includes(v) ? form.vibe.filter(x => x !== v) : [...form.vibe, v])
+  const setColor = (role, hex) => setForm(prev => ({ ...prev, brand_colors: { ...prev.brand_colors, [role]: hex } }))
+
+  // Extract valid #RRGGBB hex picks; ignore partial input while typing.
+  const validBrandColors = ['primary', 'secondary', 'accent']
+    .map(name => ({ name, hex: form.brand_colors[name] }))
+    .filter(c => /^#[0-9a-fA-F]{6}$/.test(c.hex))
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
 
-    // Required field check
-    const requiredColdStart = ['business_name', 'business_description', 'industry', 'audience', 'color_preference', 'inspirations']
-    const requiredAuditPrefill = ['business_name', 'industry', 'audience', 'color_preference', 'inspirations']
+    // Required field check (color_preference is required only when brand_colors is empty).
+    const requiredColdStart = ['business_name', 'business_description', 'industry', 'audience', 'inspirations']
+    const requiredAuditPrefill = ['business_name', 'industry', 'audience', 'inspirations']
     const required = isPath1 ? requiredAuditPrefill : requiredColdStart
     for (const f of required) {
       if (!form[f] || (Array.isArray(form[f]) && form[f].length === 0)) {
@@ -59,13 +69,25 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
       setError('Pick at least one vibe descriptor')
       return
     }
+    if (!form.color_preference.trim() && validBrandColors.length === 0) {
+      setError('Either describe the color preference OR pick explicit brand colors below.')
+      return
+    }
+    if (form.existing_logo_url && !/^https?:\/\//.test(form.existing_logo_url.trim())) {
+      setError('Existing logo URL must start with http:// or https://')
+      return
+    }
 
     setSubmitting(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      // Strip the per-role hex object — we send the validated array shape.
+      const { brand_colors: _bc, ...formClean } = form
       const inputs = {
         path: isPath1 ? 'audit_prefill' : 'cold_start',
-        ...form,
+        ...formClean,
+        existing_logo_url: form.existing_logo_url.trim() || undefined,
+        ...(validBrandColors.length > 0 ? { brand_colors: validBrandColors } : {}),
       }
       const res = await fetch('/api/start-brand-kit', {
         method: 'POST',
@@ -128,8 +150,51 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
         </div>
       </Field>
 
-      <Field label="Color preference *">
+      <Field label="Color preference (description)">
         <input value={form.color_preference} onChange={e => setField('color_preference', e.target.value)} style={inputStyle} placeholder="e.g. Earthy with one bold accent" />
+        <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
+          Free-text description for the AI to interpret. Required UNLESS you pick explicit hex codes below.
+        </p>
+      </Field>
+
+      <Field label="Brand colors (optional — explicit hex)">
+        <p style={{ color: '#94A3B8', fontSize: 11, margin: '0 0 8px' }}>
+          Already know your brand colors? Pick them here and the AI will use them verbatim instead of designing a palette.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {['primary', 'secondary', 'accent'].map(role => (
+            <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ minWidth: 78, fontSize: 12, color: '#94A3B8', textTransform: 'capitalize' }}>{role}</span>
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(form.brand_colors[role]) ? form.brand_colors[role] : '#000000'}
+                onChange={e => setColor(role, e.target.value)}
+                style={{ width: 36, height: 28, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, background: 'transparent', cursor: 'pointer', padding: 0 }}
+                aria-label={`${role} color picker`}
+              />
+              <input
+                type="text"
+                value={form.brand_colors[role]}
+                onChange={e => setColor(role, e.target.value)}
+                placeholder="#RRGGBB"
+                spellCheck={false}
+                style={{ ...inputStyle, flex: 1, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+              />
+            </div>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Already have a logo? (optional)">
+        <input
+          value={form.existing_logo_url}
+          onChange={e => setField('existing_logo_url', e.target.value)}
+          style={inputStyle}
+          placeholder="https://... (public URL to PNG/SVG/JPG)"
+        />
+        <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
+          When provided, we skip the 3-logo generation and use your logo directly. Banners are designed around it.
+        </p>
       </Field>
 
       <Field label="Inspirations / brand references *">
