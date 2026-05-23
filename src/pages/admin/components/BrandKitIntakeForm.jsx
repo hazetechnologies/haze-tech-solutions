@@ -1,11 +1,30 @@
 // src/pages/admin/components/BrandKitIntakeForm.jsx
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 const VIBE_OPTIONS = [
   'minimalist', 'warm', 'premium', 'playful', 'bold', 'organic',
   'corporate', 'futuristic', 'vintage', 'edgy', 'friendly', 'serious',
 ]
+
+// Draft autosave — survives refreshes so admins don't lose long-form input.
+// Scoped per client so different clients keep separate drafts.
+const draftKey = (clientId) => `brand-kit-draft-${clientId}`
+const readDraft = (clientId) => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(draftKey(clientId))
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+const writeDraft = (clientId, form) => {
+  if (typeof window === 'undefined') return
+  try { localStorage.setItem(draftKey(clientId), JSON.stringify(form)) } catch { /* quota / private mode */ }
+}
+const clearDraft = (clientId) => {
+  if (typeof window === 'undefined') return
+  try { localStorage.removeItem(draftKey(clientId)) } catch { /* ignore */ }
+}
 
 const inputStyle = {
   width: '100%', boxSizing: 'border-box',
@@ -38,9 +57,26 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
     existing_logo_url: '',
   }), [client, auditInputs])
 
-  const [form, setForm] = useState(initial)
+  // Hydrate from localStorage on first mount; merge over `initial` so any
+  // prefilled audit fields still shine through if the draft was saved before.
+  const [form, setForm] = useState(() => {
+    const draft = readDraft(client.id)
+    return draft ? { ...initial, ...draft } : initial
+  })
+  const [draftRestored, setDraftRestored] = useState(() => !!readDraft(client.id))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+
+  // Autosave every form change. Cheap — small JSON, no debounce needed.
+  useEffect(() => {
+    writeDraft(client.id, form)
+  }, [client.id, form])
+
+  const discardDraft = () => {
+    clearDraft(client.id)
+    setForm(initial)
+    setDraftRestored(false)
+  }
 
   const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
   const toggleVibe = (v) => setField('vibe', form.vibe.includes(v) ? form.vibe.filter(x => x !== v) : [...form.vibe, v])
@@ -103,6 +139,10 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || data.error || `Request failed: ${res.status}`)
+      // Successful submit — wipe the saved draft so the next kit for this
+      // client starts clean (admin can re-fill from scratch or "Start over"
+      // will repopulate from this same client's defaults).
+      clearDraft(client.id)
       onStarted(data.kit_id)
     } catch (err) {
       setError(err.message || 'Something went wrong')
@@ -112,6 +152,15 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      {draftRestored && (
+        <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#86EFAC', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ flex: 1 }}>Draft restored from your last visit — keep editing or discard to start fresh.</span>
+          <button type="button" onClick={discardDraft} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 6, padding: '4px 10px', color: '#86EFAC', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+            Discard draft
+          </button>
+        </div>
+      )}
+
       {isPath1 && (
         <div style={{ background: 'rgba(0,207,255,0.08)', border: '1px solid rgba(0,207,255,0.25)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#00CFFF' }}>
           Linked to audit from {new Date(linkedAudit.created_at).toLocaleDateString()} — industry, audience, goal, challenge prefilled.
