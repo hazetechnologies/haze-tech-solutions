@@ -188,8 +188,11 @@ async function status(req, res) {
   return res.status(200).json(data)
 }
 
-// POST ?action=approve-logo — client picks one of the 3 logo variants and
-// triggers the banner-generation phase of the brand-kit edge function.
+// POST ?action=approve-logo — picks one of the 3 logo variants and triggers
+// the banner-generation phase. Callable by:
+//   • the client that owns the kit (via /portal/brand-kit), or
+//   • any admin in ADMIN_EMAILS (via /admin/clients/<id> → Brand Kit), so the
+//     admin can move the flow forward on the client's behalf when needed.
 async function approveLogo(req, res) {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
@@ -211,13 +214,19 @@ async function approveLogo(req, res) {
     return res.status(400).json({ error: 'bad_request', message: `approved_logo_key must be one of ${APPROVABLE_LOGO_KEYS.join(', ')}` })
   }
 
-  // Verify caller owns this kit (kit's client.user_id == caller.id)
+  // Verify caller is either an admin OR the client that owns this kit.
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  const callerEmail = (caller.email || '').trim().toLowerCase()
+  const isAdmin = callerEmail && adminEmails.includes(callerEmail)
+
   const { data: kit } = await adminClient
     .from('brand_kits')
     .select('id, status, client_id, assets, clients!inner(user_id)')
     .eq('id', kit_id).maybeSingle()
   if (!kit) return res.status(404).json({ error: 'not_found', message: 'Brand kit not found' })
-  if (kit.clients.user_id !== caller.id) return res.status(403).json({ error: 'forbidden', message: 'Not your brand kit' })
+  if (!isAdmin && kit.clients.user_id !== caller.id) {
+    return res.status(403).json({ error: 'forbidden', message: 'Not your brand kit' })
+  }
   if (kit.status !== 'awaiting_logo_approval') {
     return res.status(409).json({ error: 'wrong_status', message: `Kit is in status: ${kit.status}` })
   }
