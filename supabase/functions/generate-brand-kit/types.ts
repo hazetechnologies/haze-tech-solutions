@@ -19,6 +19,11 @@ export interface BrandKitInputs {
   // the LLM-derived alternatives.
   brand_colors?: { name: 'primary' | 'secondary' | 'accent'; hex: string }[]
   existing_logo_url?: string
+
+  // Optional scene/backdrop direction injected into banner + profile-picture
+  // image prompts (not logos). Lets admins say "villa interiors, yachts, pools"
+  // instead of relying on the inspirations field to imply scenery.
+  imagery_direction?: string
 }
 
 export interface ColorPaletteEntry {

@@ -58,6 +58,16 @@ export default async function handler(req, res) {
   if (inputs.existing_logo_url && !/^https?:\/\//.test(inputs.existing_logo_url)) {
     return res.status(400).json({ error: 'existing_logo_url must be a full http(s):// URL' })
   }
+  // Cap imagery_direction at 500 chars — anything longer is almost certainly a
+  // paste accident and inflates the gpt-image-2 token budget per banner.
+  if (inputs.imagery_direction !== undefined) {
+    if (typeof inputs.imagery_direction !== 'string') {
+      return res.status(400).json({ error: 'imagery_direction must be a string' })
+    }
+    if (inputs.imagery_direction.length > 500) {
+      return res.status(400).json({ error: 'imagery_direction must be 500 characters or fewer' })
+    }
+  }
 
   // Verify client exists
   const { data: client, error: clientErr } =
