@@ -8,22 +8,25 @@ const VIBE_OPTIONS = [
 ]
 
 // Draft autosave — survives refreshes so admins don't lose long-form input.
-// Scoped per client so different clients keep separate drafts.
-const draftKey = (clientId) => `brand-kit-draft-${clientId}`
-const readDraft = (clientId) => {
+// Scoped per client so different clients keep separate drafts. Also scoped by
+// mode so an abandoned regenerate session can't pollute a later fresh-start
+// flow on the same client (the regen prefill is much fuller than fresh-start
+// defaults and would silently override them).
+const draftKey = (clientId, mode) => `brand-kit-draft-${clientId}-${mode}`
+const readDraft = (clientId, mode) => {
   if (typeof window === 'undefined') return null
   try {
-    const raw = localStorage.getItem(draftKey(clientId))
+    const raw = localStorage.getItem(draftKey(clientId, mode))
     return raw ? JSON.parse(raw) : null
   } catch { return null }
 }
-const writeDraft = (clientId, form) => {
+const writeDraft = (clientId, mode, form) => {
   if (typeof window === 'undefined') return
-  try { localStorage.setItem(draftKey(clientId), JSON.stringify(form)) } catch { /* quota / private mode */ }
+  try { localStorage.setItem(draftKey(clientId, mode), JSON.stringify(form)) } catch { /* quota / private mode */ }
 }
-const clearDraft = (clientId) => {
+const clearDraft = (clientId, mode) => {
   if (typeof window === 'undefined') return
-  try { localStorage.removeItem(draftKey(clientId)) } catch { /* ignore */ }
+  try { localStorage.removeItem(draftKey(clientId, mode)) } catch { /* ignore */ }
 }
 
 const inputStyle = {
@@ -100,26 +103,28 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
     }
   }, [client, auditInputs, isRegenerate, previousInputs, prevColorsByRole])
 
+  // Distinct draft slot per mode so an abandoned regen can't leak into a
+  // later fresh-start (and vice versa). Refresh-safety stays intact within
+  // each mode.
+  const draftMode = isRegenerate ? 'regen' : 'fresh'
+
   // Hydrate from localStorage on first mount; merge over `initial` so any
   // prefilled audit fields still shine through if the draft was saved before.
-  // EXCEPT on regenerate — there the previous kit's persisted inputs are the
-  // authoritative source and an old draft would clobber the prefill.
   const [form, setForm] = useState(() => {
-    if (isRegenerate) return initial
-    const draft = readDraft(client.id)
+    const draft = readDraft(client.id, draftMode)
     return draft ? { ...initial, ...draft } : initial
   })
-  const [draftRestored, setDraftRestored] = useState(() => !isRegenerate && !!readDraft(client.id))
+  const [draftRestored, setDraftRestored] = useState(() => !!readDraft(client.id, draftMode))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   // Autosave every form change. Cheap — small JSON, no debounce needed.
   useEffect(() => {
-    writeDraft(client.id, form)
-  }, [client.id, form])
+    writeDraft(client.id, draftMode, form)
+  }, [client.id, draftMode, form])
 
   const discardDraft = () => {
-    clearDraft(client.id)
+    clearDraft(client.id, draftMode)
     setForm(initial)
     setDraftRestored(false)
   }
@@ -186,10 +191,10 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || data.error || `Request failed: ${res.status}`)
-      // Successful submit — wipe the saved draft so the next kit for this
-      // client starts clean (admin can re-fill from scratch or "Start over"
-      // will repopulate from this same client's defaults).
-      clearDraft(client.id)
+      // Successful submit — wipe both draft slots for this client so neither
+      // a stale fresh draft nor a stale regen draft pollutes a future session.
+      clearDraft(client.id, 'fresh')
+      clearDraft(client.id, 'regen')
       onStarted(data.kit_id)
     } catch (err) {
       setError(err.message || 'Something went wrong')
