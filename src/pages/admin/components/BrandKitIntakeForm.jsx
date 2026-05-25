@@ -254,11 +254,12 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
         <textarea
           value={form.imagery_direction}
           onChange={e => setField('imagery_direction', e.target.value)}
+          maxLength={500}
           style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
           placeholder="e.g. villa interiors, yachts on Miami Intracoastal, infinity pools, beach cabanas at golden hour"
         />
         <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
-          Scenes / backdrops to include in banners (NOT logos). Be concrete — "villa interiors, yachts, pools" beats "luxury vibes".
+          Scenes / backdrops to include in banners (NOT logos). Be concrete — "villa interiors, yachts, pools" beats "luxury vibes". {form.imagery_direction.length}/500
         </p>
       </Field>
 
