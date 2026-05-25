@@ -55,6 +55,9 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
     brand_colors: { primary: '', secondary: '', accent: '' },
     // Optional URL to an existing logo — skips the 3-logo generation entirely.
     existing_logo_url: '',
+    // Optional scene/backdrop direction injected only into banner + profile-picture
+    // image prompts (logos stay clean).
+    imagery_direction: '',
   }), [client, auditInputs])
 
   // Hydrate from localStorage on first mount; merge over `initial` so any
@@ -123,6 +126,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
         path: isPath1 ? 'audit_prefill' : 'cold_start',
         ...formClean,
         existing_logo_url: form.existing_logo_url.trim() || undefined,
+        imagery_direction: form.imagery_direction.trim() || undefined,
         ...(validBrandColors.length > 0 ? { brand_colors: validBrandColors } : {}),
       }
       const res = await fetch('/api/start-brand-kit', {
@@ -243,6 +247,18 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
         />
         <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
           When provided, we skip the 3-logo generation and use your logo directly. Banners are designed around it.
+        </p>
+      </Field>
+
+      <Field label="Imagery direction (optional)">
+        <textarea
+          value={form.imagery_direction}
+          onChange={e => setField('imagery_direction', e.target.value)}
+          style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+          placeholder="e.g. villa interiors, yachts on Miami Intracoastal, infinity pools, beach cabanas at golden hour"
+        />
+        <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
+          Scenes / backdrops to include in banners (NOT logos). Be concrete — "villa interiors, yachts, pools" beats "luxury vibes".
         </p>
       </Field>
 

@@ -137,6 +137,13 @@ export function buildImagePrompt(assetId: string, inputs: BrandKitInputs, palett
   const paletteText = palette.map(c => `${c.name}: ${c.hex}`).join(', ')
   const baseStyle = `Brand: ${inputs.business_name}. Vibe: ${inputs.vibe.join(', ')}. Color palette: ${paletteText}. Style references: ${inputs.inspirations}.`
 
+  // Scene direction only for banners + profile_picture. Logos must stay clean —
+  // a yacht inside a logo is never what an admin meant when they typed "yachts".
+  const isSceneAsset = assetId.startsWith('banner_') || assetId === 'profile_picture'
+  const sceneSuffix = isSceneAsset && inputs.imagery_direction?.trim()
+    ? ` Scene/backdrop: ${inputs.imagery_direction.trim()}`
+    : ''
+
   switch (assetId) {
     case 'logo_primary':
       return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, white background, scalable, high-contrast. ${baseStyle}`
@@ -145,19 +152,19 @@ export function buildImagePrompt(assetId: string, inputs: BrandKitInputs, palett
     case 'logo_monochrome':
       return `Monochrome (single-color) version of the "${inputs.business_name}" logo. Pure black on white background. ${baseStyle}`
     case 'profile_picture':
-      return `Square social media profile picture for "${inputs.business_name}". Logo lockup centered, generous padding around edges, optimized for circular crop, brand colors. ${baseStyle}`
+      return `Square social media profile picture for "${inputs.business_name}". Logo lockup centered, generous padding around edges, optimized for circular crop, brand colors. ${baseStyle}${sceneSuffix}`
     case 'banner_ig':
-      return `Vertical Instagram story banner for "${inputs.business_name}". Hero composition, brand colors, ample empty space at top and bottom for text overlay. ${baseStyle}`
+      return `Vertical Instagram story banner for "${inputs.business_name}". Hero composition, brand colors, ample empty space at top and bottom for text overlay. ${baseStyle}${sceneSuffix}`
     case 'banner_fb':
-      return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. ${baseStyle}`
+      return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. ${baseStyle}${sceneSuffix}`
     case 'banner_yt':
-      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, focal element centered (safe area for all screen sizes), professional. ${baseStyle}`
+      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, focal element centered (safe area for all screen sizes), professional. ${baseStyle}${sceneSuffix}`
     case 'banner_x':
-      return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors, focal point off-center to the right. ${baseStyle}`
+      return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors, focal point off-center to the right. ${baseStyle}${sceneSuffix}`
     case 'banner_tiktok':
-      return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. ${baseStyle}`
+      return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. ${baseStyle}${sceneSuffix}`
     case 'banner_linkedin_cover':
-      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, focal element left-aligned, generous empty space for text overlay. ${baseStyle}`
+      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, focal element left-aligned, generous empty space for text overlay. ${baseStyle}${sceneSuffix}`
     default:
       return baseStyle
   }
