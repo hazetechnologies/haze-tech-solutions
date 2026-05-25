@@ -11,6 +11,9 @@ export default function BrandKitTab({ client }) {
   const [latestKit, setLatestKit] = useState(null)  // { id, status, progress_message, error, assets, ... }
   const [loading, setLoading] = useState(true)
   const [linkedAudit, setLinkedAudit] = useState(null)  // for Path 1 prefill detection
+  // When the admin clicks "Start over" we snapshot the previous kit's inputs
+  // here so the intake form can prefill instead of starting blank.
+  const [regenerateFromInputs, setRegenerateFromInputs] = useState(null)
 
   // Initial load: fetch latest kit for this client + check for matching audit
   const loadInitial = useCallback(async () => {
@@ -93,10 +96,16 @@ export default function BrandKitTab({ client }) {
     })
     // Optimistic: set state so polling kicks in
     setLatestKit({ id: kit_id, status: 'pending', progress_message: 'Queued…', created_at: new Date().toISOString() })
+    // Prefill is consumed — next "Start over" should pull fresh from whatever
+    // kit ends up being latest after this run completes.
+    setRegenerateFromInputs(null)
   }, [client.id, linkedAudit])
 
-  // Regenerate: clear current kit, show intake form again (a new kit row will be created)
+  // Regenerate: snapshot the current kit's inputs so the form can prefill,
+  // then clear the kit so the intake renders again (a new kit row will be
+  // created on submit).
   const handleRegenerate = () => {
+    setRegenerateFromInputs(latestKit?.inputs ?? null)
     setLatestKit(null)
   }
 
@@ -139,6 +148,7 @@ export default function BrandKitTab({ client }) {
       <BrandKitIntakeForm
         client={client}
         linkedAudit={linkedAudit}
+        previousInputs={regenerateFromInputs}
         onStarted={handleStarted}
       />
     )

@@ -35,38 +35,81 @@ const inputStyle = {
   fontSize: 13, outline: 'none',
 }
 
-export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
-  const isPath1 = !!linkedAudit
+export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs, onStarted }) {
+  const isRegenerate = !!previousInputs
+  // On regenerate, lock the path to whatever the previous kit used — that
+  // determines field requirements (business_description is required for
+  // cold_start but not audit_prefill) and what we send to the server.
+  const isPath1 = isRegenerate
+    ? previousInputs.path === 'audit_prefill'
+    : !!linkedAudit
 
   // Prefill from audit when present
   const auditInputs = linkedAudit?.inputs || {}
-  const initial = useMemo(() => ({
-    business_name: client.company || client.name || '',
-    business_description: '',
-    industry: auditInputs.industry || '',
-    audience: auditInputs.audience || '',
-    vibe: [],
-    color_preference: '',
-    inspirations: '',
-    voice_tone_preference: '',
-    goal: auditInputs.goal || '',
-    challenge: auditInputs.challenge || '',
-    // Explicit hex picks; empty when the admin wants the AI to design a palette.
-    brand_colors: { primary: '', secondary: '', accent: '' },
-    // Optional URL to an existing logo — skips the 3-logo generation entirely.
-    existing_logo_url: '',
-    // Optional scene/backdrop direction injected only into banner + profile-picture
-    // image prompts (logos stay clean).
-    imagery_direction: '',
-  }), [client, auditInputs])
+
+  // Re-shape the persisted brand_colors array ([{name,hex}, …]) back into the
+  // form's per-role object ({primary, secondary, accent}).
+  const prevColorsByRole = useMemo(() => {
+    const out = { primary: '', secondary: '', accent: '' }
+    if (Array.isArray(previousInputs?.brand_colors)) {
+      for (const c of previousInputs.brand_colors) {
+        if (c?.name && typeof c.hex === 'string') out[c.name] = c.hex
+      }
+    }
+    return out
+  }, [previousInputs])
+
+  const initial = useMemo(() => {
+    // Regenerate path wins over both the cold-start defaults and the audit
+    // prefill — the admin explicitly chose to iterate on the previous kit.
+    if (isRegenerate) {
+      return {
+        business_name: previousInputs.business_name || client.company || client.name || '',
+        business_description: previousInputs.business_description || '',
+        industry: previousInputs.industry || '',
+        audience: previousInputs.audience || '',
+        vibe: Array.isArray(previousInputs.vibe) ? previousInputs.vibe : [],
+        color_preference: previousInputs.color_preference || '',
+        inspirations: previousInputs.inspirations || '',
+        voice_tone_preference: previousInputs.voice_tone_preference || '',
+        goal: previousInputs.goal || '',
+        challenge: previousInputs.challenge || '',
+        brand_colors: prevColorsByRole,
+        existing_logo_url: previousInputs.existing_logo_url || '',
+        imagery_direction: previousInputs.imagery_direction || '',
+      }
+    }
+    return {
+      business_name: client.company || client.name || '',
+      business_description: '',
+      industry: auditInputs.industry || '',
+      audience: auditInputs.audience || '',
+      vibe: [],
+      color_preference: '',
+      inspirations: '',
+      voice_tone_preference: '',
+      goal: auditInputs.goal || '',
+      challenge: auditInputs.challenge || '',
+      // Explicit hex picks; empty when the admin wants the AI to design a palette.
+      brand_colors: { primary: '', secondary: '', accent: '' },
+      // Optional URL to an existing logo — skips the 3-logo generation entirely.
+      existing_logo_url: '',
+      // Optional scene/backdrop direction injected only into banner + profile-picture
+      // image prompts (logos stay clean).
+      imagery_direction: '',
+    }
+  }, [client, auditInputs, isRegenerate, previousInputs, prevColorsByRole])
 
   // Hydrate from localStorage on first mount; merge over `initial` so any
   // prefilled audit fields still shine through if the draft was saved before.
+  // EXCEPT on regenerate — there the previous kit's persisted inputs are the
+  // authoritative source and an old draft would clobber the prefill.
   const [form, setForm] = useState(() => {
+    if (isRegenerate) return initial
     const draft = readDraft(client.id)
     return draft ? { ...initial, ...draft } : initial
   })
-  const [draftRestored, setDraftRestored] = useState(() => !!readDraft(client.id))
+  const [draftRestored, setDraftRestored] = useState(() => !isRegenerate && !!readDraft(client.id))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -165,9 +208,15 @@ export default function BrandKitIntakeForm({ client, linkedAudit, onStarted }) {
         </div>
       )}
 
-      {isPath1 && (
+      {isPath1 && !isRegenerate && (
         <div style={{ background: 'rgba(0,207,255,0.08)', border: '1px solid rgba(0,207,255,0.25)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#00CFFF' }}>
           Linked to audit from {new Date(linkedAudit.created_at).toLocaleDateString()} — industry, audience, goal, challenge prefilled.
+        </div>
+      )}
+
+      {isRegenerate && (
+        <div style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#C4B5FD' }}>
+          Iterating on your previous brand kit — every field is prefilled. Tweak what you want and submit to generate a fresh kit.
         </div>
       )}
 
