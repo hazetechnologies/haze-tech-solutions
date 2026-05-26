@@ -23,6 +23,7 @@ export default async function handler(req, res) {
     case 'start':               return req.method === 'POST' ? start(req, res)            : methodNotAllowed(res, 'POST')
     case 'status':              return req.method === 'GET'  ? status(req, res)           : methodNotAllowed(res, 'GET')
     case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
+    case 'download-asset':      return req.method === 'GET'  ? downloadAsset(req, res)    : methodNotAllowed(res, 'GET')
     case 'stripe-checkout':     return req.method === 'POST' ? stripeCheckout(req, res)   : methodNotAllowed(res, 'POST')
     case 'stripe-portal':       return req.method === 'POST' ? stripePortal(req, res)     : methodNotAllowed(res, 'POST')
     case 'stripe-send-invoice': return req.method === 'POST' ? stripeSendInvoice(req, res): methodNotAllowed(res, 'POST')
@@ -264,6 +265,49 @@ async function approveLogo(req, res) {
   }
 
   return res.status(200).json({ kit_id, approved_logo_key })
+}
+
+// GET ?action=download-asset&url=…&filename=… — server-side proxy that
+// fetches an R2 asset and streams it back with Content-Disposition: attachment.
+// Needed because R2's pub-*.r2.dev URLs don't serve CORS, so a client-side
+// fetch fails and the browser ignores the <a download> attribute on cross-origin
+// hrefs. Locked to the brand-kit bucket hostname so this can't be used as an
+// open proxy.
+async function downloadAsset(req, res) {
+  const url = (req.query?.url || '').toString()
+  const filename = (req.query?.filename || 'download').toString()
+  if (!url) return res.status(400).json({ error: 'bad_request', message: 'url required' })
+
+  let parsed
+  try { parsed = new URL(url) }
+  catch { return res.status(400).json({ error: 'bad_request', message: 'invalid url' }) }
+
+  // Hostname allowlist — only our brand-kit R2 bucket. Prevents open-proxy abuse.
+  const ALLOWED_HOSTS = ['pub-b7118fbfb8444240959bec83b07fafba.r2.dev']
+  if (!ALLOWED_HOSTS.includes(parsed.hostname)) {
+    return res.status(403).json({ error: 'forbidden', message: 'host not allowed' })
+  }
+
+  // Sanitize filename — strip path separators and quotes so we can put it
+  // safely in the Content-Disposition header.
+  const safeFilename = filename.replace(/[/\\"'\r\n]/g, '_').slice(0, 200) || 'download'
+
+  let upstream
+  try { upstream = await fetch(url) }
+  catch (err) { return res.status(502).json({ error: 'bad_gateway', message: `fetch failed: ${err.message}` }) }
+
+  if (!upstream.ok) {
+    return res.status(upstream.status).json({ error: 'upstream', message: `R2 returned ${upstream.status}` })
+  }
+
+  res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream')
+  const len = upstream.headers.get('content-length')
+  if (len) res.setHeader('Content-Length', len)
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`)
+  res.setHeader('Cache-Control', 'private, max-age=0, no-store')
+
+  const buf = Buffer.from(await upstream.arrayBuffer())
+  return res.status(200).end(buf)
 }
 
 // ─── Stripe ──────────────────────────────────────────────────────────────

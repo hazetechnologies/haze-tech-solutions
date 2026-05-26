@@ -2,28 +2,18 @@
 import { useState } from 'react'
 import { Copy, Check, Download, RefreshCw } from 'lucide-react'
 
-// The `download` attribute on an <a> is ignored by browsers when the href
-// points to a cross-origin URL — R2's public dev URL is a different origin
-// than the site, so clicking "download" just opened the image instead of
-// saving it. Fetch the image as a blob, build an object URL, and trigger
-// the save via a synthetic anchor. Falls back to opening in a new tab if
-// the fetch is blocked (CORS, network, etc.).
-async function downloadCrossOriginImage(url, filename) {
-  try {
-    const res = await fetch(url, { mode: 'cors' })
-    if (!res.ok) throw new Error(`fetch ${res.status}`)
-    const blob = await res.blob()
-    const objectUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = objectUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
-  } catch {
-    window.open(url, '_blank', 'noopener')
-  }
+// The `download` attribute on an <a> is ignored when the href is cross-origin,
+// and R2's pub-*.r2.dev URLs don't serve CORS, so a direct client-side fetch
+// also fails. Route through our same-origin proxy, which streams the asset
+// back with Content-Disposition: attachment so the browser saves it.
+function downloadCrossOriginImage(url, filename) {
+  const proxied = `/api/website?action=download-asset&url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`
+  const a = document.createElement('a')
+  a.href = proxied
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 function filenameForAsset(assetId, url) {
