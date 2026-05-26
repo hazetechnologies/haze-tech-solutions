@@ -2,6 +2,36 @@
 import { useState } from 'react'
 import { Copy, Check, Download, RefreshCw } from 'lucide-react'
 
+// The `download` attribute on an <a> is ignored by browsers when the href
+// points to a cross-origin URL — R2's public dev URL is a different origin
+// than the site, so clicking "download" just opened the image instead of
+// saving it. Fetch the image as a blob, build an object URL, and trigger
+// the save via a synthetic anchor. Falls back to opening in a new tab if
+// the fetch is blocked (CORS, network, etc.).
+async function downloadCrossOriginImage(url, filename) {
+  try {
+    const res = await fetch(url, { mode: 'cors' })
+    if (!res.ok) throw new Error(`fetch ${res.status}`)
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+  } catch {
+    window.open(url, '_blank', 'noopener')
+  }
+}
+
+function filenameForAsset(assetId, url) {
+  const match = url.match(/\.(png|jpg|jpeg|webp|svg)(?:\?|$)/i)
+  const ext = match ? match[1].toLowerCase() : 'png'
+  return `${assetId}.${ext}`
+}
+
 const IMAGE_LABELS = {
   logo_primary: { label: 'Logo (primary)', dims: '1024×1024' },
   logo_icon: { label: 'Logo (icon)', dims: '1024×1024' },
@@ -48,9 +78,14 @@ export default function BrandKitView({ kit, onRegenerate }) {
                     <div style={{ color: '#F1F5F9', fontSize: 12, fontWeight: 600 }}>{label}</div>
                     <div style={{ color: '#64748B', fontSize: 11 }}>{dims}</div>
                   </div>
-                  <a href={img.public_url} download style={{ ...btnSecondary, padding: '4px 8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => downloadCrossOriginImage(img.public_url, filenameForAsset(assetId, img.public_url))}
+                    aria-label={`Download ${label}`}
+                    style={{ ...btnSecondary, padding: '4px 8px' }}
+                  >
                     <Download size={12} />
-                  </a>
+                  </button>
                 </div>
               </div>
             )
