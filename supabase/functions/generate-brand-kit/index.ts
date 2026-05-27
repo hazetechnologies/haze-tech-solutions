@@ -107,6 +107,32 @@ async function processBrandKit(
     const existingAssets = (row.assets || {}) as Partial<BrandKitAssets>
     const approvedLogoKey = (row.approved_logo_asset_id as ImageAssetId | null) ?? 'logo_primary'
 
+    // Serialized per-banner DB writer. Each banner that completes immediately
+    // persists its ImageAssetRef into assets.images so the row reflects partial
+    // progress; if the edge function execution gets killed mid-flight, the row
+    // keeps what was already done, and re-firing phase='banners' will skip
+    // already-completed banners and only retry the missing ones.
+    const makePersistBanner = () => {
+      let chain: Promise<void> = Promise.resolve()
+      return (assetId: ImageAssetId, ref: ImageAssetRef): Promise<void> => {
+        chain = chain.then(async () => {
+          const { data: cur } = await supabase
+            .from('brand_kits')
+            .select('assets')
+            .eq('id', kit_id)
+            .single()
+          const curAssets = (cur?.assets || {}) as Partial<BrandKitAssets>
+          const curImages = (curAssets.images || {}) as Record<string, ImageAssetRef>
+          const nextImages = { ...curImages, [assetId]: ref }
+          await supabase
+            .from('brand_kits')
+            .update({ assets: { ...curAssets, images: nextImages } })
+            .eq('id', kit_id)
+        })
+        return chain
+      }
+    }
+
     if (phase === 'banners') {
       // ── Banner-only phase: client has approved a logo; generate banners using it as ref ──
       const existingImages = (existingAssets.images || {}) as Partial<Record<ImageAssetId, ImageAssetRef>>
@@ -115,16 +141,35 @@ async function processBrandKit(
         await update({ status: 'failed', error: `approved logo asset (${approvedLogoKey}) not found` })
         return
       }
-      await update({ status: 'generating', progress_message: 'Generating banners…' })
-      const banners = await generateBanners(
+      // Resume-safe: skip banners we already have on the row.
+      const alreadyDone = new Set<string>(
+        REFERENCE_ASSET_IDS.filter((id) => existingImages[id]?.public_url),
+      )
+      const remaining = REFERENCE_ASSET_IDS.length - alreadyDone.size
+      await update({
+        status: 'generating',
+        progress_message: remaining === REFERENCE_ASSET_IDS.length
+          ? 'Generating banners…'
+          : `Resuming banners (${alreadyDone.size}/${REFERENCE_ASSET_IDS.length} already done)…`,
+      })
+      await generateBanners(
         inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url,
         { tagline: existingAssets.tagline, cta: existingAssets.cta },
+        makePersistBanner(),
+        alreadyDone,
       )
-      const mergedImages = { ...existingImages, ...banners }
+      // Re-read final state since per-banner writes mutated the row.
+      const { data: finalRow } = await supabase
+        .from('brand_kits')
+        .select('assets')
+        .eq('id', kit_id)
+        .single()
+      const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
+      const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
       await update({
-        status: 'done',
+        status: allDone ? 'done' : 'failed',
         progress_message: null,
-        assets: { ...existingAssets, images: mergedImages },
+        error: allDone ? null : `${REFERENCE_ASSET_IDS.filter(id => !finalImages[id]?.public_url).join(', ')} did not generate — re-fire phase='banners' to retry`,
       })
       return
     }
@@ -168,14 +213,27 @@ async function processBrandKit(
       // When we skip the gate via existing_logo_url, mark logo_primary approved so the schema is consistent.
       ...(skippedLogoGen ? { approved_logo_asset_id: 'logo_primary' } : {}),
     })
-    const banners = await generateBanners(
+    await generateBanners(
       inputs, textAssets.color_palette, client_id, kit_id, logos.logo_primary.public_url,
       { tagline: textAssets.tagline, cta: textAssets.cta },
+      makePersistBanner(),
+      new Set<string>(),  // fresh run, nothing to skip
     )
+    // Re-read final state since per-banner writes mutated the row.
+    const { data: finalRow } = await supabase
+      .from('brand_kits')
+      .select('assets')
+      .eq('id', kit_id)
+      .single()
+    const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
+    const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
+    const missing = REFERENCE_ASSET_IDS.filter((id) => !finalImages[id]?.public_url)
     await update({
-      status: 'done',
+      status: allDone ? 'done' : 'failed',
       progress_message: null,
-      assets: { ...textAssets, images: { ...logos, ...banners } as any },
+      ...(allDone ? {} : { error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry` }),
+      // Don't pass `assets` here — per-banner writes already mutated the row
+      // and overwriting with a stale snapshot would lose those updates.
     })
   } catch (err) {
     await update({
@@ -352,26 +410,45 @@ async function generateBanners(
   clientId: string,
   kitId: string,
   approvedLogoUrl: string,
-  copy?: { tagline?: string; cta?: string },
+  copy: { tagline?: string; cta?: string } | undefined,
+  // Mutable DB writer — invoked as each banner completes so partial progress
+  // is persisted. Lets us survive Supabase Edge Functions' execution-time cap:
+  // if the function dies after 4-of-7 banners, the next phase='banners' call
+  // sees the 4 already in the row and skips them.
+  persistBanner: (assetId: ImageAssetId, ref: ImageAssetRef) => Promise<void>,
+  // assetIds we already have results for — skip work entirely.
+  skip: Set<string>,
 ): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
 
-  const referenceResults = await Promise.all(
-    REFERENCE_ASSET_IDS.map(async (assetId) => {
-      const spec = SIZES[assetId]
-      const prompt = buildImagePrompt(assetId, inputs, palette, copy)
-      const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
+  const todo = REFERENCE_ASSET_IDS.filter((id) => !skip.has(id))
+  if (todo.length === 0) return out as Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>
 
-      const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
-      const resultUrl = await pollKieTask(taskId, assetId)
-      const raw = await downloadRemoteImage(resultUrl, assetId)
-      const resized = await resizeToFinalDims(raw, spec)
-      const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
-      return [assetId, uploaded] as const
+  // Per-banner failures are isolated — one bad banner doesn't kill the whole
+  // batch. Failed banners just stay absent from the row and the user can
+  // re-fire phase='banners' to retry only the missing ones.
+  await Promise.all(
+    todo.map(async (assetId) => {
+      try {
+        const spec = SIZES[assetId]
+        const prompt = buildImagePrompt(assetId, inputs, palette, copy)
+        const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
+
+        const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
+        const resultUrl = await pollKieTask(taskId, assetId)
+        const raw = await downloadRemoteImage(resultUrl, assetId)
+        const resized = await resizeToFinalDims(raw, spec)
+        const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+        out[assetId] = uploaded
+        await persistBanner(assetId, uploaded)
+      } catch (err) {
+        // Log per-banner failure but don't bubble up — partial success is
+        // better than total failure. Re-firing phase='banners' will retry.
+        console.error(`banner ${assetId} failed:`, err instanceof Error ? err.message : err)
+      }
     })
   )
-  for (const [assetId, uploaded] of referenceResults) out[assetId] = uploaded
 
   return out as Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>
 }
