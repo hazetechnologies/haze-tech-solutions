@@ -24,6 +24,11 @@ export interface BrandKitInputs {
   // image prompts (not logos). Lets admins say "villa interiors, yachts, pools"
   // instead of relying on the inspirations field to imply scenery.
   imagery_direction?: string
+
+  // Optional admin overrides for the auto-generated tagline + CTA that get
+  // rendered ON banners. When unset, the structured generator picks them.
+  tagline_override?: string
+  cta_override?: string
 }
 
 export interface ColorPaletteEntry {
@@ -63,5 +68,9 @@ export interface BrandKitAssets {
   handles?: string[]                        // Path 3 only
   platform_priority?: string                // Path 3 only
   color_palette: ColorPaletteEntry[]
+  // Rendered ON banners; also surfaced in BrandKitView with copy buttons so
+  // admins can reuse them as marketing copy.
+  tagline?: string
+  cta?: string
   images: Record<ImageAssetId, ImageAssetRef>
 }
