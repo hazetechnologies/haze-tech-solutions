@@ -162,10 +162,21 @@ export function buildImagePrompt(
   const tagline = (inputs.tagline_override ?? copy?.tagline ?? '').trim()
   const cta = (inputs.cta_override ?? copy?.cta ?? '').trim()
   const isBanner = assetId.startsWith('banner_')
+
+  // Narrow banners (LinkedIn cover at 1128×191) have no vertical room to stack
+  // tagline + CTA below the logo, so the model drops them entirely. Use a
+  // horizontal layout instead: logo on the left, tagline + CTA stacked to its
+  // right, all on one line. Tall banners (Instagram story) and roughly-square
+  // ones (TikTok, profile) keep the default vertical stack below the logo.
+  const isNarrowBanner = assetId === 'banner_linkedin_cover'
+  const layoutDirective = isNarrowBanner
+    ? `place the tagline and the CTA button stacked vertically to the RIGHT of the logo (logo on the left, copy on the right) — all on one horizontal row so they fit in a short-height banner`
+    : `place the tagline immediately below the logo (smaller than the logo, high-contrast against the background) and the CTA button immediately below the tagline`
+
   const copySuffix = isBanner && (tagline || cta)
-    ? ` Text rendered ON the banner — render the words EXACTLY as written, with correct spelling, in a clean modern sans-serif typeface:` +
-      (tagline ? ` (1) Tagline reads EXACTLY: "${tagline}" — placed below the logo, smaller than the logo, high-contrast against the background.` : '') +
-      (cta ? ` (2) Call-to-action reads EXACTLY: "${cta}" — rendered as a solid pill-shaped button using the brand accent color, with the text in the brand light color, placed near the tagline but visually distinct.` : '') +
+    ? ` MANDATORY text overlays rendered ON the banner — these are NOT decorative; they MUST appear. Spell every word EXACTLY as written, character-for-character, in a clean modern sans-serif typeface. Layout: ${layoutDirective}.` +
+      (tagline ? ` (1) Tagline reads EXACTLY: "${tagline}". This is a required element.` : '') +
+      (cta ? ` (2) Call-to-action reads EXACTLY: "${cta}" — render it as a SOLID PILL-SHAPED BUTTON filled with the brand accent color, with the CTA text in the brand light color centered inside. The CTA button is a REQUIRED element — do NOT omit it, do NOT replace it with plain text. If you skip the CTA button the banner is unusable.` : '') +
       ` Do NOT add any other words, slogans, taglines, addresses, phone numbers, dates, or watermarks anywhere on the banner.`
     : ''
 
@@ -183,7 +194,7 @@ export function buildImagePrompt(
     case 'banner_fb':
       return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_yt':
-      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: all logo and text MUST fit inside a CENTERED zone covering roughly the MIDDLE 60% horizontally and MIDDLE 30% vertically of the canvas. Everything outside that centered zone is background scenery only — YouTube crops aggressively on mobile and TV, so anything near the edges will be cut off. The logo must be horizontally centered and vertically centered. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: ALL logo + tagline + CTA content MUST fit inside a SMALL CENTERED block roughly 40% wide × 25% tall, positioned at the exact center of the canvas (50%/50%). The logo's vertical center MUST coincide with the canvas vertical center; the tagline + CTA sit just below the logo. Leave at least 20% of canvas height above the logo and 20% below the CTA as background scenery only. Everything outside the central block is background scenery — YouTube crops aggressively on mobile and TV, so content near edges is invisible to most viewers. Do NOT place any text or logo content in the top quarter or bottom quarter of the canvas. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_x':
       return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 12% margin from the top, bottom, and right edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the right third, vertically centered. The left two-thirds is scenery. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_tiktok':
