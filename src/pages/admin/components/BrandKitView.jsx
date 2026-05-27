@@ -2,24 +2,18 @@
 import { useState } from 'react'
 import { Copy, Check, Download, RefreshCw } from 'lucide-react'
 
-// The `download` attribute on an <a> is ignored when the href is cross-origin,
-// and R2's pub-*.r2.dev URLs don't serve CORS, so a direct client-side fetch
-// also fails. Route through our same-origin proxy, which streams the asset
-// back with Content-Disposition: attachment so the browser saves it.
-function downloadCrossOriginImage(url, filename) {
-  const proxied = `/api/website?action=download-asset&url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`
+// Server-side proxy at /api/website?action=download-asset looks up the asset
+// URL from the kit row in the DB and streams it with Content-Disposition:
+// attachment. Same-origin, so the browser saves the file. Works for any
+// asset regardless of which R2 bucket it lives on (logos supplied via
+// existing_logo_url may live on a different bucket than generated banners).
+function downloadKitAsset(kitId, assetId) {
+  const proxied = `/api/website?action=download-asset&kit_id=${encodeURIComponent(kitId)}&asset_id=${encodeURIComponent(assetId)}`
   const a = document.createElement('a')
   a.href = proxied
-  a.download = filename
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
-}
-
-function filenameForAsset(assetId, url) {
-  const match = url.match(/\.(png|jpg|jpeg|webp|svg)(?:\?|$)/i)
-  const ext = match ? match[1].toLowerCase() : 'png'
-  return `${assetId}.${ext}`
 }
 
 const IMAGE_LABELS = {
@@ -70,7 +64,7 @@ export default function BrandKitView({ kit, onRegenerate }) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => downloadCrossOriginImage(img.public_url, filenameForAsset(assetId, img.public_url))}
+                    onClick={() => downloadKitAsset(kit.id, assetId)}
                     aria-label={`Download ${label}`}
                     style={{ ...btnSecondary, padding: '4px 8px' }}
                   >

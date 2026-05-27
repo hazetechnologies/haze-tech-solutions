@@ -154,17 +154,17 @@ export function buildImagePrompt(assetId: string, inputs: BrandKitInputs, palett
     case 'profile_picture':
       return `Square social media profile picture for "${inputs.business_name}". Logo lockup centered, generous padding around edges, optimized for circular crop, brand colors. ${baseStyle}${sceneSuffix}`
     case 'banner_ig':
-      return `Vertical Instagram story banner for "${inputs.business_name}". Hero composition, brand colors, ample empty space at top and bottom for text overlay. ${baseStyle}${sceneSuffix}`
+      return `Vertical Instagram story banner for "${inputs.business_name}". Hero composition, brand colors, ample empty space at top and bottom for text overlay. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}`
     case 'banner_fb':
-      return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. ${baseStyle}${sceneSuffix}`
+      return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}`
     case 'banner_yt':
-      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, focal element centered (safe area for all screen sizes), professional. ${baseStyle}${sceneSuffix}`
+      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: all logo and text MUST fit inside a CENTERED zone covering roughly the MIDDLE 60% horizontally and MIDDLE 30% vertically of the canvas. Everything outside that centered zone is background scenery only — YouTube crops aggressively on mobile and TV, so anything near the edges will be cut off. The logo must be horizontally centered and vertically centered. ${baseStyle}${sceneSuffix}`
     case 'banner_x':
-      return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors, focal point off-center to the right. ${baseStyle}${sceneSuffix}`
+      return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 12% margin from the top, bottom, and right edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the right third, vertically centered. The left two-thirds is scenery. ${baseStyle}${sceneSuffix}`
     case 'banner_tiktok':
-      return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. ${baseStyle}${sceneSuffix}`
+      return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. CRITICAL: keep the logo centered with at least 12% margin on all sides — TikTok crops to a circle. ${baseStyle}${sceneSuffix}`
     case 'banner_linkedin_cover':
-      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, focal element left-aligned, generous empty space for text overlay. ${baseStyle}${sceneSuffix}`
+      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, text-friendly negative space. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 15% margin from the top, bottom, and left edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the left third, vertically centered. The right two-thirds is scenery. ${baseStyle}${sceneSuffix}`
     default:
       return baseStyle
   }

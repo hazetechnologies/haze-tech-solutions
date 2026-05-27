@@ -267,47 +267,67 @@ async function approveLogo(req, res) {
   return res.status(200).json({ kit_id, approved_logo_key })
 }
 
-// GET ?action=download-asset&url=…&filename=… — server-side proxy that
-// fetches an R2 asset and streams it back with Content-Disposition: attachment.
-// Needed because R2's pub-*.r2.dev URLs don't serve CORS, so a client-side
-// fetch fails and the browser ignores the <a download> attribute on cross-origin
-// hrefs. Locked to the brand-kit bucket hostname so this can't be used as an
-// open proxy.
+// GET ?action=download-asset&kit_id=…&asset_id=… — proxies a brand-kit asset
+// and streams it back with Content-Disposition: attachment. We look up the
+// URL from brand_kits.assets.images[asset_id] in the DB rather than accepting
+// a raw URL, so:
+//   1. There's no open-proxy risk regardless of which R2 bucket the asset
+//      lives in (e.g. an admin-supplied existing_logo_url on a different bucket).
+//   2. We don't need a hostname allowlist that goes stale as we add buckets.
+// Needed because R2's pub-*.r2.dev URLs don't serve CORS and don't include
+// Content-Disposition, so the browser ignores the <a download> attribute on
+// cross-origin hrefs.
 async function downloadAsset(req, res) {
-  const url = (req.query?.url || '').toString()
-  const filename = (req.query?.filename || 'download').toString()
-  if (!url) return res.status(400).json({ error: 'bad_request', message: 'url required' })
-
-  let parsed
-  try { parsed = new URL(url) }
-  catch { return res.status(400).json({ error: 'bad_request', message: 'invalid url' }) }
-
-  // Hostname allowlist — only our brand-kit R2 bucket. Prevents open-proxy abuse.
-  const ALLOWED_HOSTS = ['pub-b7118fbfb8444240959bec83b07fafba.r2.dev']
-  if (!ALLOWED_HOSTS.includes(parsed.hostname)) {
-    return res.status(403).json({ error: 'forbidden', message: 'host not allowed' })
+  const kitId = (req.query?.kit_id || '').toString()
+  const assetId = (req.query?.asset_id || '').toString()
+  if (!kitId || !assetId) {
+    return res.status(400).json({ error: 'bad_request', message: 'kit_id and asset_id required' })
   }
 
-  // Sanitize filename — strip path separators and quotes so we can put it
-  // safely in the Content-Disposition header.
-  const safeFilename = filename.replace(/[/\\"'\r\n]/g, '_').slice(0, 200) || 'download'
+  const supabase = createClient(process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+  const { data: row, error } = await supabase
+    .from('brand_kits')
+    .select('assets')
+    .eq('id', kitId)
+    .maybeSingle()
+  if (error) return res.status(500).json({ error: 'db', message: error.message })
+  if (!row)  return res.status(404).json({ error: 'not_found', message: 'kit not found' })
+
+  const ref = row.assets?.images?.[assetId]
+  const url = ref?.public_url
+  if (!url) return res.status(404).json({ error: 'not_found', message: `asset ${assetId} not on this kit` })
+
+  // Sanitize filename for Content-Disposition.
+  const extMatch = url.match(/\.(png|jpe?g|webp|svg)(?:\?|$)/i)
+  const ext = extMatch ? extMatch[1].toLowerCase() : 'png'
+  const safeAssetId = assetId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80) || 'asset'
+  const filename = `${safeAssetId}.${ext}`
 
   let upstream
   try { upstream = await fetch(url) }
   catch (err) { return res.status(502).json({ error: 'bad_gateway', message: `fetch failed: ${err.message}` }) }
 
   if (!upstream.ok) {
-    return res.status(upstream.status).json({ error: 'upstream', message: `R2 returned ${upstream.status}` })
+    return res.status(upstream.status).json({ error: 'upstream', message: `source returned ${upstream.status}` })
+  }
+
+  // 25 MB guard — brand-kit images shouldn't approach this. Prevents a misconfigured
+  // existing_logo_url pointing at a giant file from blowing memory or bandwidth.
+  const MAX_BYTES = 25 * 1024 * 1024
+  const upstreamLen = parseInt(upstream.headers.get('content-length') || '0', 10)
+  if (upstreamLen && upstreamLen > MAX_BYTES) {
+    return res.status(413).json({ error: 'too_large', message: `asset is ${upstreamLen} bytes (max ${MAX_BYTES})` })
+  }
+  const ab = await upstream.arrayBuffer()
+  if (ab.byteLength > MAX_BYTES) {
+    return res.status(413).json({ error: 'too_large', message: `asset is ${ab.byteLength} bytes (max ${MAX_BYTES})` })
   }
 
   res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream')
-  const len = upstream.headers.get('content-length')
-  if (len) res.setHeader('Content-Length', len)
-  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`)
+  res.setHeader('Content-Length', ab.byteLength)
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
   res.setHeader('Cache-Control', 'private, max-age=0, no-store')
-
-  const buf = Buffer.from(await upstream.arrayBuffer())
-  return res.status(200).end(buf)
+  return res.status(200).end(Buffer.from(ab))
 }
 
 // ─── Stripe ──────────────────────────────────────────────────────────────
