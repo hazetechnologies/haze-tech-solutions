@@ -77,6 +77,28 @@ export default function BrandKitView({ kit, onRegenerate }) {
         </div>
       </Section>
 
+      {/* Tagline + CTA */}
+      {(a.tagline || a.cta) && (
+        <Section title="Tagline & CTA">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+            {a.tagline && (
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 12 }}>
+                <div style={{ color: '#94A3B8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Tagline</div>
+                <div style={{ color: '#F1F5F9', fontSize: 14, fontWeight: 600, marginBottom: 8, lineHeight: 1.3 }}>{a.tagline}</div>
+                <CopyableText text={a.tagline} />
+              </div>
+            )}
+            {a.cta && (
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 12 }}>
+                <div style={{ color: '#94A3B8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Call-to-action</div>
+                <div style={{ color: '#F1F5F9', fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{a.cta}</div>
+                <CopyableText text={a.cta} />
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
       {/* Color palette */}
       <Section title="Color palette">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>

@@ -68,6 +68,24 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'imagery_direction must be 500 characters or fewer' })
     }
   }
+  // Tagline + CTA caps match the schema constraints we pass to gpt-image-2;
+  // longer values aren't reliably rendered.
+  if (inputs.tagline_override !== undefined) {
+    if (typeof inputs.tagline_override !== 'string') {
+      return res.status(400).json({ error: 'tagline_override must be a string' })
+    }
+    if (inputs.tagline_override.length > 80) {
+      return res.status(400).json({ error: 'tagline_override must be 80 characters or fewer' })
+    }
+  }
+  if (inputs.cta_override !== undefined) {
+    if (typeof inputs.cta_override !== 'string') {
+      return res.status(400).json({ error: 'cta_override must be a string' })
+    }
+    if (inputs.cta_override.length > 24) {
+      return res.status(400).json({ error: 'cta_override must be 24 characters or fewer' })
+    }
+  }
 
   // Verify client exists
   const { data: client, error: clientErr } =

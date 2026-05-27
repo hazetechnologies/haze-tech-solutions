@@ -116,7 +116,10 @@ async function processBrandKit(
         return
       }
       await update({ status: 'generating', progress_message: 'Generating banners…' })
-      const banners = await generateBanners(inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url)
+      const banners = await generateBanners(
+        inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url,
+        { tagline: existingAssets.tagline, cta: existingAssets.cta },
+      )
       const mergedImages = { ...existingImages, ...banners }
       await update({
         status: 'done',
@@ -165,7 +168,10 @@ async function processBrandKit(
       // When we skip the gate via existing_logo_url, mark logo_primary approved so the schema is consistent.
       ...(skippedLogoGen ? { approved_logo_asset_id: 'logo_primary' } : {}),
     })
-    const banners = await generateBanners(inputs, textAssets.color_palette, client_id, kit_id, logos.logo_primary.public_url)
+    const banners = await generateBanners(
+      inputs, textAssets.color_palette, client_id, kit_id, logos.logo_primary.public_url,
+      { tagline: textAssets.tagline, cta: textAssets.cta },
+    )
     await update({
       status: 'done',
       progress_message: null,
@@ -191,6 +197,10 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
     callOpusPalette(inputs, kit_id, evtProps),
   ])
 
+  // Admin overrides win over the auto-generated tagline/CTA.
+  const tagline = (inputs.tagline_override?.trim()) || structured.tagline || ''
+  const cta = (inputs.cta_override?.trim()) || structured.cta || ''
+
   return {
     bios: structured.bios,
     hashtags: structured.hashtags,
@@ -199,6 +209,8 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
     voice_tone: voiceTone,
     content_pillars: pillarsResp,
     color_palette: palette,
+    tagline,
+    cta,
   }
 }
 
@@ -223,6 +235,8 @@ async function callMiniStructured(inputs: BrandKitInputs, kitId: string, evtProp
     hashtags: string[]
     handles: string[]
     platform_priority: string
+    tagline: string
+    cta: string
   }
 }
 
@@ -338,6 +352,7 @@ async function generateBanners(
   clientId: string,
   kitId: string,
   approvedLogoUrl: string,
+  copy?: { tagline?: string; cta?: string },
 ): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
@@ -345,7 +360,7 @@ async function generateBanners(
   const referenceResults = await Promise.all(
     REFERENCE_ASSET_IDS.map(async (assetId) => {
       const spec = SIZES[assetId]
-      const prompt = buildImagePrompt(assetId, inputs, palette)
+      const prompt = buildImagePrompt(assetId, inputs, palette, copy)
       const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
 
       const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)

@@ -80,6 +80,8 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
         brand_colors: prevColorsByRole,
         existing_logo_url: previousInputs.existing_logo_url || '',
         imagery_direction: previousInputs.imagery_direction || '',
+        tagline_override: previousInputs.tagline_override || '',
+        cta_override: previousInputs.cta_override || '',
       }
     }
     return {
@@ -100,6 +102,10 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
       // Optional scene/backdrop direction injected only into banner + profile-picture
       // image prompts (logos stay clean).
       imagery_direction: '',
+      // Optional admin overrides for the tagline + CTA rendered ON banners.
+      // Leave blank to let the AI generate them.
+      tagline_override: '',
+      cta_override: '',
     }
   }, [client, auditInputs, isRegenerate, previousInputs, prevColorsByRole])
 
@@ -175,6 +181,8 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
         ...formClean,
         existing_logo_url: form.existing_logo_url.trim() || undefined,
         imagery_direction: form.imagery_direction.trim() || undefined,
+        tagline_override: form.tagline_override.trim() || undefined,
+        cta_override: form.cta_override.trim() || undefined,
         ...(validBrandColors.length > 0 ? { brand_colors: validBrandColors } : {}),
       }
       const res = await fetch('/api/start-brand-kit', {
@@ -314,6 +322,32 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
         />
         <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
           Scenes / backdrops to include in banners (NOT logos). Be concrete — "villa interiors, yachts, pools" beats "luxury vibes". {form.imagery_direction.length}/500
+        </p>
+      </Field>
+
+      <Field label="Tagline override (optional)">
+        <input
+          value={form.tagline_override}
+          onChange={e => setField('tagline_override', e.target.value)}
+          maxLength={80}
+          style={inputStyle}
+          placeholder="e.g. Luxury Living, Seamlessly Managed"
+        />
+        <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
+          5–8 words rendered ON banners. Leave blank to let the AI generate one from the brand brief. {form.tagline_override.length}/80
+        </p>
+      </Field>
+
+      <Field label="Call-to-action override (optional)">
+        <input
+          value={form.cta_override}
+          onChange={e => setField('cta_override', e.target.value)}
+          maxLength={24}
+          style={inputStyle}
+          placeholder="e.g. Book Your Stay"
+        />
+        <p style={{ color: '#475569', fontSize: 11, margin: '4px 0 0' }}>
+          2–4 words rendered as a button on banners. Leave blank to auto-generate. {form.cta_override.length}/24
         </p>
       </Field>
 

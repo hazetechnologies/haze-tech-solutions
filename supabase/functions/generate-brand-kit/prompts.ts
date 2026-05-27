@@ -24,7 +24,7 @@ export const STRUCTURED_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['bios', 'hashtags', 'handles', 'platform_priority'],
+    required: ['bios', 'hashtags', 'handles', 'platform_priority', 'tagline', 'cta'],
     properties: {
       bios: {
         type: 'object',
@@ -50,6 +50,10 @@ export const STRUCTURED_SCHEMA = {
         minItems: 5, maxItems: 5,
       },
       platform_priority: { type: 'string' },
+      // 5-8 words. The brand promise/positioning phrase that goes ON the banner.
+      tagline: { type: 'string', maxLength: 80 },
+      // 2-4 words. Action verb phrase ("Book Now", "Get a Quote") that goes ON the banner.
+      cta:     { type: 'string', maxLength: 24 },
     },
   },
 } as const
@@ -62,6 +66,8 @@ export function buildStructuredSystemPrompt(): string {
     'For hashtags: mix 3 broad (>1M posts) + 4 niche (~100k posts) + 3 ultra-niche (<10k posts). All lowercase. No spaces. Brand-relevant.',
     'For handles (Path 3 only): 5 candidates the team can check for availability. Mix variants: brand name, brand+industry, brand+region/HQ, brand+function (e.g. "_official", "hq"), creative twist. Keep 3-30 chars, lowercase, alphanumeric + underscore only.',
     'For platform_priority (Path 3 only): one paragraph (max 80 words). Recommend ONE platform to launch first based on the audience and industry. Justify briefly.',
+    'For tagline: a short brand promise / positioning phrase that gets rendered ON marketing banners. 5-8 words, title-cased or sentence case, NO emoji, NO trailing punctuation. Avoid the word "the". Should be memorable, evocative, and tied to what makes this brand distinct. Examples: "Luxury Living, Seamlessly Managed." — "Code That Compounds." — "Your AI Co-Pilot for Customer Conversations."',
+    'For cta: a short action phrase rendered ON banners as a button label. 2-4 words, title case, NO emoji, NO trailing punctuation. Must match the brand\'s primary conversion action (buy, book, schedule, download, sign up). Examples: "Book Your Stay" — "Start Free Trial" — "Get a Quote" — "Schedule a Call".',
   ].join('\n\n')
 }
 
@@ -133,7 +139,12 @@ export function buildColorPalettePrompt(inputs: BrandKitInputs): { system: strin
 
 // ── Image prompts (gpt-image-2) ──
 
-export function buildImagePrompt(assetId: string, inputs: BrandKitInputs, palette: ColorPaletteEntry[]): string {
+export function buildImagePrompt(
+  assetId: string,
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  copy?: { tagline?: string; cta?: string },
+): string {
   const paletteText = palette.map(c => `${c.name}: ${c.hex}`).join(', ')
   const baseStyle = `Brand: ${inputs.business_name}. Vibe: ${inputs.vibe.join(', ')}. Color palette: ${paletteText}. Style references: ${inputs.inspirations}.`
 
@@ -142,6 +153,20 @@ export function buildImagePrompt(assetId: string, inputs: BrandKitInputs, palett
   const isSceneAsset = assetId.startsWith('banner_') || assetId === 'profile_picture'
   const sceneSuffix = isSceneAsset && inputs.imagery_direction?.trim()
     ? ` Scene/backdrop: ${inputs.imagery_direction.trim()}`
+    : ''
+
+  // Tagline + CTA only get embedded into BANNERS, never into logos or the
+  // profile picture (which gets cropped to a circle on most platforms and
+  // shouldn't carry copy). When the admin overrides via the intake form
+  // those win; otherwise we use what the structured generator produced.
+  const tagline = (inputs.tagline_override ?? copy?.tagline ?? '').trim()
+  const cta = (inputs.cta_override ?? copy?.cta ?? '').trim()
+  const isBanner = assetId.startsWith('banner_')
+  const copySuffix = isBanner && (tagline || cta)
+    ? ` Text rendered ON the banner — render the words EXACTLY as written, with correct spelling, in a clean modern sans-serif typeface:` +
+      (tagline ? ` (1) Tagline reads EXACTLY: "${tagline}" — placed below the logo, smaller than the logo, high-contrast against the background.` : '') +
+      (cta ? ` (2) Call-to-action reads EXACTLY: "${cta}" — rendered as a solid pill-shaped button using the brand accent color, with the text in the brand light color, placed near the tagline but visually distinct.` : '') +
+      ` Do NOT add any other words, slogans, taglines, addresses, phone numbers, dates, or watermarks anywhere on the banner.`
     : ''
 
   switch (assetId) {
@@ -154,17 +179,17 @@ export function buildImagePrompt(assetId: string, inputs: BrandKitInputs, palett
     case 'profile_picture':
       return `Square social media profile picture for "${inputs.business_name}". Logo lockup centered, generous padding around edges, optimized for circular crop, brand colors. ${baseStyle}${sceneSuffix}`
     case 'banner_ig':
-      return `Vertical Instagram story banner for "${inputs.business_name}". Hero composition, brand colors, ample empty space at top and bottom for text overlay. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}`
+      return `Vertical Instagram story banner for "${inputs.business_name}". Hero composition, brand colors, ample empty space at top and bottom for text overlay. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_fb':
-      return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}`
+      return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_yt':
-      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: all logo and text MUST fit inside a CENTERED zone covering roughly the MIDDLE 60% horizontally and MIDDLE 30% vertically of the canvas. Everything outside that centered zone is background scenery only — YouTube crops aggressively on mobile and TV, so anything near the edges will be cut off. The logo must be horizontally centered and vertically centered. ${baseStyle}${sceneSuffix}`
+      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: all logo and text MUST fit inside a CENTERED zone covering roughly the MIDDLE 60% horizontally and MIDDLE 30% vertically of the canvas. Everything outside that centered zone is background scenery only — YouTube crops aggressively on mobile and TV, so anything near the edges will be cut off. The logo must be horizontally centered and vertically centered. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_x':
-      return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 12% margin from the top, bottom, and right edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the right third, vertically centered. The left two-thirds is scenery. ${baseStyle}${sceneSuffix}`
+      return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 12% margin from the top, bottom, and right edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the right third, vertically centered. The left two-thirds is scenery. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_tiktok':
-      return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. CRITICAL: keep the logo centered with at least 12% margin on all sides — TikTok crops to a circle. ${baseStyle}${sceneSuffix}`
+      return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. CRITICAL: keep the logo centered with at least 12% margin on all sides — TikTok crops to a circle. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_linkedin_cover':
-      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, text-friendly negative space. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 15% margin from the top, bottom, and left edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the left third, vertically centered. The right two-thirds is scenery. ${baseStyle}${sceneSuffix}`
+      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, text-friendly negative space. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 15% margin from the top, bottom, and left edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the left third, vertically centered. The right two-thirds is scenery. ${baseStyle}${sceneSuffix}${copySuffix}`
     default:
       return baseStyle
   }
