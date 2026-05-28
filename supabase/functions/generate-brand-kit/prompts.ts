@@ -163,14 +163,17 @@ export function buildImagePrompt(
   const cta = (inputs.cta_override ?? copy?.cta ?? '').trim()
   const isBanner = assetId.startsWith('banner_')
 
-  // Narrow banners (LinkedIn cover at 1128×191) have no vertical room to stack
-  // tagline + CTA below the logo, so the model drops them entirely. Use a
-  // horizontal layout instead: logo on the left, tagline + CTA stacked to its
-  // right, all on one line. Tall banners (Instagram story) and roughly-square
-  // ones (TikTok, profile) keep the default vertical stack below the logo.
-  const isNarrowBanner = assetId === 'banner_linkedin_cover'
-  const layoutDirective = isNarrowBanner
-    ? `place the tagline and the CTA button stacked vertically to the RIGHT of the logo (logo on the left, copy on the right) — all on one horizontal row so they fit in a short-height banner`
+  // Banners whose usable safe area is a SHORT WIDE STRIP can't stack logo +
+  // tagline + CTA vertically — the stack overflows the strip height and gets
+  // cropped. LinkedIn cover (1128×191) and the YouTube banner (whose
+  // "viewable on all devices" safe zone is only 1546×423 ≈ 3.65:1 inside a
+  // 2560×1440 canvas) both fall in this bucket. Use a HORIZONTAL layout for
+  // them: logo on the left, tagline + CTA stacked compactly to its right, all
+  // within one short row. Tall (Instagram story) and square-ish (TikTok,
+  // profile) banners keep the default vertical stack below the logo.
+  const isShortStripBanner = assetId === 'banner_linkedin_cover' || assetId === 'banner_yt'
+  const layoutDirective = isShortStripBanner
+    ? `place the tagline and the CTA button stacked vertically to the RIGHT of the logo (logo on the left, copy on the right) — keep the whole logo+copy group as ONE compact horizontal row so it fits inside a short-height safe strip without overflowing top or bottom`
     : `place the tagline immediately below the logo (smaller than the logo, high-contrast against the background) and the CTA button immediately below the tagline`
 
   const copySuffix = isBanner && (tagline || cta)
@@ -194,7 +197,7 @@ export function buildImagePrompt(
     case 'banner_fb':
       return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_yt':
-      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: ALL logo + tagline + CTA content MUST fit inside a SMALL CENTERED block roughly 40% wide × 25% tall, positioned at the exact center of the canvas (50%/50%). The logo's vertical center MUST coincide with the canvas vertical center; the tagline + CTA sit just below the logo. Leave at least 20% of canvas height above the logo and 20% below the CTA as background scenery only. Everything outside the central block is background scenery — YouTube crops aggressively on mobile and TV, so content near edges is invisible to most viewers. Do NOT place any text or logo content in the top quarter or bottom quarter of the canvas. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: YouTube only reliably shows a SHORT WIDE STRIP across the exact vertical center — about 60% of the width and only the MIDDLE 28% of the height (the top ~36% and bottom ~36% of the canvas are cropped on phones and TVs). ALL logo + tagline + CTA content MUST fit inside that thin central horizontal strip, arranged as one compact horizontal row (logo left, tagline + CTA stacked to its right). The content row must be SHORT — its total height must not exceed ~28% of the canvas height. The top third and bottom third of the canvas are background scenery ONLY — absolutely no logo or text there. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_x':
       return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 12% margin from the top, bottom, and right edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the right third, vertically centered. The left two-thirds is scenery. ${baseStyle}${sceneSuffix}${copySuffix}`
     case 'banner_tiktok':
