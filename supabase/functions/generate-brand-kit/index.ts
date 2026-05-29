@@ -442,41 +442,46 @@ async function generateBanners(
     console.error('logo fetch for overlay threw:', err instanceof Error ? err.message : err)
   }
 
-  // Per-banner failures are isolated — one bad banner doesn't kill the whole
-  // batch. Failed banners just stay absent from the row and the user can
-  // re-fire phase='banners' to retry only the missing ones.
-  await Promise.all(
-    todo.map(async (assetId) => {
-      try {
-        const spec = SIZES[assetId]
-        const prompt = buildImagePrompt(assetId, inputs, palette)
-        const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
+  // Process banners in small parallel batches. We were running all 7 at once,
+  // but each decoded background (e.g. 2560×1440 RGBA = ~14 MB) plus the logo,
+  // scrim, and text imgs sits in memory until that banner's encode + upload
+  // completes — 7× of that exhausted Supabase Edge Runtime resources and only
+  // the smallest 2 finished. BATCH_SIZE=2 keeps peak memory bounded while
+  // still parallelizing the KIE polling, which is the slow part.
+  const BATCH_SIZE = 2
+  const runOne = async (assetId: ImageAssetId) => {
+    try {
+      const spec = SIZES[assetId]
+      const prompt = buildImagePrompt(assetId, inputs, palette)
+      const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
 
-        const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
-        const resultUrl = await pollKieTask(taskId, assetId)
-        const raw = await downloadRemoteImage(resultUrl, assetId)
-        const resized = await resizeToFinalDims(raw, spec)
-        // KIE returns scenery only; overlay logo + tagline + CTA deterministically.
-        let finalBytes = resized
-        if (logoBytes) {
-          try {
-            finalBytes = await composeBanner({
-              background: resized, logo: logoBytes, tagline, cta, palette, assetId,
-            })
-          } catch (err) {
-            console.error(`compose ${assetId} failed, using bare scenery:`, err instanceof Error ? err.message : err)
-          }
+      const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
+      const resultUrl = await pollKieTask(taskId, assetId)
+      const raw = await downloadRemoteImage(resultUrl, assetId)
+      const resized = await resizeToFinalDims(raw, spec)
+      // KIE returns scenery only; overlay logo + tagline + CTA deterministically.
+      let finalBytes = resized
+      if (logoBytes) {
+        try {
+          finalBytes = await composeBanner({
+            background: resized, logo: logoBytes, tagline, cta, palette, assetId,
+          })
+        } catch (err) {
+          console.error(`compose ${assetId} failed, using bare scenery:`, err instanceof Error ? err.message : err)
         }
-        const uploaded = await uploadImage({ bytes: finalBytes, clientId, timestamp, assetId })
-        out[assetId] = uploaded
-        await persistBanner(assetId, uploaded)
-      } catch (err) {
-        // Log per-banner failure but don't bubble up — partial success is
-        // better than total failure. Re-firing phase='banners' will retry.
-        console.error(`banner ${assetId} failed:`, err instanceof Error ? err.message : err)
       }
-    })
-  )
+      const uploaded = await uploadImage({ bytes: finalBytes, clientId, timestamp, assetId })
+      out[assetId] = uploaded
+      await persistBanner(assetId, uploaded)
+    } catch (err) {
+      // Log per-banner failure but don't bubble up — partial success is
+      // better than total failure. Re-firing phase='banners' will retry.
+      console.error(`banner ${assetId} failed:`, err instanceof Error ? err.message : err)
+    }
+  }
+  for (let i = 0; i < todo.length; i += BATCH_SIZE) {
+    await Promise.all(todo.slice(i, i + BATCH_SIZE).map(runOne))
+  }
 
   return out as Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>
 }
