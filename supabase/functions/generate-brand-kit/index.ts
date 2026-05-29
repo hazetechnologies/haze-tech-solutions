@@ -27,7 +27,21 @@ import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
 const OPENAI_KEY    = Deno.env.get('OPENAI_API_KEY')!
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const KIE_API_KEY   = Deno.env.get('KIE_API_KEY')!
+const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!
+const SERVICE_ROLE  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const KIE_BASE      = 'https://api.kie.ai/api/v1'
+
+// Fire a fresh self-invoke of this function for the same kit, banner phase.
+// Used to chain across Supabase Edge Function execution-time caps: when one
+// invocation hits its wall-time budget, it fires another that picks up where
+// it left off (resume-safe via the skip-set in generateBanners).
+function chainSelfInvoke(kit_id: string): void {
+  fetch(`${SUPABASE_URL}/functions/v1/generate-brand-kit`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SERVICE_ROLE}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kit_id, phase: 'banners' }),
+  }).catch((e) => console.error('self-invoke failed:', e))
+}
 const OPUS_MODEL    = 'claude-opus-4-7'
 const MINI_MODEL    = 'gpt-4o-mini'
 const IMAGE_RETRY_DELAYS_MS = [15_000, 30_000, 60_000]
@@ -167,11 +181,29 @@ async function processBrandKit(
         .single()
       const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
       const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
-      await update({
-        status: allDone ? 'done' : 'failed',
-        progress_message: null,
-        error: allDone ? null : `${REFERENCE_ASSET_IDS.filter(id => !finalImages[id]?.public_url).join(', ')} did not generate — re-fire phase='banners' to retry`,
-      })
+      const nowDone = REFERENCE_ASSET_IDS.filter((id) => finalImages[id]?.public_url).length
+      const madeProgress = nowDone > alreadyDone.size
+      const missing = REFERENCE_ASSET_IDS.filter(id => !finalImages[id]?.public_url)
+      if (allDone) {
+        await update({ status: 'done', progress_message: null, error: null })
+      } else if (madeProgress) {
+        // Wall-time budget hit but we DID complete some banners this round.
+        // Chain a self-invoke to finish the rest. The new invocation sees
+        // partial state in the row and only generates what's missing.
+        await update({
+          status: 'generating',
+          progress_message: `${nowDone}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
+        })
+        chainSelfInvoke(kit_id)
+      } else {
+        // No progress at all this invocation — finalize as failed instead of
+        // looping forever.
+        await update({
+          status: 'failed',
+          progress_message: null,
+          error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry`,
+        })
+      }
       return
     }
 
@@ -228,14 +260,26 @@ async function processBrandKit(
       .single()
     const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
     const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
+    const nowDoneCount = REFERENCE_ASSET_IDS.filter((id) => finalImages[id]?.public_url).length
     const missing = REFERENCE_ASSET_IDS.filter((id) => !finalImages[id]?.public_url)
-    await update({
-      status: allDone ? 'done' : 'failed',
-      progress_message: null,
-      ...(allDone ? {} : { error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry` }),
-      // Don't pass `assets` here — per-banner writes already mutated the row
-      // and overwriting with a stale snapshot would lose those updates.
-    })
+    if (allDone) {
+      await update({ status: 'done', progress_message: null })
+    } else if (nowDoneCount > 0) {
+      // Phase='all' started fresh (0 banners present). If we landed >=1 but
+      // not all 7, the wall-time budget ran out. Hand off to a phase='banners'
+      // self-invoke so the remaining banners get their own function budget.
+      await update({
+        status: 'generating',
+        progress_message: `${nowDoneCount}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
+      })
+      chainSelfInvoke(kit_id)
+    } else {
+      await update({
+        status: 'failed',
+        progress_message: null,
+        error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry`,
+      })
+    }
   } catch (err) {
     await update({
       status: 'failed',
@@ -442,13 +486,18 @@ async function generateBanners(
     console.error('logo fetch for overlay threw:', err instanceof Error ? err.message : err)
   }
 
-  // Process banners in small parallel batches. We were running all 7 at once,
-  // but each decoded background (e.g. 2560×1440 RGBA = ~14 MB) plus the logo,
-  // scrim, and text imgs sits in memory until that banner's encode + upload
-  // completes — 7× of that exhausted Supabase Edge Runtime resources and only
-  // the smallest 2 finished. BATCH_SIZE=2 keeps peak memory bounded while
-  // still parallelizing the KIE polling, which is the slow part.
+  // Process banners in small parallel batches with a wall-time budget.
+  //
+  // BATCH_SIZE=2 bounds peak memory (each 2560×1440 RGBA decoded backing
+  // image is ~14 MB; 7 of those in parallel exhausted Edge Runtime).
+  // BUDGET_MS=85_000 leaves headroom inside Supabase's ~150s function cap
+  // so we can finalize a self-invoke cleanly. When we run out of budget,
+  // the caller (processBrandKit) detects missing banners and chain-fires
+  // another phase='banners' invocation — the resume logic skips banners
+  // already in the row, so each chained call only does the remaining work.
   const BATCH_SIZE = 2
+  const BUDGET_MS = 85_000
+  const startedAt = Date.now()
   const runOne = async (assetId: ImageAssetId) => {
     try {
       const spec = SIZES[assetId]
@@ -480,6 +529,10 @@ async function generateBanners(
     }
   }
   for (let i = 0; i < todo.length; i += BATCH_SIZE) {
+    if (Date.now() - startedAt > BUDGET_MS) {
+      console.log(`banner budget exhausted (${Date.now() - startedAt}ms) — yielding for self-invoke`)
+      break
+    }
     await Promise.all(todo.slice(i, i + BATCH_SIZE).map(runOne))
   }
 
