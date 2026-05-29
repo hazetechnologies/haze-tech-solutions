@@ -35,12 +35,23 @@ const KIE_BASE      = 'https://api.kie.ai/api/v1'
 // Used to chain across Supabase Edge Function execution-time caps: when one
 // invocation hits its wall-time budget, it fires another that picks up where
 // it left off (resume-safe via the skip-set in generateBanners).
-function chainSelfInvoke(kit_id: string): void {
-  fetch(`${SUPABASE_URL}/functions/v1/generate-brand-kit`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${SERVICE_ROLE}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kit_id, phase: 'banners' }),
-  }).catch((e) => console.error('self-invoke failed:', e))
+//
+// Must be AWAITED. Fire-and-forget left the request unsent — the runtime
+// killed the function before Deno's fetch finished its TCP/TLS handshake and
+// transmitted the body, so the next invocation never started. Awaiting the
+// fetch ensures Supabase's edge router has actually received the request
+// (the target's serve handler returns 200 immediately via its own waitUntil,
+// so this await is sub-second).
+async function chainSelfInvoke(kit_id: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/generate-brand-kit`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${SERVICE_ROLE}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kit_id, phase: 'banners' }),
+    })
+  } catch (e) {
+    console.error('self-invoke failed:', e instanceof Error ? e.message : e)
+  }
 }
 const OPUS_MODEL    = 'claude-opus-4-7'
 const MINI_MODEL    = 'gpt-4o-mini'
@@ -194,7 +205,7 @@ async function processBrandKit(
           status: 'generating',
           progress_message: `${nowDone}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
         })
-        chainSelfInvoke(kit_id)
+        await chainSelfInvoke(kit_id)
       } else {
         // No progress at all this invocation — finalize as failed instead of
         // looping forever.
