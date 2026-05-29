@@ -21,6 +21,7 @@ import type {
 } from './types.ts'
 import { uploadImage } from '../_shared/r2-upload.ts'
 import { resizeToFinalDims } from './post-process.ts'
+import { composeBanner } from './compose-banner.ts'
 import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
 
 const OPENAI_KEY    = Deno.env.get('OPENAI_API_KEY')!
@@ -425,6 +426,22 @@ async function generateBanners(
   const todo = REFERENCE_ASSET_IDS.filter((id) => !skip.has(id))
   if (todo.length === 0) return out as Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>
 
+  // Overrides win over the auto-generated copy; both feed the deterministic
+  // overlay compositor (not the image prompt anymore).
+  const tagline = (inputs.tagline_override ?? copy?.tagline ?? '').trim()
+  const cta = (inputs.cta_override ?? copy?.cta ?? '').trim()
+
+  // Fetch the logo bytes ONCE — every banner composites the same logo on top
+  // of its scenery background.
+  let logoBytes: Uint8Array | null = null
+  try {
+    const logoRes = await fetch(approvedLogoUrl)
+    if (logoRes.ok) logoBytes = new Uint8Array(await logoRes.arrayBuffer())
+    else console.error(`logo fetch for overlay failed: ${logoRes.status}`)
+  } catch (err) {
+    console.error('logo fetch for overlay threw:', err instanceof Error ? err.message : err)
+  }
+
   // Per-banner failures are isolated — one bad banner doesn't kill the whole
   // batch. Failed banners just stay absent from the row and the user can
   // re-fire phase='banners' to retry only the missing ones.
@@ -432,14 +449,25 @@ async function generateBanners(
     todo.map(async (assetId) => {
       try {
         const spec = SIZES[assetId]
-        const prompt = buildImagePrompt(assetId, inputs, palette, copy)
+        const prompt = buildImagePrompt(assetId, inputs, palette)
         const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
 
         const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
         const resultUrl = await pollKieTask(taskId, assetId)
         const raw = await downloadRemoteImage(resultUrl, assetId)
         const resized = await resizeToFinalDims(raw, spec)
-        const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+        // KIE returns scenery only; overlay logo + tagline + CTA deterministically.
+        let finalBytes = resized
+        if (logoBytes) {
+          try {
+            finalBytes = await composeBanner({
+              background: resized, logo: logoBytes, tagline, cta, palette, assetId,
+            })
+          } catch (err) {
+            console.error(`compose ${assetId} failed, using bare scenery:`, err instanceof Error ? err.message : err)
+          }
+        }
+        const uploaded = await uploadImage({ bytes: finalBytes, clientId, timestamp, assetId })
         out[assetId] = uploaded
         await persistBanner(assetId, uploaded)
       } catch (err) {

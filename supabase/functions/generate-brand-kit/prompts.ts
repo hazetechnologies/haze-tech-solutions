@@ -143,45 +143,23 @@ export function buildImagePrompt(
   assetId: string,
   inputs: BrandKitInputs,
   palette: ColorPaletteEntry[],
-  copy?: { tagline?: string; cta?: string },
 ): string {
   const paletteText = palette.map(c => `${c.name}: ${c.hex}`).join(', ')
   const baseStyle = `Brand: ${inputs.business_name}. Vibe: ${inputs.vibe.join(', ')}. Color palette: ${paletteText}. Style references: ${inputs.inspirations}.`
 
-  // Scene direction only for banners + profile_picture. Logos must stay clean —
-  // a yacht inside a logo is never what an admin meant when they typed "yachts".
+  // Scene direction drives banner + profile-picture backdrops.
   const isSceneAsset = assetId.startsWith('banner_') || assetId === 'profile_picture'
   const sceneSuffix = isSceneAsset && inputs.imagery_direction?.trim()
     ? ` Scene/backdrop: ${inputs.imagery_direction.trim()}`
     : ''
 
-  // Tagline + CTA only get embedded into BANNERS, never into logos or the
-  // profile picture (which gets cropped to a circle on most platforms and
-  // shouldn't carry copy). When the admin overrides via the intake form
-  // those win; otherwise we use what the structured generator produced.
-  const tagline = (inputs.tagline_override ?? copy?.tagline ?? '').trim()
-  const cta = (inputs.cta_override ?? copy?.cta ?? '').trim()
-  const isBanner = assetId.startsWith('banner_')
-
-  // Banners whose usable safe area is a SHORT WIDE STRIP can't stack logo +
-  // tagline + CTA vertically — the stack overflows the strip height and gets
-  // cropped. LinkedIn cover (1128×191) and the YouTube banner (whose
-  // "viewable on all devices" safe zone is only 1546×423 ≈ 3.65:1 inside a
-  // 2560×1440 canvas) both fall in this bucket. Use a HORIZONTAL layout for
-  // them: logo on the left, tagline + CTA stacked compactly to its right, all
-  // within one short row. Tall (Instagram story) and square-ish (TikTok,
-  // profile) banners keep the default vertical stack below the logo.
-  const isShortStripBanner = assetId === 'banner_linkedin_cover' || assetId === 'banner_yt'
-  const layoutDirective = isShortStripBanner
-    ? `place the tagline and the CTA button stacked vertically to the RIGHT of the logo (logo on the left, copy on the right) — keep the whole logo+copy group as ONE compact horizontal row so it fits inside a short-height safe strip without overflowing top or bottom`
-    : `place the tagline immediately below the logo (smaller than the logo, high-contrast against the background) and the CTA button immediately below the tagline`
-
-  const copySuffix = isBanner && (tagline || cta)
-    ? ` MANDATORY text overlays rendered ON the banner — these are NOT decorative; they MUST appear. Spell every word EXACTLY as written, character-for-character, in a clean modern sans-serif typeface. Layout: ${layoutDirective}.` +
-      (tagline ? ` (1) Tagline reads EXACTLY: "${tagline}". This is a required element.` : '') +
-      (cta ? ` (2) Call-to-action reads EXACTLY: "${cta}" — render it as a SOLID PILL-SHAPED BUTTON filled with the brand accent color, with the CTA text in the brand light color centered inside. The CTA button is a REQUIRED element — do NOT omit it, do NOT replace it with plain text. If you skip the CTA button the banner is unusable.` : '') +
-      ` Do NOT add any other words, slogans, taglines, addresses, phone numbers, dates, or watermarks anywhere on the banner.`
-    : ''
+  // Banners are now SCENERY ONLY — the logo, tagline, and CTA are composited
+  // deterministically afterward by compose-banner.ts at exact safe-area
+  // coordinates. Asking gpt-image-2 to place them was unreliable (cropped
+  // logos, invented opaque panels covering the scenery). So every banner
+  // prompt forbids text/logos/panels and just asks for a clean photographic
+  // backdrop with a calm, uncluttered focal zone for the overlay to sit on.
+  const sceneryOnly = ` IMPORTANT: Generate ONLY a photographic background scene — absolutely NO text, NO words, NO letters, NO logos, NO badges, NO watermarks, and NO solid color panels or boxes anywhere. Keep the composition clean and softly lit with a calm, relatively uncluttered area near the center where branding will be overlaid later. Cinematic, premium, high-resolution photography.`
 
   switch (assetId) {
     case 'logo_primary':
@@ -191,19 +169,19 @@ export function buildImagePrompt(
     case 'logo_monochrome':
       return `Monochrome (single-color) version of the "${inputs.business_name}" logo. Pure black on white background. ${baseStyle}`
     case 'profile_picture':
-      return `Square social media profile picture for "${inputs.business_name}". Logo lockup centered, generous padding around edges, optimized for circular crop, brand colors. ${baseStyle}${sceneSuffix}`
+      return `Square background scene for "${inputs.business_name}" social profile. Cinematic, brand colors, calm uncluttered center. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_ig':
-      return `Vertical Instagram story banner for "${inputs.business_name}". Hero composition, brand colors, ample empty space at top and bottom for text overlay. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Vertical (9:16) background scene for an Instagram story for "${inputs.business_name}". Hero composition, brand colors, calm uncluttered center band. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_fb':
-      return `Wide horizontal Facebook cover image for "${inputs.business_name}". Cinematic composition, brand colors, focal point centered, text-friendly negative space. CRITICAL: the logo and any text must NEVER touch the canvas edges — leave at least 10% margin on all sides. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Wide horizontal background scene for a Facebook cover for "${inputs.business_name}". Cinematic, brand colors, calm uncluttered center. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_yt':
-      return `Wide YouTube channel banner for "${inputs.business_name}". 16:9 cinematic, brand colors, professional. CRITICAL safe-area rule: YouTube only reliably shows a SHORT WIDE STRIP across the exact vertical center — about 60% of the width and only the MIDDLE 28% of the height (the top ~36% and bottom ~36% of the canvas are cropped on phones and TVs). ALL logo + tagline + CTA content MUST fit inside that thin central horizontal strip, arranged as one compact horizontal row (logo left, tagline + CTA stacked to its right). The content row must be SHORT — its total height must not exceed ~28% of the canvas height. The top third and bottom third of the canvas are background scenery ONLY — absolutely no logo or text there. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Wide 16:9 cinematic background scene for a YouTube banner for "${inputs.business_name}". Brand colors, professional. Keep the CENTER of the frame calm and relatively uncluttered (this central strip is where branding gets overlaid); richer scenery can sit toward the top and bottom edges. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_x':
-      return `Ultra-wide X (Twitter) header banner for "${inputs.business_name}". Horizontal panoramic composition, brand colors. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 12% margin from the top, bottom, and right edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the right third, vertically centered. The left two-thirds is scenery. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Ultra-wide horizontal panoramic background scene for an X (Twitter) header for "${inputs.business_name}". Brand colors. Keep the right-center area calm and uncluttered for overlaid branding. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_tiktok':
-      return `Square TikTok profile picture for "${inputs.business_name}". Bold, simple, high-contrast, instantly readable at small sizes. CRITICAL: keep the logo centered with at least 12% margin on all sides — TikTok crops to a circle. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Square background scene for a TikTok profile for "${inputs.business_name}". Brand colors, simple, calm uncluttered center. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_linkedin_cover':
-      return `Ultra-wide LinkedIn company page cover image for "${inputs.business_name}". Professional, clean horizontal composition, brand colors, subtle texture or gradient background, text-friendly negative space. CRITICAL: the logo must sit COMPLETELY inside the canvas with at least 15% margin from the top, bottom, and left edges — NEVER let any part of the logo touch or cross an edge. Position the logo in the left third, vertically centered. The right two-thirds is scenery. ${baseStyle}${sceneSuffix}${copySuffix}`
+      return `Ultra-wide horizontal background scene for a LinkedIn company cover for "${inputs.business_name}". Professional, brand colors, subtle gradient or texture. Keep the left-center area calm and uncluttered for overlaid branding. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     default:
       return baseStyle
   }
