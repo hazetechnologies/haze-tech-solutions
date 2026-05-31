@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({})) as {
     kit_id?: string
     existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>
-    phase?: 'all' | 'logos_then_pause' | 'banners'
+    phase?: 'all' | 'logos_then_pause' | 'banners' | 'logos_only'
   }
   const { kit_id, existing_logos } = body
   // Default phase = 'logos_then_pause' so new kits stop after logos for client approval.
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
 
 async function processBrandKit(
   kit_id: string,
-  phase: 'all' | 'logos_then_pause' | 'banners',
+  phase: 'all' | 'logos_then_pause' | 'banners' | 'logos_only',
   existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
 ): Promise<void> {
   const supabase = createClient(
@@ -215,6 +215,32 @@ async function processBrandKit(
           error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry`,
         })
       }
+      return
+    }
+
+    if (phase === 'logos_only') {
+      // Regenerate just the 3 logos using the existing palette/text on the row.
+      // Used when we want to retry a logo prompt (e.g. wordmark color fix)
+      // without burning Claude tokens on text or KIE calls on banners.
+      const palette = existingAssets.color_palette ?? []
+      if (palette.length === 0) {
+        await update({ status: 'failed', error: `logos_only requires existing color_palette on row` })
+        return
+      }
+      await update({ status: 'generating', progress_message: 'Regenerating logos…' })
+      const logos = await generateLogos(inputs, palette, client_id, kit_id)
+      const existingImages = (existingAssets.images || {}) as Partial<Record<ImageAssetId, ImageAssetRef>>
+      // Merge the new logo refs over whatever was there (banners survive).
+      const mergedImages = { ...existingImages, ...logos } as Record<ImageAssetId, ImageAssetRef>
+      // If banners aren't generated yet, return to the approval gate; otherwise mark done.
+      const hasAnyBanner = REFERENCE_ASSET_IDS.some((id) => existingImages[id]?.public_url)
+      await update({
+        status: hasAnyBanner ? 'done' : 'awaiting_logo_approval',
+        progress_message: hasAnyBanner ? null : 'Logos regenerated — pick one or approve',
+        assets: { ...existingAssets, images: mergedImages },
+        // Reset approval so the admin re-picks (the new logo_primary may look different).
+        ...(hasAnyBanner ? {} : { approved_logo_asset_id: null }),
+      })
       return
     }
 

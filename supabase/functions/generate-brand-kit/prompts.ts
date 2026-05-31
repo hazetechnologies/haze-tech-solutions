@@ -162,8 +162,10 @@ export function buildImagePrompt(
   const sceneryOnly = ` IMPORTANT: Generate ONLY a photographic background scene — absolutely NO text, NO words, NO letters, NO logos, NO badges, NO watermarks, and NO solid color panels or boxes anywhere. Keep the composition clean and softly lit with a calm, relatively uncluttered area near the center where branding will be overlaid later. Cinematic, premium, high-resolution photography.`
 
   switch (assetId) {
-    case 'logo_primary':
-      return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, white background, scalable, high-contrast. ${baseStyle}`
+    case 'logo_primary': {
+      const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
+      return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, white background, scalable. CRITICAL color rule: the wordmark text "${inputs.business_name}" MUST be rendered in the PRIMARY brand color ${primaryHex} — NOT black, NOT the dark UI color, NOT navy. The icon/monogram can use the primary color or the accent color. The "dark" color in the palette is for UI body text only and must NEVER appear in this logo. ${baseStyle}`
+    }
     case 'logo_icon':
       return `Icon-only version of the "${inputs.business_name}" brand mark. Square format, no text, abstract or symbolic icon, white background, scalable. ${baseStyle}`
     case 'logo_monochrome':
