@@ -24,6 +24,8 @@ export default async function handler(req, res) {
     case 'status':              return req.method === 'GET'  ? status(req, res)           : methodNotAllowed(res, 'GET')
     case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
     case 'download-asset':      return req.method === 'GET'  ? downloadAsset(req, res)    : methodNotAllowed(res, 'GET')
+    case 'hsp-proxy':           return req.method === 'POST' ? hspProxy(req, res)         : methodNotAllowed(res, 'POST')
+    case 'activate-social':     return req.method === 'POST' ? activateSocial(req, res)   : methodNotAllowed(res, 'POST')
     case 'stripe-checkout':     return req.method === 'POST' ? stripeCheckout(req, res)   : methodNotAllowed(res, 'POST')
     case 'stripe-portal':       return req.method === 'POST' ? stripePortal(req, res)     : methodNotAllowed(res, 'POST')
     case 'stripe-send-invoice': return req.method === 'POST' ? stripeSendInvoice(req, res): methodNotAllowed(res, 'POST')
@@ -328,6 +330,126 @@ async function downloadAsset(req, res) {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
   res.setHeader('Cache-Control', 'private, max-age=0, no-store')
   return res.status(200).end(Buffer.from(ab))
+}
+
+// ─── Haze Social Post external-API integration ───────────────────────────
+
+const HSP_BASE = 'https://hazesocialposts.com/api/v1/external'
+
+// POST ?action=hsp-proxy — admin-only proxy for the haze-social-post external
+// API. The browser never sees the bearer key. requireAdmin gates every call.
+// Body: { path: '/tenants/abc', method: 'GET'|'POST'|..., body?: any }
+async function hspProxy(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { path, method, body } = req.body || {}
+  if (typeof path !== 'string' || !path.startsWith('/')) {
+    return res.status(400).json({ error: 'bad_request', message: 'path must start with /' })
+  }
+  const m = (method || 'GET').toUpperCase()
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(m)) {
+    return res.status(400).json({ error: 'bad_request', message: `method ${m} not allowed` })
+  }
+  const apiKey = await getSetting('HSP_EXTERNAL_API_KEY', 'HSP_EXTERNAL_API_KEY')
+  if (!apiKey) {
+    return res.status(500).json({ error: 'not_configured', message: 'HSP_EXTERNAL_API_KEY not set; paste it in /admin/secrets' })
+  }
+  const upstream = await fetch(`${HSP_BASE}${path}`, {
+    method: m,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: m === 'GET' || m === 'DELETE' ? undefined : JSON.stringify(body ?? {}),
+  })
+  const text = await upstream.text()
+  res.status(upstream.status)
+  res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json')
+  return res.send(text)
+}
+
+// POST ?action=activate-social — one-shot wrapper that creates a sub-tenant
+// User on haze-social-post for a client and pushes the latest brand kit.
+// Idempotent: a re-activate just re-pushes the brand to the existing sub-tenant.
+// Body: { client_id }
+async function activateSocial(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { adminClient } = ctx
+  const { client_id } = req.body || {}
+  if (!client_id) return res.status(400).json({ error: 'bad_request', message: 'client_id required' })
+
+  const { data: client, error: clientErr } = await adminClient
+    .from('clients').select('id, name, email, company, hsp_user_id').eq('id', client_id).single()
+  if (clientErr || !client) return res.status(404).json({ error: 'not_found', message: 'client not found' })
+
+  const apiKey = await getSetting('HSP_EXTERNAL_API_KEY', 'HSP_EXTERNAL_API_KEY')
+  if (!apiKey) {
+    return res.status(500).json({ error: 'not_configured', message: 'HSP_EXTERNAL_API_KEY not set; paste it in /admin/secrets' })
+  }
+
+  // 1. Create sub-tenant (or reuse if already activated). The external-API is
+  //    idempotent on contact_email but we also short-circuit locally if
+  //    hsp_user_id is already set on the client row.
+  let tenantId = client.hsp_user_id
+  if (!tenantId) {
+    const createRes = await fetch(`${HSP_BASE}/tenants`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: client.company || client.name,
+        contact_email: client.email,
+        hts_client_id: client.id,
+      }),
+    })
+    const createJson = await createRes.json().catch(() => ({}))
+    if (!createRes.ok) {
+      return res.status(createRes.status).json({ error: 'tenant_create_failed', message: createJson.message || `upstream ${createRes.status}` })
+    }
+    tenantId = createJson.id
+    await adminClient.from('clients').update({ hsp_user_id: tenantId }).eq('id', client.id)
+  }
+
+  // 2. Push the latest brand kit (if one exists).
+  const { data: kit } = await adminClient
+    .from('brand_kits')
+    .select('assets, inputs')
+    .eq('client_id', client.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (kit?.assets) {
+    const a = kit.assets || {}
+    const i = kit.inputs || {}
+    const brandBody = {
+      business_name: i.business_name || client.company || client.name,
+      business_description: i.business_description,
+      industry: i.industry,
+      audience: i.audience,
+      vibe: i.vibe,
+      voice_tone: a.voice_tone,
+      inspirations: i.inspirations,
+      color_palette: a.color_palette,
+      logo_url: a?.images?.logo_primary?.public_url,
+      tagline: a.tagline,
+      cta: a.cta,
+      bios: a.bios,
+      hashtags: a.hashtags,
+      content_pillars: a.content_pillars,
+      imagery_direction: i.imagery_direction,
+    }
+    const brandRes = await fetch(`${HSP_BASE}/tenants/${tenantId}/brand`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(brandBody),
+    })
+    if (!brandRes.ok) {
+      const brandErr = await brandRes.json().catch(() => ({}))
+      return res.status(brandRes.status).json({ error: 'brand_push_failed', message: brandErr.message || `upstream ${brandRes.status}`, tenant_id: tenantId })
+    }
+  }
+
+  return res.status(200).json({ tenant_id: tenantId, brand_pushed: !!kit?.assets })
 }
 
 // ─── Stripe ──────────────────────────────────────────────────────────────
