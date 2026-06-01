@@ -12,7 +12,7 @@
 - **haze-social-post** (Tasks 1–7): clone fresh — `git clone https://github.com/hazetechnologies/haze-social-post` into `C:\repos\haze-social-post` (the OneDrive copy's `.git` is corrupted; do NOT use it for commits). Deploys to Vercel (web) on push to `main` via PR.
 - **haze-tech-solutions** (Tasks 8–9): `C:\Users\wealt\OneDrive\Documents\N8N Workflows\Website Builders\haze-tech-solutions` (git works here; PRs #38/#39 merged from it).
 
-**Verification approach:** The haze-social-post web app has **no unit-test framework** (only `worker/` uses vitest), and Phase 1 endpoints were verified via curl + `npm run build`. This plan follows that established pattern: each task ends with typecheck/lint/build + a curl or browser check with expected output, then a commit. Schema changes use `prisma db push` (the repo has no migration files; `db:push` script exists).
+**Verification approach:** The app now has **vitest** wired for `lib/**/*.test.ts` (`npm test` → `vitest run`, config at `vitest.config.ts`, `environment: node`). Pure `lib/` modules get real TDD unit tests (Task 2's HMAC helper). App-router routes, the NextAuth provider, and the landing page aren't unit-testable without a harness the repo doesn't have, so those follow the Phase 1 pattern: typecheck/lint/build + curl or browser check with expected output, then commit. Schema changes use `prisma db push` (the repo has no migration files; `db:push` script exists). Run `npm install` first — vitest and other post-Phase-1 deps may not be in `node_modules` yet.
 
 **Secrets:**
 - haze-social-post needs a new env var `INTEGRATOR_SSO_SECRET` (HMAC key). Generate once: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Add to Vercel (Production + Preview) and to the local `.env`. If unset, the mint helper falls back to `NEXTAUTH_SECRET` so dev never crashes.
@@ -93,12 +93,64 @@ git commit -m "feat(sso): add SsoToken nonce model for integrator SSO links"
 
 ---
 
-## Task 2: HMAC token mint + verify helper
+## Task 2: HMAC token mint + verify helper (TDD)
 
 **Files:**
+- Create: `lib/external-api/sso-token.test.ts` (vitest — matches `lib/**/*.test.ts`)
 - Create: `lib/external-api/sso-token.ts`
 
-- [ ] **Step 1: Write the helper**
+- [ ] **Step 1: Write the failing test first**
+
+```typescript
+// lib/external-api/sso-token.test.ts
+import { describe, it, expect, beforeAll } from 'vitest'
+import { mintSsoToken, verifySsoToken, sha256 } from './sso-token'
+
+beforeAll(() => { process.env.INTEGRATOR_SSO_SECRET = 'test-secret-for-vitest' })
+const NOW = 1_700_000_000_000
+
+describe('sso-token', () => {
+  it('mints a token that verifies with the same payload', () => {
+    const { token, expMs } = mintSsoToken('u1', 'i1', NOW)
+    expect(expMs).toBe(NOW + 5 * 60 * 1000)
+    const payload = verifySsoToken(token, NOW)
+    expect(payload).not.toBeNull()
+    expect(payload!.uid).toBe('u1')
+    expect(payload!.iid).toBe('i1')
+  })
+
+  it('rejects an expired token', () => {
+    const { token } = mintSsoToken('u1', 'i1', NOW)
+    expect(verifySsoToken(token, NOW + 6 * 60 * 1000)).toBeNull()
+  })
+
+  it('rejects a tampered token', () => {
+    const { token } = mintSsoToken('u1', 'i1', NOW)
+    expect(verifySsoToken(token.slice(0, -2) + '00', NOW)).toBeNull()
+  })
+
+  it('rejects a malformed token', () => {
+    expect(verifySsoToken('not-a-token', NOW)).toBeNull()
+  })
+
+  it('sha256 is stable and hex', () => {
+    expect(sha256('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+  })
+
+  it('two mints of the same uid produce different tokens (nonce)', () => {
+    const a = mintSsoToken('u1', 'i1', NOW).token
+    const b = mintSsoToken('u1', 'i1', NOW).token
+    expect(a).not.toBe(b)
+  })
+})
+```
+
+- [ ] **Step 2: Run the test to verify it fails (module not yet created)**
+
+Run: `npm test -- sso-token`
+Expected: FAIL — `Cannot find module './sso-token'` (or similar resolution error).
+
+- [ ] **Step 3: Write the helper**
 
 ```typescript
 // lib/external-api/sso-token.ts
@@ -166,30 +218,20 @@ export function verifySsoToken(token: string, nowMs: number): SsoPayload | null 
 }
 ```
 
-- [ ] **Step 2: Typecheck the file compiles**
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `npm test -- sso-token`
+Expected: PASS — all 6 tests green.
+
+- [ ] **Step 5: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: no errors referencing `lib/external-api/sso-token.ts`.
 
-- [ ] **Step 3: Sanity-check round-trip manually**
-
-Run:
-```bash
-INTEGRATOR_SSO_SECRET=testsecret npx tsx -e "
-import { mintSsoToken, verifySsoToken } from './lib/external-api/sso-token';
-const now = 1700000000000;
-const { token } = mintSsoToken('u1','i1', now);
-console.log('valid:', JSON.stringify(verifySsoToken(token, now)));
-console.log('expired:', verifySsoToken(token, now + 6*60*1000));
-console.log('tampered:', verifySsoToken(token.slice(0,-2)+'00', now));
-"
-```
-Expected: `valid:` prints a payload with `uid:"u1"`; `expired:` prints `null`; `tampered:` prints `null`. (`tsx` is available as a transitive dep; if not, `npm i -D tsx` first, but do not commit that change.)
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add lib/external-api/sso-token.ts
+git add lib/external-api/sso-token.ts lib/external-api/sso-token.test.ts
 git commit -m "feat(sso): HMAC mint/verify helper for integrator SSO tokens"
 ```
 
