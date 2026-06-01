@@ -21,12 +21,38 @@ import type {
 } from './types.ts'
 import { uploadImage } from '../_shared/r2-upload.ts'
 import { resizeToFinalDims } from './post-process.ts'
+import { composeBanner } from './compose-banner.ts'
 import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
 
 const OPENAI_KEY    = Deno.env.get('OPENAI_API_KEY')!
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const KIE_API_KEY   = Deno.env.get('KIE_API_KEY')!
+const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!
+const SERVICE_ROLE  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const KIE_BASE      = 'https://api.kie.ai/api/v1'
+
+// Fire a fresh self-invoke of this function for the same kit, banner phase.
+// Used to chain across Supabase Edge Function execution-time caps: when one
+// invocation hits its wall-time budget, it fires another that picks up where
+// it left off (resume-safe via the skip-set in generateBanners).
+//
+// Must be AWAITED. Fire-and-forget left the request unsent — the runtime
+// killed the function before Deno's fetch finished its TCP/TLS handshake and
+// transmitted the body, so the next invocation never started. Awaiting the
+// fetch ensures Supabase's edge router has actually received the request
+// (the target's serve handler returns 200 immediately via its own waitUntil,
+// so this await is sub-second).
+async function chainSelfInvoke(kit_id: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/generate-brand-kit`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${SERVICE_ROLE}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kit_id, phase: 'banners' }),
+    })
+  } catch (e) {
+    console.error('self-invoke failed:', e instanceof Error ? e.message : e)
+  }
+}
 const OPUS_MODEL    = 'claude-opus-4-7'
 const MINI_MODEL    = 'gpt-4o-mini'
 const IMAGE_RETRY_DELAYS_MS = [15_000, 30_000, 60_000]
@@ -55,7 +81,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({})) as {
     kit_id?: string
     existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>
-    phase?: 'all' | 'logos_then_pause' | 'banners'
+    phase?: 'all' | 'logos_then_pause' | 'banners' | 'logos_only'
   }
   const { kit_id, existing_logos } = body
   // Default phase = 'logos_then_pause' so new kits stop after logos for client approval.
@@ -78,7 +104,7 @@ Deno.serve(async (req) => {
 
 async function processBrandKit(
   kit_id: string,
-  phase: 'all' | 'logos_then_pause' | 'banners',
+  phase: 'all' | 'logos_then_pause' | 'banners' | 'logos_only',
   existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
 ): Promise<void> {
   const supabase = createClient(
@@ -166,10 +192,54 @@ async function processBrandKit(
         .single()
       const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
       const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
+      const nowDone = REFERENCE_ASSET_IDS.filter((id) => finalImages[id]?.public_url).length
+      const madeProgress = nowDone > alreadyDone.size
+      const missing = REFERENCE_ASSET_IDS.filter(id => !finalImages[id]?.public_url)
+      if (allDone) {
+        await update({ status: 'done', progress_message: null, error: null })
+      } else if (madeProgress) {
+        // Wall-time budget hit but we DID complete some banners this round.
+        // Chain a self-invoke to finish the rest. The new invocation sees
+        // partial state in the row and only generates what's missing.
+        await update({
+          status: 'generating',
+          progress_message: `${nowDone}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
+        })
+        await chainSelfInvoke(kit_id)
+      } else {
+        // No progress at all this invocation — finalize as failed instead of
+        // looping forever.
+        await update({
+          status: 'failed',
+          progress_message: null,
+          error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry`,
+        })
+      }
+      return
+    }
+
+    if (phase === 'logos_only') {
+      // Regenerate just the 3 logos using the existing palette/text on the row.
+      // Used when we want to retry a logo prompt (e.g. wordmark color fix)
+      // without burning Claude tokens on text or KIE calls on banners.
+      const palette = existingAssets.color_palette ?? []
+      if (palette.length === 0) {
+        await update({ status: 'failed', error: `logos_only requires existing color_palette on row` })
+        return
+      }
+      await update({ status: 'generating', progress_message: 'Regenerating logos…' })
+      const logos = await generateLogos(inputs, palette, client_id, kit_id)
+      const existingImages = (existingAssets.images || {}) as Partial<Record<ImageAssetId, ImageAssetRef>>
+      // Merge the new logo refs over whatever was there (banners survive).
+      const mergedImages = { ...existingImages, ...logos } as Record<ImageAssetId, ImageAssetRef>
+      // If banners aren't generated yet, return to the approval gate; otherwise mark done.
+      const hasAnyBanner = REFERENCE_ASSET_IDS.some((id) => existingImages[id]?.public_url)
       await update({
-        status: allDone ? 'done' : 'failed',
-        progress_message: null,
-        error: allDone ? null : `${REFERENCE_ASSET_IDS.filter(id => !finalImages[id]?.public_url).join(', ')} did not generate — re-fire phase='banners' to retry`,
+        status: hasAnyBanner ? 'done' : 'awaiting_logo_approval',
+        progress_message: hasAnyBanner ? null : 'Logos regenerated — pick one or approve',
+        assets: { ...existingAssets, images: mergedImages },
+        // Reset approval so the admin re-picks (the new logo_primary may look different).
+        ...(hasAnyBanner ? {} : { approved_logo_asset_id: null }),
       })
       return
     }
@@ -227,14 +297,26 @@ async function processBrandKit(
       .single()
     const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
     const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
+    const nowDoneCount = REFERENCE_ASSET_IDS.filter((id) => finalImages[id]?.public_url).length
     const missing = REFERENCE_ASSET_IDS.filter((id) => !finalImages[id]?.public_url)
-    await update({
-      status: allDone ? 'done' : 'failed',
-      progress_message: null,
-      ...(allDone ? {} : { error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry` }),
-      // Don't pass `assets` here — per-banner writes already mutated the row
-      // and overwriting with a stale snapshot would lose those updates.
-    })
+    if (allDone) {
+      await update({ status: 'done', progress_message: null })
+    } else if (nowDoneCount > 0) {
+      // Phase='all' started fresh (0 banners present). If we landed >=1 but
+      // not all 7, the wall-time budget ran out. Hand off to a phase='banners'
+      // self-invoke so the remaining banners get their own function budget.
+      await update({
+        status: 'generating',
+        progress_message: `${nowDoneCount}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
+      })
+      chainSelfInvoke(kit_id)
+    } else {
+      await update({
+        status: 'failed',
+        progress_message: null,
+        error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry`,
+      })
+    }
   } catch (err) {
     await update({
       status: 'failed',
@@ -425,30 +507,71 @@ async function generateBanners(
   const todo = REFERENCE_ASSET_IDS.filter((id) => !skip.has(id))
   if (todo.length === 0) return out as Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>
 
-  // Per-banner failures are isolated — one bad banner doesn't kill the whole
-  // batch. Failed banners just stay absent from the row and the user can
-  // re-fire phase='banners' to retry only the missing ones.
-  await Promise.all(
-    todo.map(async (assetId) => {
-      try {
-        const spec = SIZES[assetId]
-        const prompt = buildImagePrompt(assetId, inputs, palette, copy)
-        const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
+  // Overrides win over the auto-generated copy; both feed the deterministic
+  // overlay compositor (not the image prompt anymore).
+  const tagline = (inputs.tagline_override ?? copy?.tagline ?? '').trim()
+  const cta = (inputs.cta_override ?? copy?.cta ?? '').trim()
 
-        const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
-        const resultUrl = await pollKieTask(taskId, assetId)
-        const raw = await downloadRemoteImage(resultUrl, assetId)
-        const resized = await resizeToFinalDims(raw, spec)
-        const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
-        out[assetId] = uploaded
-        await persistBanner(assetId, uploaded)
-      } catch (err) {
-        // Log per-banner failure but don't bubble up — partial success is
-        // better than total failure. Re-firing phase='banners' will retry.
-        console.error(`banner ${assetId} failed:`, err instanceof Error ? err.message : err)
+  // Fetch the logo bytes ONCE — every banner composites the same logo on top
+  // of its scenery background.
+  let logoBytes: Uint8Array | null = null
+  try {
+    const logoRes = await fetch(approvedLogoUrl)
+    if (logoRes.ok) logoBytes = new Uint8Array(await logoRes.arrayBuffer())
+    else console.error(`logo fetch for overlay failed: ${logoRes.status}`)
+  } catch (err) {
+    console.error('logo fetch for overlay threw:', err instanceof Error ? err.message : err)
+  }
+
+  // Process banners in small parallel batches with a wall-time budget.
+  //
+  // BATCH_SIZE=2 bounds peak memory (each 2560×1440 RGBA decoded backing
+  // image is ~14 MB; 7 of those in parallel exhausted Edge Runtime).
+  // BUDGET_MS=85_000 leaves headroom inside Supabase's ~150s function cap
+  // so we can finalize a self-invoke cleanly. When we run out of budget,
+  // the caller (processBrandKit) detects missing banners and chain-fires
+  // another phase='banners' invocation — the resume logic skips banners
+  // already in the row, so each chained call only does the remaining work.
+  const BATCH_SIZE = 2
+  const BUDGET_MS = 85_000
+  const startedAt = Date.now()
+  const runOne = async (assetId: ImageAssetId) => {
+    try {
+      const spec = SIZES[assetId]
+      const prompt = buildImagePrompt(assetId, inputs, palette)
+      const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
+
+      const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)
+      const resultUrl = await pollKieTask(taskId, assetId)
+      const raw = await downloadRemoteImage(resultUrl, assetId)
+      const resized = await resizeToFinalDims(raw, spec)
+      // KIE returns scenery only; overlay logo + tagline + CTA deterministically.
+      let finalBytes = resized
+      if (logoBytes) {
+        try {
+          finalBytes = await composeBanner({
+            background: resized, logo: logoBytes, tagline, cta, palette, assetId,
+          })
+        } catch (err) {
+          console.error(`compose ${assetId} failed, using bare scenery:`, err instanceof Error ? err.message : err)
+        }
       }
-    })
-  )
+      const uploaded = await uploadImage({ bytes: finalBytes, clientId, timestamp, assetId })
+      out[assetId] = uploaded
+      await persistBanner(assetId, uploaded)
+    } catch (err) {
+      // Log per-banner failure but don't bubble up — partial success is
+      // better than total failure. Re-firing phase='banners' will retry.
+      console.error(`banner ${assetId} failed:`, err instanceof Error ? err.message : err)
+    }
+  }
+  for (let i = 0; i < todo.length; i += BATCH_SIZE) {
+    if (Date.now() - startedAt > BUDGET_MS) {
+      console.log(`banner budget exhausted (${Date.now() - startedAt}ms) — yielding for self-invoke`)
+      break
+    }
+    await Promise.all(todo.slice(i, i + BATCH_SIZE).map(runOne))
+  }
 
   return out as Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>
 }
