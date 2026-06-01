@@ -3,7 +3,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import {
   LayoutDashboard, Receipt, Sparkles, ShoppingBag, ShoppingCart,
-  LogOut, ExternalLink, ChevronRight,
+  LogOut, ExternalLink, ChevronRight, Share2,
 } from 'lucide-react'
 import { useCart } from '../../lib/cart'
 
@@ -12,6 +12,7 @@ const NAV = [
   { to: '/portal/services',  label: 'Services',   icon: ShoppingBag },
   { to: '/cart',             label: 'Cart',       icon: ShoppingCart, showBadge: true },
   { to: '/portal/brand-kit', label: 'Brand Kit',  icon: Sparkles },
+  { to: '/portal/social',    label: 'Social',     icon: Share2 },
   { to: '/portal/invoices',  label: 'Invoices',   icon: Receipt },
 ]
 
