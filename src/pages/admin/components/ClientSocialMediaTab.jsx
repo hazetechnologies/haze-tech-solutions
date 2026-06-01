@@ -19,6 +19,25 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
 
   const activated = !!client?.hsp_user_id
 
+  const openWorkspace = async () => {
+    setBusy(true); setError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=hsp-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ path: `/tenants/${client.hsp_user_id}/sso-link`, method: 'POST', body: { next: '/dashboard' } }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) throw new Error(data.message || data.error || `Server error (${res.status})`)
+      window.open(data.url, '_blank', 'noopener')
+    } catch (err) {
+      setError(err.message || 'Could not open workspace')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const callActivate = async () => {
     setBusy(true); setError(null); setLastResult(null)
     try {
@@ -91,6 +110,13 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
             }}>
               {busy ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
               {busy ? 'Pushing…' : 'Re-push brand kit'}
+            </button>
+            <button onClick={openWorkspace} disabled={busy} style={{
+              background: 'linear-gradient(135deg, #00D4FF, #0099CC)', color: '#020817',
+              border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700,
+              cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
+            }}>
+              <Share2 size={13} /> Open Social Workspace
             </button>
             <span style={{ color: '#64748B', fontSize: 11 }}>
               (Use after a brand-kit regenerate to sync the latest tagline, palette, logo, etc.)
