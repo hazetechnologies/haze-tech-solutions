@@ -19,6 +19,8 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
   const [platforms, setPlatforms] = useState(null)
   const [connectLink, setConnectLink] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [plans, setPlans] = useState(null)
+  const [posts, setPosts] = useState(null)
 
   const activated = !!client?.hsp_user_id
 
@@ -34,10 +36,10 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
     return data
   }
 
-  const openWorkspace = async () => {
+  const openWorkspace = async (next = '/dashboard') => {
     setBusy(true); setError(null)
     try {
-      const data = await hspProxy(`/tenants/${client.hsp_user_id}/sso-link`, 'POST', { next: '/dashboard' })
+      const data = await hspProxy(`/tenants/${client.hsp_user_id}/sso-link`, 'POST', { next })
       if (!data.url) throw new Error('No workspace URL returned')
       window.open(data.url, '_blank', 'noopener')
     } catch (err) {
@@ -45,6 +47,17 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  const loadContent = async () => {
+    try {
+      const [pl, po] = await Promise.all([
+        hspProxy(`/tenants/${client.hsp_user_id}/content-plans`),
+        hspProxy(`/tenants/${client.hsp_user_id}/posts`),
+      ])
+      setPlans(pl.plans || [])
+      setPosts(po.posts || [])
+    } catch (err) { setError(err.message) }
   }
 
   const loadPlatforms = async () => {
@@ -59,7 +72,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
     finally { setBusy(false) }
   }
 
-  useEffect(() => { if (activated) loadPlatforms() }, [activated, client?.hsp_user_id])
+  useEffect(() => { if (activated) { loadPlatforms(); loadContent() } }, [activated, client?.hsp_user_id])
 
   const callActivate = async () => {
     setBusy(true); setError(null); setLastResult(null)
@@ -134,7 +147,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
               {busy ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
               {busy ? 'Pushing…' : 'Re-push brand kit'}
             </button>
-            <button onClick={openWorkspace} disabled={busy} style={{
+            <button onClick={() => openWorkspace('/dashboard')} disabled={busy} style={{
               background: 'linear-gradient(135deg, #00D4FF, #0099CC)', color: '#020817',
               border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700,
               cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
@@ -179,6 +192,54 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
               </div>
             )}
             {connectLink && <div style={{ color: '#64748B', fontSize: 11, marginTop: 6 }}>Send this to the client — it expires in 5 minutes and only lets them connect their channels.</div>}
+          </div>
+
+          <div style={{ marginTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ color: '#F1F5F9', fontSize: 14, fontWeight: 600 }}>Content & Calendar</div>
+              <button onClick={() => openWorkspace('/haze-creator')} disabled={busy} style={{
+                background: 'linear-gradient(135deg, #00D4FF, #0099CC)', color: '#020817',
+                border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700,
+                cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
+              }}>
+                <Share2 size={12} /> Generate / review in workspace
+              </button>
+            </div>
+
+            {plans && plans.length > 0 && (
+              <div style={{ color: '#94A3B8', fontSize: 12, marginBottom: 10 }}>
+                {plans.length} plan{plans.length === 1 ? '' : 's'} ·{' '}
+                {plans.map((p) => `${p.name || 'Plan'} (${p.status.replace(/_/g, ' ').toLowerCase()}, ${p.post_count} posts)`).join('  ·  ')}
+              </div>
+            )}
+
+            {posts === null && <div style={{ color: '#64748B', fontSize: 12 }}>Loading…</div>}
+            {posts && posts.length === 0 && (
+              <div style={{ color: '#94A3B8', fontSize: 13 }}>No posts yet. Use "Generate / review in workspace" to create a content plan.</div>
+            )}
+            {posts && posts.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+                {posts.map((p) => {
+                  const when = p.scheduled_for ? new Date(p.scheduled_for).toLocaleString() : 'unscheduled'
+                  const statusColor = p.status === 'PUBLISHED' ? '#86EFAC' : p.status === 'SCHEDULED' ? '#7DD3FC' : p.status === 'FAILED' || p.status === 'PARTIAL_FAILURE' ? '#FCA5A5' : '#CBD5E1'
+                  return (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '8px 10px' }}>
+                      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: statusColor, textTransform: 'uppercase', width: 78 }}>{p.status.replace(/_/g, ' ')}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#E2E8F0', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.caption || '(no caption)'}</div>
+                        <div style={{ color: '#64748B', fontSize: 10 }}>{when}{p.platforms.length ? ` · ${p.platforms.join(', ')}` : ''}</div>
+                      </div>
+                      {p.content_plan_id && (
+                        <button onClick={() => openWorkspace(`/haze-creator/plan/${p.content_plan_id}`)} disabled={busy} style={{
+                          flexShrink: 0, background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#CBD5E1',
+                          borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                        }}>Open</button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
