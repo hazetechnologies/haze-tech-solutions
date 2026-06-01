@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     case 'portal-checkout':     return req.method === 'POST' ? portalCheckout(req, res)   : methodNotAllowed(res, 'POST')
     case 'public-cart-checkout':return req.method === 'POST' ? publicCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-cart-checkout':return req.method === 'POST' ? portalCartCheckout(req, res): methodNotAllowed(res, 'POST')
+    case 'portal-social':       return req.method === 'POST' ? portalSocial(req, res)     : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -480,6 +481,58 @@ async function activateSocial(req, res) {
   }
 
   return res.status(200).json({ tenant_id: tenantId, brand_pushed: !!kit?.assets })
+}
+
+// POST ?action=portal-social — client-facing, read-mostly bridge to the
+// client's OWN haze-social-post sub-tenant. Auth = the logged-in portal client;
+// the tenant id is resolved server-side from their clients.hsp_user_id, never
+// supplied by the caller. Body: { op, ...args }.
+async function portalSocial(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  // 1. Authenticate the portal client from their Supabase session.
+  const authHeader = req.headers.authorization || ''
+  const m = /^Bearer\s+(.+)$/.exec(authHeader)
+  if (!m) return res.status(401).json({ error: 'unauthorized' })
+  const userClient = createClient(url, anonKey)
+  const { data: { user: caller }, error: authErr } = await userClient.auth.getUser(m[1].trim())
+  if (authErr || !caller) return res.status(401).json({ error: 'unauthorized' })
+
+  // 2. Resolve THIS caller's client row + its sub-tenant id.
+  const admin = createClient(url, SERVICE_ROLE_KEY)
+  const { data: client } = await admin
+    .from('clients').select('id, hsp_user_id').eq('user_id', caller.id).maybeSingle()
+  if (!client) return res.status(403).json({ error: 'forbidden', message: 'no client for this user' })
+  if (!client.hsp_user_id) return res.status(409).json({ error: 'not_activated', message: 'social media is not set up for your account yet' })
+  const tid = client.hsp_user_id
+
+  // 3. Resolve the integrator key and dispatch a fixed op against the OWN tenant.
+  const apiKey = await getSetting('HSP_EXTERNAL_API_KEY', 'HSP_EXTERNAL_API_KEY')
+  if (!apiKey) return res.status(500).json({ error: 'not_configured' })
+
+  const { op, query } = req.body || {}
+  const q = typeof query === 'string' && query.startsWith('?') ? query : ''
+  let path, method
+  switch (op) {
+    case 'channels':     path = `/tenants/${tid}/connected-platforms`; method = 'GET'; break
+    case 'engagement':   path = `/tenants/${tid}/engagement`;          method = 'GET'; break
+    case 'plans':        path = `/tenants/${tid}/content-plans`;       method = 'GET'; break
+    case 'posts':        path = `/tenants/${tid}/posts${q}`;           method = 'GET'; break
+    case 'connect-link': path = `/tenants/${tid}/connect-links`;       method = 'POST'; break
+    default: return res.status(400).json({ error: 'bad_request', message: `unknown op ${op}` })
+  }
+
+  const upstream = await fetch(`${HSP_BASE}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: method === 'GET' ? undefined : JSON.stringify({}),
+  })
+  const text = await upstream.text()
+  res.status(upstream.status)
+  res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json')
+  return res.send(text)
 }
 
 // ─── Stripe ──────────────────────────────────────────────────────────────
