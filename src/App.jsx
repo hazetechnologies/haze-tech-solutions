@@ -39,6 +39,7 @@ import AcceptInvite         from './pages/portal/AcceptInvite'
 import PortalWebsiteIntake  from './pages/portal/PortalWebsiteIntake'
 import PortalBrandKit       from './pages/portal/PortalBrandKit'
 import PortalServices       from './pages/portal/PortalServices'
+import PortalSocial          from './pages/portal/PortalSocial'
 
 import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="website-intake"       element={<PortalWebsiteIntake />} />
             <Route path="brand-kit"            element={<PortalBrandKit />} />
             <Route path="services"             element={<PortalServices />} />
+            <Route path="social"               element={<PortalSocial />} />
           </Route>
           </Routes>
         </BrowserRouter>
