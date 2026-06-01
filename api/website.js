@@ -447,6 +447,36 @@ async function activateSocial(req, res) {
       const brandErr = await brandRes.json().catch(() => ({}))
       return res.status(brandRes.status).json({ error: 'brand_push_failed', message: brandErr.message || `upstream ${brandRes.status}`, tenant_id: tenantId })
     }
+
+    // Sync the kit's image assets into the sub-tenant's library (idempotent).
+    // Dedupe by URL — multiple logo variants often share one public_url.
+    const images = a?.images || {}
+    const seen = new Set()
+    const libraryAssets = []
+    for (const [key, val] of Object.entries(images)) {
+      const url = val?.public_url || val?.url
+      if (!url || seen.has(url)) continue
+      seen.add(url)
+      const isBanner = key.startsWith('banner')
+      libraryAssets.push({
+        url,
+        type: 'image',
+        description: isBanner ? `Brand banner (${key.replace('banner_', '')})` : `Brand logo (${key.replace('logo_', '').replace(/_/g, ' ')})`,
+        tags: ['brand-kit', key],
+      })
+    }
+    if (libraryAssets.length > 0) {
+      // Best-effort: a library-sync failure must not fail activation/brand push.
+      try {
+        await fetch(`${HSP_BASE}/tenants/${tenantId}/assets`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assets: libraryAssets }),
+        })
+      } catch (e) {
+        console.error('[activate-social] library asset sync failed:', e?.message || e)
+      }
+    }
   }
 
   return res.status(200).json({ tenant_id: tenantId, brand_pushed: !!kit?.assets })
