@@ -334,7 +334,7 @@ async function downloadAsset(req, res) {
 
 // ─── Haze Social Post external-API integration ───────────────────────────
 
-const HSP_BASE = 'https://hazesocialposts.com/api/v1/external'
+const HSP_BASE = 'https://hazesocialpost.com/api/v1/external'
 
 // POST ?action=hsp-proxy — admin-only proxy for the haze-social-post external
 // API. The browser never sees the bearer key. requireAdmin gates every call.
