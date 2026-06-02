@@ -36,10 +36,15 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
     return data
   }
 
-  const openWorkspace = async (next = '/dashboard') => {
+  const openWorkspace = async (target = 'dashboard') => {
     setBusy(true); setError(null)
     try {
-      const data = await hspProxy(`/tenants/${client.hsp_user_id}/sso-link`, 'POST', { next })
+      // Phase 2: launch an AGENCY session that lands on THIS client via the
+      // /t/<id>/ deep-link (haze-social-post middleware sets the acting_tenant
+      // cookie + redirects to the target). The operator can then switch
+      // clients from the in-app "Operating as" bar — no per-client logout.
+      const next = `/t/${client.hsp_user_id}/${target}`
+      const data = await hspProxy('/integrators/self/agency-sso-link', 'POST', { next })
       if (!data.url) throw new Error('No workspace URL returned')
       window.open(data.url, '_blank', 'noopener')
     } catch (err) {
@@ -155,7 +160,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
               {busy ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
               {busy ? 'Pushing…' : 'Re-push brand kit'}
             </button>
-            <button onClick={() => openWorkspace('/dashboard')} disabled={busy} style={{
+            <button onClick={() => openWorkspace('dashboard')} disabled={busy} style={{
               background: 'linear-gradient(135deg, #00D4FF, #0099CC)', color: '#020817',
               border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700,
               cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
@@ -213,7 +218,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
           <div style={{ marginTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ color: '#F1F5F9', fontSize: 14, fontWeight: 600 }}>Content & Calendar</div>
-              <button onClick={() => openWorkspace('/haze-creator')} disabled={busy} style={{
+              <button onClick={() => openWorkspace('haze-creator')} disabled={busy} style={{
                 background: 'linear-gradient(135deg, #00D4FF, #0099CC)', color: '#020817',
                 border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700,
                 cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
@@ -246,7 +251,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
                         <div style={{ color: '#64748B', fontSize: 10 }}>{when}{p.platforms.length ? ` · ${p.platforms.join(', ')}` : ''}</div>
                       </div>
                       {p.content_plan_id && (
-                        <button onClick={() => openWorkspace(`/haze-creator/plan/${p.content_plan_id}`)} disabled={busy} style={{
+                        <button onClick={() => openWorkspace(`haze-creator/plan/${p.content_plan_id}`)} disabled={busy} style={{
                           flexShrink: 0, background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#CBD5E1',
                           borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                         }}>Open</button>
