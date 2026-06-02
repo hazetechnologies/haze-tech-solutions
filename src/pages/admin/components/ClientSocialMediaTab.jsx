@@ -72,6 +72,14 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
     finally { setBusy(false) }
   }
 
+  const [emailed, setEmailed] = useState(null)
+  const emailConnectLink = async () => {
+    setBusy(true); setError(null); setEmailed(null)
+    try { const d = await hspProxy(`/tenants/${client.hsp_user_id}/connect-links/email`, 'POST', {}); setEmailed(d.to || true) }
+    catch (err) { setError(err.message || 'Could not email connect link') }
+    finally { setBusy(false) }
+  }
+
   useEffect(() => { if (activated) { loadPlatforms(); loadContent() } }, [activated, client?.hsp_user_id])
 
   const callActivate = async () => {
@@ -180,6 +188,13 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
             }}>
               <Share2 size={13} /> {busy ? 'Issuing…' : 'Issue connect link for client'}
             </button>
+            <button onClick={emailConnectLink} disabled={busy} style={{
+              marginLeft: 8, background: 'transparent', border: '1px solid rgba(0,212,255,0.4)', color: '#7DD3FC',
+              borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: busy ? 'not-allowed' : 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
+            }}>
+              <Share2 size={13} /> {busy ? 'Emailing…' : 'Email connect link to client'}
+            </button>
             {connectLink && (
               <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input readOnly value={connectLink} onFocus={(e) => e.target.select()} style={{
@@ -192,6 +207,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
               </div>
             )}
             {connectLink && <div style={{ color: '#64748B', fontSize: 11, marginTop: 6 }}>Send this to the client — it expires in 5 minutes and only lets them connect their channels.</div>}
+            {emailed && <div style={{ color: '#86EFAC', fontSize: 11, marginTop: 6 }}>Connect link emailed{typeof emailed === 'string' ? ` to ${emailed}` : ''} — expires in 48h.</div>}
           </div>
 
           <div style={{ marginTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 16 }}>
