@@ -44,3 +44,10 @@ alter table brand_kits       add column if not exists notified_status text;
 -- historical "ready" notification on the first cron run).
 update website_projects set notified_status = status where notified_status is null;
 update brand_kits       set notified_status = status where notified_status is null;
+
+-- Restrict UPDATE to the read_at column for app users: the RLS update policy
+-- scopes WHICH rows, this column grant scopes WHICH columns, so a client (or
+-- admin browser) can only mark notifications read — not rewrite title / body /
+-- payload / email_status. Server emits use the service role (own grants).
+revoke update on notifications from authenticated;
+grant update (read_at) on notifications to authenticated;

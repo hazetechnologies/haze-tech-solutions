@@ -59,6 +59,8 @@ export default async function handler(req, res) {
         const clientId = session.metadata?.client_id
         if (session.mode === 'subscription' && session.subscription && clientId) {
           const sub = await stripe.subscriptions.retrieve(session.subscription)
+          // Was this subscription already recorded? (webhook redelivery guard)
+          const { data: priorSub } = await sb.from('subscriptions').select('id').eq('stripe_subscription_id', sub.id).maybeSingle()
           await sb.from('subscriptions').upsert({
             client_id: clientId,
             stripe_customer_id: sub.customer,
@@ -72,14 +74,16 @@ export default async function handler(req, res) {
           // Also stamp the customer id back onto the client if missing
           await sb.from('clients').update({ stripe_customer_id: sub.customer })
             .eq('id', clientId).is('stripe_customer_id', null)
-          // Notify: confirm to client + alert admin of the new subscription.
-          const { data: subClient } = await sb.from('clients').select('id, name, email').eq('id', clientId).maybeSingle()
-          await emitNotification(sb, 'subscription.created', {
-            clientId,
-            clientName: subClient?.name,
-            clientEmail: subClient?.email,
-            planName: sub.items.data[0]?.price?.nickname || undefined,
-          })
+          // Notify only on first creation (skip redeliveries). Best-effort.
+          if (!priorSub) {
+            const { data: subClient } = await sb.from('clients').select('id, name, email').eq('id', clientId).maybeSingle()
+            await emitNotification(sb, 'subscription.created', {
+              clientId,
+              clientName: subClient?.name,
+              clientEmail: subClient?.email,
+              planName: sub.items.data[0]?.price?.nickname || undefined,
+            })
+          }
         }
         break
       }
@@ -108,19 +112,23 @@ export default async function handler(req, res) {
 
       case 'invoice.paid': {
         const inv = event.data.object
-        // One-off invoices we sent: link by stripe_invoice_id
-        await sb.from('invoices').update({
+        // One-off invoices we sent: link by stripe_invoice_id. Guard on the
+        // current status (.neq paid + .select) so Stripe webhook redeliveries
+        // only flip — and only notify — on the FIRST transition to paid.
+        const { data: transitioned } = await sb.from('invoices').update({
           status: 'paid',
           paid_date: new Date((inv.status_transitions?.paid_at ?? inv.created) * 1000).toISOString().slice(0, 10),
-        }).eq('stripe_invoice_id', inv.id)
-        // Notify: receipt to client + alert admin of the payment. Best-effort.
-        const { data: payer } = await sb.from('clients').select('id, name, email').eq('stripe_customer_id', inv.customer).maybeSingle()
-        await emitNotification(sb, 'invoice.paid', {
-          clientId: payer?.id,
-          clientName: payer?.name,
-          clientEmail: payer?.email,
-          amount: inv.amount_paid != null ? (inv.amount_paid / 100).toFixed(2) : undefined,
-        })
+        }).eq('stripe_invoice_id', inv.id).neq('status', 'paid').select('id')
+        // Notify only for a tracked invoice that just became paid. Best-effort.
+        if (transitioned && transitioned.length > 0) {
+          const { data: payer } = await sb.from('clients').select('id, name, email').eq('stripe_customer_id', inv.customer).maybeSingle()
+          await emitNotification(sb, 'invoice.paid', {
+            clientId: payer?.id,
+            clientName: payer?.name,
+            clientEmail: payer?.email,
+            amount: inv.amount_paid != null ? (inv.amount_paid / 100).toFixed(2) : undefined,
+          })
+        }
         break
       }
 

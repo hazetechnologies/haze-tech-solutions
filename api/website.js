@@ -120,6 +120,11 @@ const STATUS_EVENTS = {
 // GET ?action=cron-notify-status — emit for rows whose status advanced past the
 // last-notified value. PostgREST can't compare two columns server-side, so we
 // fetch and filter status !== notified_status in JS.
+//
+// Known v1 limitation: only the CURRENT status is observed, so if a row advances
+// through two mapped statuses between 5-min polls (e.g. awaiting_logo_approval
+// -> done) only the latest emits. In practice awaiting_logo_approval pauses for
+// client approval (hours), so it is reliably caught by a poll.
 async function cronNotifyStatus(req, res) {
   if (!requireCron(req, res)) return
   const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -130,6 +135,13 @@ async function cronNotifyStatus(req, res) {
       .limit(500)
     for (const row of rows || []) {
       if (!row.status || row.status === row.notified_status) continue
+      // Claim the transition atomically before emitting (optimistic CAS on the
+      // value we just read) so two overlapping cron runs can't both emit for
+      // the same change. This is at-most-once: claim then emit.
+      let claim = sb.from(table).update({ notified_status: row.status }).eq('id', row.id)
+      claim = row.notified_status == null ? claim.is('notified_status', null) : claim.eq('notified_status', row.notified_status)
+      const { data: won } = await claim.select('id')
+      if (!won || won.length === 0) continue // another run claimed it first
       const evt = map[row.status]
       if (evt) {
         await emitNotification(sb, evt, {
@@ -139,8 +151,6 @@ async function cronNotifyStatus(req, res) {
         })
         emitted++
       }
-      // Mark processed regardless, so unmapped statuses don't re-scan forever.
-      await sb.from(table).update({ notified_status: row.status }).eq('id', row.id)
     }
   }
   return res.status(200).json({ ok: true, emitted })
