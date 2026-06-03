@@ -8,6 +8,7 @@ export default function WebsiteProjectTab({ client }) {
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => { loadProject() }, [client.id])
 
@@ -16,6 +17,12 @@ export default function WebsiteProjectTab({ client }) {
   // an admin viewing a client's profile reads zero rows. Going through
   // requireAdmin mirrors the ?action=status poll below and is what makes the
   // re-read after Activate actually surface the new project.
+  //
+  // 404 is the ONLY "no project yet" signal. Any other failure (401/403/5xx,
+  // network, malformed body) must NOT null out the project — otherwise a
+  // transient error renders the "Activate" empty state and invites a duplicate
+  // activation. On such failures we keep the current project and raise
+  // loadError so the UI can show a retry instead of the Activate CTA.
   async function loadProject() {
     setLoading(true)
     try {
@@ -23,11 +30,15 @@ export default function WebsiteProjectTab({ client }) {
       const res = await fetch(`/api/website?action=get-project&client_id=${client.id}`, {
         headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
       })
-      if (res.status === 404) { setProject(null); return }  // no project yet — expected
+      if (res.status === 404) { setProject(null); setLoadError(null); return }  // no project yet — expected
       const data = await res.json().catch(() => null)
-      setProject(res.ok ? data : null)
+      if (!res.ok) {
+        setLoadError((data && (data.message || data.error)) || `Could not load project (${res.status})`)
+        return  // leave existing `project` untouched
+      }
+      setProject(data); setLoadError(null)
     } catch {
-      setProject(null)
+      setLoadError('Could not load website project — check your connection and retry.')
     } finally {
       setLoading(false)
     }
@@ -98,6 +109,21 @@ export default function WebsiteProjectTab({ client }) {
   }
 
   if (loading) return <p style={{ color:'#94A3B8' }}>Loading…</p>
+
+  // Load failed (not a 404). Show a retry rather than the Activate empty state,
+  // so a transient error can't be mistaken for "no project" and trigger a
+  // duplicate activation.
+  if (loadError && !project) {
+    return (
+      <div style={{ padding: 20 }}>
+        <h3 style={h3}>Website project</h3>
+        <p style={errStyle}>{loadError}</p>
+        <button onClick={loadProject} disabled={loading} style={btnPrimary}>
+          <RefreshCw size={14} style={{ marginRight: 6 }} /> Retry
+        </button>
+      </div>
+    )
+  }
 
   // No project yet
   if (!project) {
