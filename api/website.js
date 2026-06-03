@@ -11,6 +11,7 @@ import { requireAdmin } from './_lib/require-admin.js'
 import { getStripe, getSetting, siteUrl } from './_lib/stripe.js'
 import { emitNotification } from './_lib/notifications.js'
 import { REGISTRY } from './_lib/notification-registry.js'
+import { sendEmail, wrapHtml } from './_lib/email.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -39,6 +40,7 @@ export default async function handler(req, res) {
     case 'portal-cart-checkout':return req.method === 'POST' ? portalCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-social':       return req.method === 'POST' ? portalSocial(req, res)     : methodNotAllowed(res, 'POST')
     case 'workflow-preview':    return req.method === 'GET'  ? workflowPreview(req, res)  : methodNotAllowed(res, 'GET')
+    case 'send-test-email':     return req.method === 'POST' ? sendTestEmail(req, res)    : methodNotAllowed(res, 'POST')
     case 'cron-notify-status':  return req.method === 'GET'  ? cronNotifyStatus(req, res) : methodNotAllowed(res, 'GET')
     case 'cron-admin-digest':   return req.method === 'GET'  ? cronAdminDigest(req, res)  : methodNotAllowed(res, 'GET')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
@@ -145,6 +147,49 @@ async function workflowPreview(req, res) {
     }
   })
   return res.status(200).json({ type, recipients })
+}
+
+// POST ?action=send-test-email — admin sends a test email to verify SMTP and
+// preview templates in a real inbox. Body: { to?, type? }. With a workflow
+// `type`, sends that workflow's rendered email(s); otherwise a generic SMTP test.
+async function sendTestEmail(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+
+  const { to, type } = req.body || {}
+  const recipient = (to || '').toString().trim()
+    || (await getSetting('ADMIN_NOTIFY_EMAIL', 'ADMIN_NOTIFY_EMAIL'))
+    || 'info@hazetechsolutions.com'
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) {
+    return res.status(400).json({ error: 'bad_request', message: 'A valid "to" email is required' })
+  }
+
+  // Specific workflow template → send each recipient variant that has an email.
+  if (type) {
+    if (!REGISTRY[type]) return res.status(400).json({ error: 'bad_request', message: 'unknown workflow type' })
+    const results = []
+    for (const r of REGISTRY[type]) {
+      let c
+      try { c = r.render(PREVIEW_SAMPLE) } catch { continue }
+      if (!c.emailHtml) continue
+      const status = await sendEmail({ to: recipient, subject: `[TEST] ${c.emailSubject || c.title}`, html: c.emailHtml, text: c.body })
+      results.push({ audience: r.audience, status })
+    }
+    if (results.length === 0) {
+      return res.status(200).json({ ok: true, sent: false, to: recipient, message: 'This workflow is in-app only (no email to test).' })
+    }
+    return res.status(200).json({ ok: true, sent: results.some((r) => r.status === 'sent'), to: recipient, results })
+  }
+
+  // Generic SMTP connectivity test.
+  const status = await sendEmail({
+    to: recipient,
+    subject: '[TEST] Haze Tech Solutions email is working ✅',
+    html: wrapHtml('SMTP test successful ✅', `<p>If you're reading this, your Haze Tech Solutions email (SMTP) is configured correctly — notification emails will send.</p>`),
+    text: 'SMTP test successful — your Haze Tech email is configured correctly.',
+  })
+  // status: 'sent' | 'failed' | 'skipped' (skipped = SMTP not configured)
+  return res.status(200).json({ ok: true, sent: status === 'sent', status, to: recipient })
 }
 
 // ─── Cron: notification status-watcher + daily admin digest ──────────────────

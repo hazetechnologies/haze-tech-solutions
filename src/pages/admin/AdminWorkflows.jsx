@@ -155,6 +155,30 @@ export default function AdminWorkflows() {
 }
 
 function WorkflowPreviewModal({ workflow, recipients, loading, error, onClose }) {
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState(null)
+  const hasEmail = !!(recipients && recipients.some((r) => r.emailHtml))
+
+  const sendTest = async () => {
+    setSending(true); setSendResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=send-test-email', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: workflow.type }),
+      })
+      const data = await res.json()
+      if (!res.ok) setSendResult({ ok: false, msg: data.message || data.error || 'Failed' })
+      else if (data.sent) setSendResult({ ok: true, msg: `Sent to ${data.to} — check the inbox (and spam).` })
+      else setSendResult({ ok: false, msg: data.message || 'Not sent — is SMTP configured in Settings → Email?' })
+    } catch (e) {
+      setSendResult({ ok: false, msg: e.message })
+    } finally {
+      setSending(false)
+    }
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,8,23,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#0F172A', border: '1px solid rgba(0,212,255,0.15)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
@@ -167,6 +191,15 @@ function WorkflowPreviewModal({ workflow, recipients, loading, error, onClose })
         </div>
 
         <div style={{ color: '#94A3B8', fontSize: 13, marginBottom: 16 }}>{workflow.desc}</div>
+
+        {!loading && !error && hasEmail && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <button onClick={sendTest} disabled={sending} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, color: '#4ADE80', fontSize: 12, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: sending ? 0.5 : 1 }}>
+              <Mail size={13} /> {sending ? 'Sending…' : 'Send test to my inbox'}
+            </button>
+            {sendResult && <span style={{ fontSize: 12, color: sendResult.ok ? '#86EFAC' : '#FCA5A5' }}>{sendResult.msg}</span>}
+          </div>
+        )}
 
         {loading && <div style={{ color: '#64748B', fontSize: 13 }}>Rendering preview…</div>}
         {error && <div style={{ color: '#FCA5A5', fontSize: 13, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: 12 }}>{error}</div>}
