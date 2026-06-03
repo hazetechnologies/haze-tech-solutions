@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { trackEvent } from '../lib/telemetry'
 
+const DEFAULT_GREETING = "Hey! I'm Haze, your AI assistant at Haze Tech Solutions. I can help with AI Automation, Social Media, Web Development, and SEO. What's your name and how can I help you today?"
+
 function ChatWidgetInner() {
   const [sessionId] = useState(() => {
     const stored = localStorage.getItem('haze_chat_session')
@@ -11,16 +13,46 @@ function ChatWidgetInner() {
     return id
   })
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState([
-    { role: 'assistant', text: "Hey! I'm Haze, your AI assistant at Haze Tech Solutions. I can help with AI Automation, Social Media, Web Development, and SEO. What's your name and how can I help you today?" }
-  ])
+  const [messages, setMessages] = useState([{ role: 'assistant', text: DEFAULT_GREETING }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [config, setConfig] = useState(null)        // { greeting, avatarUrl, followupEnabled, followupDelaySec, followupMessage }
+  const [followupFired, setFollowupFired] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Load admin-configured display config (greeting / avatar / follow-up).
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/chat').then(r => r.json()).then(cfg => {
+      if (cancelled || !cfg) return
+      setConfig(cfg)
+      // Swap in the configured greeting only if the visitor hasn't interacted yet.
+      if (cfg.greeting) {
+        setMessages(prev => (prev.length === 1 && prev[0].role === 'assistant'
+          ? [{ role: 'assistant', text: cfg.greeting }]
+          : prev))
+      }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // Idle follow-up: once per session, if the chat is open, the bot spoke last,
+  // and the visitor stays quiet past the configured delay, send one nudge.
+  useEffect(() => {
+    if (!open || followupFired || loading) return
+    if (!config?.followupEnabled) return
+    const last = messages[messages.length - 1]
+    if (!last || last.role !== 'assistant') return
+    const t = setTimeout(() => {
+      setMessages(prev => [...prev, { role: 'assistant', text: config.followupMessage || "Still there? Happy to help — just ask, or leave your email and we'll follow up." }])
+      setFollowupFired(true)
+    }, (config.followupDelaySec || 30) * 1000)
+    return () => clearTimeout(t)
+  }, [open, config, followupFired, loading, messages])
 
   async function sendMessage() {
     const text = input.trim()
@@ -75,8 +107,10 @@ function ChatWidgetInner() {
         background: 'rgba(0,212,255,0.06)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #00D4FF, #0099CC)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#020817" strokeWidth="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
+          <div style={{ width: 32, height: 32, borderRadius: 8, overflow: 'hidden', background: 'linear-gradient(135deg, #00D4FF, #0099CC)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {config?.avatarUrl
+              ? <img src={config.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#020817" strokeWidth="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>}
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#F1F5F9' }}>Haze AI</div>

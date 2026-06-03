@@ -19,11 +19,15 @@ const PERSONALITIES = [
 // Keys this page owns in admin_settings (so save doesn't touch unrelated keys).
 const CHATBOT_KEYS = [
   'chatbot_model',
+  'chatbot_avatar_url',
   'chatbot_system_prompt',
   'chatbot_greeting',
   'chatbot_personality',
   'chatbot_max_tokens',
   'chatbot_lead_capture',
+  'chatbot_followup_enabled',
+  'chatbot_followup_delay',
+  'chatbot_followup_message',
 ]
 
 export default function AdminChatbot() {
@@ -106,6 +110,24 @@ export default function AdminChatbot() {
             </div>
 
             <div>
+              <label style={styles.label}>Profile Image URL</label>
+              <p style={styles.fieldDesc}>Shown as the bot's avatar in the chat header. Paste a hosted image URL (e.g. your logo or an R2 public URL). Leave blank for the default icon.</p>
+              <input
+                type="text"
+                value={settings.chatbot_avatar_url || ''}
+                onChange={(e) => set('chatbot_avatar_url', e.target.value)}
+                placeholder="https://…/bot-avatar.png"
+                style={styles.input}
+              />
+              {settings.chatbot_avatar_url ? (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <img src={settings.chatbot_avatar_url} alt="avatar preview" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }} />
+                  <span style={{ fontSize: 11, color: '#64748B' }}>Preview</span>
+                </div>
+              ) : null}
+            </div>
+
+            <div>
               <label style={styles.label}>System Prompt</label>
               <p style={styles.fieldDesc}>The core instruction that defines the chatbot's identity and behavior</p>
               <textarea
@@ -162,6 +184,46 @@ export default function AdminChatbot() {
                 <span style={{ fontSize: '13px', color: '#94A3B8' }}>{settings.chatbot_lead_capture !== 'false' ? 'Enabled' : 'Disabled'}</span>
               </div>
             </div>
+
+            {/* Idle follow-up */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 18 }}>
+              <label style={styles.label}>Idle Follow-up</label>
+              <p style={styles.fieldDesc}>If a visitor opens the chat and then goes quiet, the bot sends one nudge after the delay below.</p>
+              <div
+                onClick={() => set('chatbot_followup_enabled', settings.chatbot_followup_enabled === 'true' ? 'false' : 'true')}
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', userSelect: 'none' }}
+              >
+                <div style={{ width: 44, height: 24, borderRadius: 12, position: 'relative', background: settings.chatbot_followup_enabled === 'true' ? 'rgba(0,212,255,0.4)' : 'rgba(255,255,255,0.1)', transition: 'background 0.2s' }}>
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', position: 'absolute', top: 3, left: settings.chatbot_followup_enabled === 'true' ? 23 : 3, background: settings.chatbot_followup_enabled === 'true' ? '#00D4FF' : '#475569', transition: 'left 0.2s, background 0.2s' }} />
+                </div>
+                <span style={{ fontSize: '13px', color: '#94A3B8' }}>{settings.chatbot_followup_enabled === 'true' ? 'Enabled' : 'Disabled'}</span>
+              </div>
+            </div>
+
+            {settings.chatbot_followup_enabled === 'true' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '14px' }}>
+                <div>
+                  <label style={styles.label}>Delay (seconds)</label>
+                  <input
+                    type="number"
+                    value={settings.chatbot_followup_delay || '30'}
+                    onChange={(e) => set('chatbot_followup_delay', e.target.value)}
+                    min="5" max="600"
+                    style={styles.input}
+                  />
+                </div>
+                <div>
+                  <label style={styles.label}>Follow-up Message</label>
+                  <input
+                    type="text"
+                    value={settings.chatbot_followup_message || ''}
+                    onChange={(e) => set('chatbot_followup_message', e.target.value)}
+                    placeholder="Still there? Happy to help — just ask, or leave your email and we'll follow up."
+                    style={styles.input}
+                  />
+                </div>
+              </div>
+            )}
 
             <button onClick={handleSave} disabled={saving} style={{ ...styles.saveBtn, opacity: saving ? 0.6 : 1 }}>
               {saving ? <><RefreshCw size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving...</> : <><Save size={15} /> Save chatbot settings</>}

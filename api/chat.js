@@ -1,6 +1,30 @@
 import { trackedOpenAi } from './_lib/tracked-openai.js'
 
 export default async function handler(req, res) {
+  // GET — public, display-safe chatbot config for the widget (greeting, avatar,
+  // idle follow-up). No secrets; safe for anonymous visitors.
+  if (req.method === 'GET') {
+    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const settings = {}
+    if (key) {
+      try {
+        const r = await fetch(`${url}/rest/v1/admin_settings?select=key,value&key=in.(chatbot_greeting,chatbot_avatar_url,chatbot_followup_enabled,chatbot_followup_delay,chatbot_followup_message)`, {
+          headers: { apikey: key, Authorization: `Bearer ${key}` },
+        })
+        const d = await r.json()
+        if (Array.isArray(d)) for (const s of d) settings[s.key] = s.value
+      } catch { /* fall back to widget defaults */ }
+    }
+    return res.status(200).json({
+      greeting: settings.chatbot_greeting || '',
+      avatarUrl: settings.chatbot_avatar_url || '',
+      followupEnabled: settings.chatbot_followup_enabled === 'true',
+      followupDelaySec: Math.max(5, parseInt(settings.chatbot_followup_delay) || 30),
+      followupMessage: settings.chatbot_followup_message || '',
+    })
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
