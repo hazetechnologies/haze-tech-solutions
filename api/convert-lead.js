@@ -1,4 +1,5 @@
 import { requireAdmin } from './_lib/require-admin.js'
+import { emitNotification } from './_lib/notifications.js'
 
 const SITE_URL = process.env.VITE_SITE_URL || 'https://www.hazetechsolutions.com'
 
@@ -158,6 +159,12 @@ async function runHandler(req, res) {
   if (leadUpdateErr) {
     console.warn(`convert-lead: client ${client.id} created but lead ${lead.id} update failed:`, leadUpdateErr.message)
   }
+
+  // Notify: welcome the client + alert admin of the new client. Best-effort.
+  await emitNotification(adminClient, 'client.created', {
+    client: { id: client.id, name, email: lead.email, company: company || null },
+    source: 'lead-convert',
+  })
 
   return res.status(200).json({
     client_id: client.id,

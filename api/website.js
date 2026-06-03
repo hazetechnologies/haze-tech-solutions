@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from './_lib/require-admin.js'
 import { getStripe, getSetting, siteUrl } from './_lib/stripe.js'
+import { emitNotification } from './_lib/notifications.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -36,6 +37,8 @@ export default async function handler(req, res) {
     case 'public-cart-checkout':return req.method === 'POST' ? publicCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-cart-checkout':return req.method === 'POST' ? portalCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-social':       return req.method === 'POST' ? portalSocial(req, res)     : methodNotAllowed(res, 'POST')
+    case 'cron-notify-status':  return req.method === 'GET'  ? cronNotifyStatus(req, res) : methodNotAllowed(res, 'GET')
+    case 'cron-admin-digest':   return req.method === 'GET'  ? cronAdminDigest(req, res)  : methodNotAllowed(res, 'GET')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -97,6 +100,79 @@ async function getProject(req, res) {
   return res.status(200).json(data)
 }
 
+// ─── Cron: notification status-watcher + daily admin digest ──────────────────
+
+function requireCron(req, res) {
+  const secret = process.env.CRON_SECRET
+  const auth = req.headers.authorization || ''
+  if (!secret || auth !== `Bearer ${secret}`) { res.status(401).json({ error: 'unauthorized' }); return false }
+  return true
+}
+
+// status value -> event type, per table. Terminal statuses are set by Supabase
+// edge functions (which can't call this code), so a cron watches for the
+// transition. notified_status guarantees each transition emits at most once.
+const STATUS_EVENTS = {
+  website_projects: { done: 'website.done', failed: 'website.failed' },
+  brand_kits:       { awaiting_logo_approval: 'brandkit.logos_ready', done: 'brandkit.done' },
+}
+
+// GET ?action=cron-notify-status — emit for rows whose status advanced past the
+// last-notified value. PostgREST can't compare two columns server-side, so we
+// fetch and filter status !== notified_status in JS.
+//
+// Known v1 limitation: only the CURRENT status is observed, so if a row advances
+// through two mapped statuses between 5-min polls (e.g. awaiting_logo_approval
+// -> done) only the latest emits. In practice awaiting_logo_approval pauses for
+// client approval (hours), so it is reliably caught by a poll.
+async function cronNotifyStatus(req, res) {
+  if (!requireCron(req, res)) return
+  const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+  let emitted = 0
+  for (const [table, map] of Object.entries(STATUS_EVENTS)) {
+    const { data: rows } = await sb.from(table)
+      .select('id, client_id, status, notified_status, clients(name, email)')
+      .limit(500)
+    for (const row of rows || []) {
+      if (!row.status || row.status === row.notified_status) continue
+      // Claim the transition atomically before emitting (optimistic CAS on the
+      // value we just read) so two overlapping cron runs can't both emit for
+      // the same change. This is at-most-once: claim then emit.
+      let claim = sb.from(table).update({ notified_status: row.status }).eq('id', row.id)
+      claim = row.notified_status == null ? claim.is('notified_status', null) : claim.eq('notified_status', row.notified_status)
+      const { data: won } = await claim.select('id')
+      if (!won || won.length === 0) continue // another run claimed it first
+      const evt = map[row.status]
+      if (evt) {
+        await emitNotification(sb, evt, {
+          clientId: row.client_id,
+          clientName: row.clients?.name,
+          clientEmail: row.clients?.email,
+        })
+        emitted++
+      }
+    }
+  }
+  return res.status(200).json({ ok: true, emitted })
+}
+
+// GET ?action=cron-admin-digest — once-daily rollup email of admin events.
+async function cronAdminDigest(req, res) {
+  if (!requireCron(req, res)) return
+  const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+  const { data: rows } = await sb.from('notifications')
+    .select('type, title, created_at')
+    .eq('audience', 'admin').gte('created_at', since)
+    .order('created_at', { ascending: false }).limit(100)
+  if (!rows || rows.length === 0) return res.status(200).json({ ok: true, sent: false })
+  const { sendEmail, wrapHtml } = await import('./_lib/email.js')
+  const list = rows.map(r => `<li>${new Date(r.created_at).toLocaleString()} — ${r.title}</li>`).join('')
+  const adminTo = (await getSetting('ADMIN_NOTIFY_EMAIL', 'ADMIN_NOTIFY_EMAIL')) || 'info@hazetechsolutions.com'
+  const status = await sendEmail({ to: adminTo, subject: `Haze Tech daily digest — ${rows.length} events`, html: wrapHtml('Daily digest', `<ul>${list}</ul>`) })
+  return res.status(200).json({ ok: true, sent: status === 'sent', count: rows.length })
+}
+
 // POST ?action=intake — client submits intake form
 async function intake(req, res) {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
@@ -131,7 +207,7 @@ async function intake(req, res) {
 
   const { data: project } = await adminClient
     .from('website_projects')
-    .select('id, status, client_id, clients!inner(user_id)')
+    .select('id, status, client_id, clients!inner(user_id, name)')
     .eq('id', project_id).maybeSingle()
   if (!project) return res.status(404).json({ error: 'not_found', message: 'Project not found' })
   if (project.clients.user_id !== caller.id) {
@@ -156,6 +232,12 @@ async function intake(req, res) {
     .update({ status: 'intake_submitted', template_id, inputs, updated_at: new Date().toISOString() })
     .eq('id', project_id)
   if (updErr) return res.status(500).json({ error: 'update_failed', message: updErr.message })
+
+  // Notify admin that intake is in and the scaffold can be generated. Best-effort.
+  await emitNotification(adminClient, 'website.intake_submitted', {
+    clientId: project.client_id,
+    clientName: project.clients?.name,
+  })
 
   return res.status(200).json({ ok: true })
 }
@@ -744,6 +826,11 @@ async function publicCheckout(req, res) {
     await rollback()
     return res.status(502).json({ error: 'stripe_failed', message: 'Could not start checkout — please try again.' })
   }
+  // Notify: welcome the new self-signup client + alert admin. Best-effort.
+  await emitNotification(adminClient, 'client.created', {
+    client: { id: client.id, name: client.name, email: client.email, company: company || null },
+    source: 'self-signup',
+  })
   return res.status(200).json({ ...result, client_id: client.id })
 }
 
@@ -995,6 +1082,11 @@ async function publicCartCheckout(req, res) {
     await rollback()
     return res.status(502).json({ error: 'stripe_failed', message: 'Could not start checkout — please try again.' })
   }
+  // Notify: welcome the new self-signup client + alert admin. Best-effort.
+  await emitNotification(adminClient, 'client.created', {
+    client: { id: client.id, name: client.name, email: client.email, company: company || null },
+    source: 'self-signup',
+  })
   return res.status(200).json({ ...result, client_id: client.id })
 }
 
