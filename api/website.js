@@ -60,7 +60,7 @@ async function activate(req, res) {
   if (!client_id) return res.status(400).json({ error: 'bad_request', message: 'client_id required' })
 
   const { data: client, error: clientErr } = await adminClient
-    .from('clients').select('id').eq('id', client_id).maybeSingle()
+    .from('clients').select('id, name, email').eq('id', client_id).maybeSingle()
   if (clientErr) return res.status(500).json({ error: 'db_error', message: clientErr.message })
   if (!client) return res.status(404).json({ error: 'not_found', message: 'Client not found' })
 
@@ -73,6 +73,13 @@ async function activate(req, res) {
   const { data: created, error: insertErr } = await adminClient
     .from('website_projects').insert({ client_id, status: 'intake_pending' }).select('id').single()
   if (insertErr) return res.status(500).json({ error: 'insert_failed', message: insertErr.message })
+
+  // Ask the client to complete their intake form (email + portal). Best-effort.
+  await emitNotification(adminClient, 'website.intake_requested', {
+    clientId: client_id,
+    clientName: client.name,
+    clientEmail: client.email,
+  })
 
   return res.status(200).json({ project_id: created.id })
 }
@@ -106,11 +113,12 @@ async function getProject(req, res) {
 // workflow: renders the registry templates with sample data so the admin can
 // see exactly what each recipient (client/admin) gets, including the email HTML.
 const PREVIEW_SAMPLE = {
-  client: { id: 'sample-client', name: 'Jane Doe', email: 'jane@example.com', company: 'Acme Co' },
+  client: { id: 'sample-client', name: 'Jane Doe', email: 'jane@example.com', company: 'Acme Co', product: 'Growth Plan', price: 499 },
   clientId: 'sample-client',
   clientName: 'Jane Doe',
   clientEmail: 'jane@example.com',
-  source: 'lead-convert',
+  source: 'admin',
+  setPasswordUrl: 'https://www.hazetechsolutions.com/portal/accept-invite#sample-token',
   amount: '499.00',
   planName: 'Growth Plan',
   error: 'Example: scaffold step timed out',

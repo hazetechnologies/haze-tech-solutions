@@ -6,7 +6,8 @@ import { supabase } from '../../lib/supabase'
 // registry in api/_lib/notification-registry.js (kept in sync by hand — these
 // are documentation of what is wired; the source of truth is the registry).
 const CATALOG = [
-  { type: 'client.created',            label: 'Welcome new client',        category: 'Welcome', client: 'email + in-app',  admin: 'email + in-app', desc: 'Fires when a client is created (lead-convert or self-signup).' },
+  { type: 'client.created',            label: 'Welcome new client',        category: 'Welcome', client: 'email + in-app',  admin: 'email + in-app', desc: 'Fires when a client is added (admin) or converted from a lead / self-signup. Admin-added clients get a set-password link.' },
+  { type: 'website.intake_requested',  label: 'Intake form sent',          category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Admin activates a website project — the client is asked to complete their intake form.' },
   { type: 'website.intake_submitted',  label: 'Website intake submitted',  category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'A client submits their website intake form.' },
   { type: 'website.done',              label: 'Website ready',             category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Website scaffold generation completes.' },
   { type: 'website.failed',            label: 'Website generation failed', category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'Website scaffold generation fails.' },

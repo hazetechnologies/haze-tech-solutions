@@ -18,7 +18,9 @@ export default function AcceptInvite() {
     // Supabase JS auto-detects session in URL hash. Parse properly to avoid
     // substring false-positives, then watch for SIGNED_IN to confirm.
     const params = new URLSearchParams((window.location.hash || '').replace(/^#/, ''))
-    const isInvite = params.get('type') === 'invite'
+    // Accept both invite (lead-convert) and recovery (admin add-client set/reset
+    // password) landings — both establish a session and let the user set a password.
+    const isSetPw = params.get('type') === 'invite' || params.get('type') === 'recovery'
 
     // Give the supabase client a brief moment to process the URL hash, then check session.
     // On slow networks, the listener may fire later — only mark 'invalid' if there's
@@ -27,25 +29,32 @@ export default function AcceptInvite() {
       if (cancelled) return
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        if (session && isInvite) {
+        if (session && isSetPw) {
           setView(v => (v === 'verifying' ? 'ready' : v))
-        } else if (session && !isInvite) {
+        } else if (session && !isSetPw) {
           // Already logged in (returning visitor) — bounce to portal
           navigate('/portal', { replace: true })
-        } else if (!isInvite) {
+        } else if (!isSetPw) {
           // No invite hash and no session — definitely not a valid invite landing
           setView('invalid')
         }
-        // else: isInvite but no session yet — wait for the listener
+        // else: isSetPw but no session yet — wait for the listener (fallback below)
       } catch (e) {
         console.error('AcceptInvite getSession failed:', e)
-        if (!isInvite) setView('invalid')
+        if (!isSetPw) setView('invalid')
       }
     }, 600)
 
+    // Fallback so a set-password landing whose link is expired or already used
+    // (session never arrives, SIGNED_IN never fires) doesn't hang on "Verifying…".
+    const fallback = setTimeout(() => {
+      if (cancelled) return
+      setView(v => (v === 'verifying' ? 'invalid' : v))
+    }, 6000)
+
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return
-      if (event === 'SIGNED_IN' && session && isInvite) {
+      if (event === 'SIGNED_IN' && session && isSetPw) {
         setView('ready')
       }
     })
@@ -53,6 +62,7 @@ export default function AcceptInvite() {
     return () => {
       cancelled = true
       clearTimeout(timer)
+      clearTimeout(fallback)
       sub.subscription.unsubscribe()
     }
   }, [navigate])

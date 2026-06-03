@@ -161,8 +161,9 @@ async function runHandler(req, res) {
   }
 
   // Notify: welcome the client + alert admin of the new client. Best-effort.
+  // No setPasswordUrl here: lead-convert uses Supabase's invite email for that.
   await emitNotification(adminClient, 'client.created', {
-    client: { id: client.id, name, email: lead.email, company: company || null },
+    client: { id: client.id, name, email: lead.email, company: company || null, product: productName, price: price != null && price !== '' ? Number(price) : null },
     source: 'lead-convert',
   })
 
