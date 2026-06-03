@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { effectivePrice } from '../../lib/pricing'
 import {
   Users, Plus, X, RefreshCw, AlertCircle, ChevronRight,
-  Mail, Phone,
+  Mail, Phone, Edit2, Trash2,
 } from 'lucide-react'
 
 export default function ClientManager() {
@@ -12,6 +12,7 @@ export default function ClientManager() {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [editClient, setEditClient] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
 
   const fetchClients = useCallback(async () => {
@@ -42,6 +43,28 @@ export default function ClientManager() {
   const handleCreated = (newClient) => {
     setClients(prev => [{ ...newClient, projects: [] }, ...prev])
     setShowModal(false)
+  }
+
+  const handleUpdated = (updated) => {
+    setClients(prev => prev.map(c => (c.id === updated.id ? { ...c, ...updated } : c)))
+    setEditClient(null)
+  }
+
+  const handleDelete = async (c) => {
+    if (!window.confirm(`Delete ${c.name}? This permanently removes their account, projects, brand kit, invoices, and notifications. This cannot be undone.`)) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/client?action=delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ id: c.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.message || j.error || 'Delete failed')
+      setClients(prev => prev.filter(x => x.id !== c.id))
+    } catch (e) {
+      alert('Delete failed: ' + e.message)
+    }
   }
 
   return (
@@ -101,9 +124,13 @@ export default function ClientManager() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
                     <div style={styles.avatar}>{(c.name || 'C')[0].toUpperCase()}</div>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '15px', fontWeight: 600, color: '#F1F5F9' }}>{c.name}</div>
                       {c.company && <div style={{ fontSize: '12px', color: '#64748B' }}>{c.company}</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button title="Edit" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditClient(c) }} style={styles.cardActionBtn}><Edit2 size={13} /></button>
+                      <button title="Delete" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(c) }} style={{ ...styles.cardActionBtn, color: '#F87171' }}><Trash2 size={13} /></button>
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: '#64748B', marginBottom: '14px' }}>
@@ -129,13 +156,17 @@ export default function ClientManager() {
         </div>
       )}
 
-      {showModal && <AddClientModal onClose={() => setShowModal(false)} onCreated={handleCreated} />}
+      {showModal && <ClientModal onClose={() => setShowModal(false)} onSaved={handleCreated} />}
+      {editClient && <ClientModal client={editClient} onClose={() => setEditClient(null)} onSaved={handleUpdated} />}
     </div>
   )
 }
 
-function AddClientModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', company: '', phone: '', product_id: '', subscription_plan_id: '', price: '' })
+function ClientModal({ client, onClose, onSaved }) {
+  const isEdit = !!client
+  const [form, setForm] = useState(() => client
+    ? { name: client.name || '', email: client.email || '', password: '', company: client.company || '', phone: client.phone || '', product_id: client.product_id || '', subscription_plan_id: client.subscription_plan_id || '', price: client.price ?? '' }
+    : { name: '', email: '', password: '', company: '', phone: '', product_id: '', subscription_plan_id: '', price: '' })
   const [products, setProducts] = useState([])
   const [plans, setPlans]       = useState([])
   const [saving, setSaving]     = useState(false)
@@ -185,23 +216,24 @@ function AddClientModal({ onClose, onCreated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.name || !form.email || !form.password) return
+    if (!form.name || !form.email || (!isEdit && !form.password)) return
     setSaving(true)
     setError(null)
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/create-client', {
+      const url = isEdit ? '/api/client?action=update' : '/api/create-client'
+      const body = isEdit
+        ? { id: client.id, name: form.name, company: form.company, phone: form.phone, product_id: form.product_id, subscription_plan_id: form.subscription_plan_id, price: form.price }
+        : form
+      const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(form),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify(body),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.message || result.error || 'Failed to create client')
-      onCreated(result.client)
+      if (!res.ok) throw new Error(result.message || result.error || (isEdit ? 'Failed to update client' : 'Failed to create client'))
+      onSaved(result.client)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -216,15 +248,15 @@ function AddClientModal({ onClose, onCreated }) {
     <div onClick={onClose} style={styles.overlay}>
       <div onClick={e => e.stopPropagation()} style={styles.modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h3 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '14px', fontWeight: 700, color: '#F1F5F9', letterSpacing: '0.06em', margin: 0 }}>Add New Client</h3>
+          <h3 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '14px', fontWeight: 700, color: '#F1F5F9', letterSpacing: '0.06em', margin: 0 }}>{isEdit ? 'Edit Client' : 'Add New Client'}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
             <Field label="Full Name *" value={form.name} onChange={v => set('name', v)} placeholder="John Smith" />
-            <Field label="Email *" value={form.email} onChange={v => set('email', v)} placeholder="john@company.com" type="email" />
-            <Field label="Password *" value={form.password} onChange={v => set('password', v)} placeholder="Temporary password" type="password" />
+            <Field label="Email *" value={form.email} onChange={v => set('email', v)} placeholder="john@company.com" type="email" disabled={isEdit} />
+            {!isEdit && <Field label="Password *" value={form.password} onChange={v => set('password', v)} placeholder="Temporary password" type="password" />}
             <Field label="Company" value={form.company} onChange={v => set('company', v)} placeholder="Acme Corp" />
             <Field label="Phone" value={form.phone} onChange={v => set('phone', v)} placeholder="+1 (555) 000-0000" />
 
@@ -255,9 +287,9 @@ function AddClientModal({ onClose, onCreated }) {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button type="button" onClick={onClose} style={styles.cancelBtn}>Cancel</button>
-            <button type="submit" disabled={saving || !form.name || !form.email || !form.password}
-              style={{ ...styles.saveBtn, opacity: saving || !form.name || !form.email || !form.password ? 0.5 : 1 }}>
-              {saving ? 'Creating...' : 'Create Client'}
+            <button type="submit" disabled={saving || !form.name || !form.email || (!isEdit && !form.password)}
+              style={{ ...styles.saveBtn, opacity: saving || !form.name || !form.email || (!isEdit && !form.password) ? 0.5 : 1 }}>
+              {saving ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Client')}
             </button>
           </div>
         </form>
@@ -266,13 +298,13 @@ function AddClientModal({ onClose, onCreated }) {
   )
 }
 
-function Field({ label, value, onChange, placeholder, type = 'text' }) {
+function Field({ label, value, onChange, placeholder, type = 'text', disabled = false }) {
   return (
     <div>
       <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>{label}</label>
       <input
-        type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '9px', padding: '10px 14px', color: '#F1F5F9', fontSize: '14px', fontFamily: "'Plus Jakarta Sans', sans-serif", outline: 'none', boxSizing: 'border-box' }}
+        type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+        style={{ width: '100%', background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '9px', padding: '10px 14px', color: disabled ? '#64748B' : '#F1F5F9', fontSize: '14px', fontFamily: "'Plus Jakarta Sans', sans-serif", outline: 'none', boxSizing: 'border-box', cursor: disabled ? 'not-allowed' : 'text' }}
       />
     </div>
   )
@@ -284,6 +316,7 @@ const styles = {
   iconBtn: { display: 'flex', alignItems: 'center', padding: '9px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '9px', color: '#64748B', cursor: 'pointer', transition: 'border-color 0.15s' },
   clientCard: { background: '#0F172A', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '20px', transition: 'border-color 0.15s', cursor: 'pointer' },
   avatar: { width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: '#00D4FF' },
+  cardActionBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, color: '#94A3B8', cursor: 'pointer' },
   overlay: { position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,8,23,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' },
   modal: { background: '#0F172A', border: '1px solid rgba(0,212,255,0.15)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' },
   cancelBtn: { padding: '9px 18px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '9px', color: '#94A3B8', fontSize: '13px', fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer' },

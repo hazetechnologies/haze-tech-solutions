@@ -4,7 +4,7 @@ import ConvertLeadModal from './components/ConvertLeadModal'
 import {
   Users, Search, Download, RefreshCw, AlertCircle,
   ChevronDown, FileX, Filter, BarChart2, X, ExternalLink, FileText,
-  CheckCircle2, UserPlus,
+  CheckCircle2, UserPlus, Edit2, Trash2,
 } from 'lucide-react'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -327,6 +327,60 @@ function AutomationReportModal({ lead, onClose }) {
 
 // ─── main component ───────────────────────────────────────────────────────────
 
+const leadActionBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, color: '#94A3B8', cursor: 'pointer' }
+
+function EditLeadModal({ lead, onClose, onSaved }) {
+  const [form, setForm] = useState({ name: lead.name || '', email: lead.email || '', business_name: lead.business_name || '', service_interest: lead.service_interest || '' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  const save = async (e) => {
+    e.preventDefault()
+    setSaving(true); setError(null)
+    try {
+      const patch = {
+        name: form.name || null,
+        email: form.email || null,
+        business_name: form.business_name || null,
+        service_interest: form.service_interest || null,
+      }
+      const { error: err } = await supabase.from('leads').update(patch).eq('id', lead.id)
+      if (err) throw err
+      onSaved({ id: lead.id, ...patch })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputStyle = { width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, padding: '10px 14px', color: '#F1F5F9', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#0F172A', border: '1px solid rgba(0,212,255,0.2)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420, boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#F1F5F9' }}>Edit Lead</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569' }}><X size={18} /></button>
+        </div>
+        <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div><label style={labelStyle}>Name</label><input value={form.name} onChange={e => set('name', e.target.value)} style={inputStyle} /></div>
+          <div><label style={labelStyle}>Email</label><input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={inputStyle} /></div>
+          <div><label style={labelStyle}>Business</label><input value={form.business_name} onChange={e => set('business_name', e.target.value)} style={inputStyle} /></div>
+          <div><label style={labelStyle}>Service Interest</label><input value={form.service_interest} onChange={e => set('service_interest', e.target.value)} placeholder="e.g. AI Automation" style={inputStyle} /></div>
+          {error && <div style={{ color: '#FCA5A5', fontSize: 12 }}>{error}</div>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" onClick={onClose} style={{ padding: '9px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, color: '#94A3B8', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>Cancel</button>
+            <button type="submit" disabled={saving} style={{ padding: '9px 16px', background: 'linear-gradient(135deg, #00D4FF, #0099CC)', border: 'none', borderRadius: 9, color: '#020817', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save Changes'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function Leads() {
   const [leads, setLeads]           = useState([])
   const [loading, setLoading]       = useState(true)
@@ -335,6 +389,7 @@ export default function Leads() {
   const [selectedAudit, setSelectedAudit] = useState(null)
   const [selectedReport, setSelectedReport] = useState(null)
   const [convertingLead, setConvertingLead] = useState(null)
+  const [editingLead, setEditingLead] = useState(null)
 
   // filters
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -371,6 +426,18 @@ export default function Leads() {
     setLeads(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l))
   }
 
+  async function handleDelete(lead) {
+    if (!window.confirm(`Delete lead "${lead.name || lead.email || 'this lead'}"? This cannot be undone.`)) return
+    const { error: delErr } = await supabase.from('leads').delete().eq('id', lead.id)
+    if (delErr) { alert('Delete failed: ' + delErr.message); return }
+    setLeads(prev => prev.filter(l => l.id !== lead.id))
+  }
+
+  function handleEdited(updated) {
+    setLeads(prev => prev.map(l => (l.id === updated.id ? { ...l, ...updated } : l)))
+    setEditingLead(null)
+  }
+
   // derived filtered list
   const filtered = leads.filter(l => {
     if (sourceFilter !== 'all' && (l.source || 'contact') !== sourceFilter) return false
@@ -394,6 +461,7 @@ export default function Leads() {
 
       <AuditScoresModal lead={selectedAudit} onClose={() => setSelectedAudit(null)} />
       <AutomationReportModal lead={selectedReport} onClose={() => setSelectedReport(null)} />
+      {editingLead && <EditLeadModal lead={editingLead} onClose={() => setEditingLead(null)} onSaved={handleEdited} />}
       <ConvertLeadModal
         lead={convertingLead}
         onClose={() => setConvertingLead(null)}
@@ -592,6 +660,10 @@ export default function Leads() {
                           <FileText size={12} /> AI Plan
                         </button>
                       )}
+                      <div style={{ display: 'inline-flex', gap: 4, marginLeft: 4 }}>
+                        <button onClick={() => setEditingLead(lead)} title="Edit lead" style={leadActionBtn}><Edit2 size={12} /></button>
+                        <button onClick={() => handleDelete(lead)} title="Delete lead" style={{ ...leadActionBtn, color: '#F87171' }}><Trash2 size={12} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))
