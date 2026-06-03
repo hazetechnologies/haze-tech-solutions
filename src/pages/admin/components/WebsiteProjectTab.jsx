@@ -11,12 +11,26 @@ export default function WebsiteProjectTab({ client }) {
 
   useEffect(() => { loadProject() }, [client.id])
 
+  // Load via the admin server endpoint (service role) rather than a direct
+  // browser read: website_projects RLS only lets a client read its OWN row, so
+  // an admin viewing a client's profile reads zero rows. Going through
+  // requireAdmin mirrors the ?action=status poll below and is what makes the
+  // re-read after Activate actually surface the new project.
   async function loadProject() {
     setLoading(true)
-    const { data } = await supabase
-      .from('website_projects').select('*').eq('client_id', client.id).maybeSingle()
-    setProject(data)
-    setLoading(false)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/website?action=get-project&client_id=${client.id}`, {
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      })
+      if (res.status === 404) { setProject(null); return }  // no project yet — expected
+      const data = await res.json().catch(() => null)
+      setProject(res.ok ? data : null)
+    } catch {
+      setProject(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Poll while generating/pending
