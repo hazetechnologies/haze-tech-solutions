@@ -1,0 +1,119 @@
+import { useEffect, useState, useCallback } from 'react'
+import { Workflow, Check, Mail, Bell } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+
+// Catalog of the configured notification automations. Mirrors the server-side
+// registry in api/_lib/notification-registry.js (kept in sync by hand — these
+// are documentation of what is wired, the source of truth is the registry).
+const CATALOG = [
+  { type: 'client.created',            label: 'Welcome new client',        category: 'Welcome', client: 'email + in-app',  admin: 'email + in-app', desc: 'Fires when a client is created (lead-convert or self-signup).' },
+  { type: 'website.intake_submitted',  label: 'Website intake submitted',  category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'A client submits their website intake form.' },
+  { type: 'website.done',              label: 'Website ready',             category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Website scaffold generation completes.' },
+  { type: 'website.failed',            label: 'Website generation failed', category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'Website scaffold generation fails.' },
+  { type: 'brandkit.logos_ready',      label: 'Logos ready to approve',    category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Brand-kit logos are generated and awaiting client approval.' },
+  { type: 'brandkit.done',             label: 'Brand kit ready',           category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Full brand kit generation completes.' },
+  { type: 'invoice.paid',              label: 'Payment received',          category: 'Payment', client: 'email + in-app',  admin: 'email + in-app', desc: 'A tracked invoice is paid (Stripe).' },
+  { type: 'subscription.created',      label: 'New subscription',          category: 'Payment', client: 'in-app',          admin: 'email + in-app', desc: 'A client starts a subscription (Stripe checkout).' },
+]
+
+const CAT_COLOR = { Welcome: '#4ADE80', Status: '#00CFFF', Payment: '#FCD34D' }
+
+export default function AdminWorkflows() {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, type, title, body, link, read_at, created_at')
+      .eq('audience', 'admin')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    setItems(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const markRead = async (id) => {
+    const now = new Date().toISOString()
+    await supabase.from('notifications').update({ read_at: now }).eq('id', id)
+    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, read_at: now } : p)))
+  }
+  const markAll = async () => {
+    const ids = items.filter((i) => !i.read_at).map((i) => i.id)
+    if (!ids.length) return
+    await supabase.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids)
+    load()
+  }
+  const unread = items.filter((i) => !i.read_at).length
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <div>
+        <h2 style={{ color: '#F1F5F9', fontSize: 18, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Workflow size={18} color="#00CFFF" /> Workflows &amp; Automations
+        </h2>
+        <p style={{ fontSize: 13, color: '#475569', margin: '4px 0 0' }}>Event-driven client + admin notifications across email and in-app. Add an event in the notification registry to extend.</p>
+      </div>
+
+      {/* Catalog of active automations */}
+      <div>
+        <div style={{ color: '#94A3B8', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Active automations ({CATALOG.length})</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {CATALOG.map((w) => (
+            <div key={w.type} style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+              <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 999, background: '#22C55E' }} title="Active" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#F1F5F9', fontSize: 14, fontWeight: 600 }}>{w.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: CAT_COLOR[w.category], background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{w.category}</span>
+                </div>
+                <div style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{w.desc}</div>
+              </div>
+              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: '#94A3B8', minWidth: 150 }}>
+                <span>Client: <span style={{ color: w.client === '—' ? '#475569' : '#CBD5E1' }}>{w.client}</span></span>
+                <span>Admin: <span style={{ color: w.admin === '—' ? '#475569' : '#CBD5E1' }}>{w.admin}</span></span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#475569' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Mail size={12} /> email sent when SMTP is configured (Settings → Email)</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Bell size={12} /> in-app = admin feed below + client portal bell</span>
+        </div>
+      </div>
+
+      {/* Recent activity (the admin event log) */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ color: '#94A3B8', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Recent activity {unread > 0 && <span style={{ color: '#00CFFF' }}>· {unread} unread</span>}
+          </div>
+          {unread > 0 && <button onClick={markAll} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#CBD5E1', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Mark all read</button>}
+        </div>
+        {loading && <div style={{ color: '#64748B', fontSize: 13 }}>Loading…</div>}
+        {!loading && items.length === 0 && <div style={{ color: '#64748B', fontSize: 13, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 16 }}>No activity yet. Events appear here as the automations above fire.</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map((it) => (
+            <div key={it.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: it.read_at ? 'rgba(255,255,255,0.02)' : 'rgba(0,212,255,0.06)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: '#F1F5F9', fontSize: 14, fontWeight: it.read_at ? 500 : 700 }}>{it.title}</div>
+                <div style={{ color: '#94A3B8', fontSize: 12.5, marginTop: 2 }}>{it.body}</div>
+                <div style={{ color: '#475569', fontSize: 11, marginTop: 4 }}>
+                  {it.type} · {new Date(it.created_at).toLocaleString()}
+                  {it.link ? <> · <a href={it.link} style={{ color: '#7DD3FC' }}>{it.link}</a></> : null}
+                </div>
+              </div>
+              {!it.read_at && (
+                <button onClick={() => markRead(it.id)} title="Mark read" style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: 6, cursor: 'pointer', color: '#22C55E' }}>
+                  <Check size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}

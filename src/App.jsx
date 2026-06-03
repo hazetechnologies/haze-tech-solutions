@@ -20,11 +20,11 @@ import ClientDetail    from './pages/admin/ClientDetail'
 import ProductsManager from './pages/admin/ProductsManager'
 import Settings           from './pages/admin/Settings'
 import BusinessInfo       from './pages/admin/BusinessInfo'
-import FaqManager         from './pages/admin/FaqManager'
+import AdminChatbot       from './pages/admin/AdminChatbot'
 import AutomationTriggers from './pages/admin/AutomationTriggers'
 import SocialAudits       from './pages/admin/SocialAudits'
 import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
-import AdminNotifications from './pages/admin/AdminNotifications'
+import AdminWorkflows     from './pages/admin/AdminWorkflows'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
@@ -89,9 +89,9 @@ export default function App() {
             <Route path="products"        element={<ProductsManager />} />
             <Route path="settings"        element={<Settings />} />
             <Route path="business-info"   element={<BusinessInfo />} />
-            <Route path="faqs"            element={<FaqManager />} />
+            <Route path="chatbot"         element={<AdminChatbot />} />
             <Route path="triggers"        element={<AutomationTriggers />} />
-            <Route path="notifications"   element={<AdminNotifications />} />
+            <Route path="workflows"       element={<AdminWorkflows />} />
             <Route path="social-audits"   element={<SocialAudits />} />
             <Route path="social-audits/:id" element={<SocialAuditDetail />} />
           </Route>
