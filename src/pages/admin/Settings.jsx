@@ -18,6 +18,29 @@ export default function Settings() {
   const [showKey, setShowKey] = useState(false)
   const [stripeTest, setStripeTest] = useState(null)   // null | { ok, … } | { ok: false, message }
   const [stripeTesting, setStripeTesting] = useState(false)
+  const [emailTestTo, setEmailTestTo] = useState('')
+  const [emailTesting, setEmailTesting] = useState(false)
+  const [emailTestResult, setEmailTestResult] = useState(null)
+
+  async function sendTestEmail() {
+    setEmailTesting(true); setEmailTestResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=send-test-email', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: emailTestTo || undefined }),
+      })
+      const json = await res.json()
+      if (!res.ok) setEmailTestResult({ ok: false, message: json.message || json.error || 'Failed' })
+      else if (json.sent) setEmailTestResult({ ok: true, message: `Test email sent to ${json.to}. Check the inbox (and spam).` })
+      else setEmailTestResult({ ok: false, message: json.status === 'skipped' ? 'SMTP not configured — fill the fields above and Save first.' : 'Send failed — double-check the SMTP host / port / user / password.' })
+    } catch (e) {
+      setEmailTestResult({ ok: false, message: e.message })
+    } finally {
+      setEmailTesting(false)
+    }
+  }
 
   async function testStripeConnection() {
     setStripeTesting(true); setStripeTest(null)
@@ -181,6 +204,27 @@ export default function Settings() {
           <p style={{ fontSize: 12, color: '#64748B', margin: 0, lineHeight: 1.5 }}>
             Until these are filled, notifications still appear in-app (Workflows + client portal) but no emails send. The 5-minute status cron + daily digest also need a <code style={{ color: '#94A3B8' }}>CRON_SECRET</code> set as a Vercel environment variable.
           </p>
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={styles.label}>Send a test email</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="email" value={emailTestTo} onChange={e => setEmailTestTo(e.target.value)} placeholder="you@example.com (defaults to the admin email)" style={{ ...styles.input, flex: 1 }} />
+              <button type="button" onClick={sendTestEmail} disabled={emailTesting} style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px',
+                background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8,
+                color: '#4ADE80', fontSize: 12, fontWeight: 600, cursor: emailTesting ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', opacity: emailTesting ? 0.5 : 1, whiteSpace: 'nowrap',
+              }}>
+                {emailTesting ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Sending…</> : <><Mail size={13} /> Send test</>}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: '#475569', margin: 0 }}>Uses your saved SMTP settings — Save above first if you just changed them. Tip: preview &amp; send any specific template from Admin → Workflows.</p>
+            {emailTestResult && (
+              <div style={{ fontSize: 12, color: emailTestResult.ok ? '#86EFAC' : '#FCA5A5', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                {emailTestResult.ok ? <CheckCircle size={14} style={{ marginTop: 1, flexShrink: 0 }} /> : <AlertCircle size={14} style={{ marginTop: 1, flexShrink: 0 }} />} {emailTestResult.message}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
