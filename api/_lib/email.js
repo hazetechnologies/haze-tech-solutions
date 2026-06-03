@@ -27,18 +27,28 @@ async function getTransport() {
   return cached
 }
 
+// Escape dynamic text before interpolating into email HTML. Email clients don't
+// run scripts, but unescaped lead/client-supplied values (name, company, error)
+// could otherwise break the table/layout. href is NOT escaped — links are
+// first-party (our own action links + constants) and escaping would mangle query
+// params.
+export function escapeHtml(s) {
+  if (s == null) return ''
+  return String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))
+}
+
 // A branded CTA button for use inside email bodies. Returns '' when href is falsy.
 export function button(href, label) {
   if (!href) return ''
   return `<table cellpadding="0" cellspacing="0" style="margin:20px 0"><tr><td style="border-radius:9px;background:#00CFFF">
-    <a href="${href}" style="display:inline-block;padding:13px 24px;color:#021018;text-decoration:none;border-radius:9px;font-weight:700;font-size:14px">${label}</a>
+    <a href="${href}" style="display:inline-block;padding:13px 24px;color:#021018;text-decoration:none;border-radius:9px;font-weight:700;font-size:14px">${escapeHtml(label || 'Open')}</a>
   </td></tr></table>`
 }
 
 // A small key/value detail table (e.g. plan, price, company). rows = [[label, value], …]
 export function detailTable(rows) {
   const body = (rows || []).filter(([, v]) => v != null && v !== '').map(
-    ([k, v]) => `<tr><td style="color:#94a3b8;padding:5px 16px 5px 0;font-size:13px;white-space:nowrap">${k}</td><td style="color:#f1f5f9;font-size:13px">${v}</td></tr>`
+    ([k, v]) => `<tr><td style="color:#94a3b8;padding:5px 16px 5px 0;font-size:13px;white-space:nowrap">${escapeHtml(k)}</td><td style="color:#f1f5f9;font-size:13px">${escapeHtml(v)}</td></tr>`
   ).join('')
   return body ? `<table cellpadding="0" cellspacing="0" style="margin:12px 0 4px">${body}</table>` : ''
 }

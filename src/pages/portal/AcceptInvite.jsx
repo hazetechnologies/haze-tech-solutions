@@ -38,12 +38,19 @@ export default function AcceptInvite() {
           // No invite hash and no session — definitely not a valid invite landing
           setView('invalid')
         }
-        // else: isSetPw but no session yet — wait for the listener
+        // else: isSetPw but no session yet — wait for the listener (fallback below)
       } catch (e) {
         console.error('AcceptInvite getSession failed:', e)
         if (!isSetPw) setView('invalid')
       }
     }, 600)
+
+    // Fallback so a set-password landing whose link is expired or already used
+    // (session never arrives, SIGNED_IN never fires) doesn't hang on "Verifying…".
+    const fallback = setTimeout(() => {
+      if (cancelled) return
+      setView(v => (v === 'verifying' ? 'invalid' : v))
+    }, 6000)
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return
@@ -55,6 +62,7 @@ export default function AcceptInvite() {
     return () => {
       cancelled = true
       clearTimeout(timer)
+      clearTimeout(fallback)
       sub.subscription.unsubscribe()
     }
   }, [navigate])

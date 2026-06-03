@@ -2,7 +2,7 @@
 // Event type -> recipients. Each recipient has an audience, an async
 // resolveTo(adminClient, payload) returning the email address (or null to skip
 // email / in-app only), and render(payload) returning the in-app + email copy.
-import { wrapHtml, button, detailTable } from './email.js'
+import { wrapHtml, button, detailTable, escapeHtml as esc } from './email.js'
 import { getSetting } from './stripe.js'
 
 const ADMIN_FALLBACK = 'info@hazetechsolutions.com'
@@ -40,8 +40,8 @@ export const REGISTRY = {
           body: `Your client portal is ready${c.company ? ` for ${c.company}` : ''}. Track your projects, brand kit, and invoices in one place.`,
           link: '/portal/dashboard',
           emailSubject: 'Welcome to Haze Tech Solutions 🎉',
-          emailHtml: wrapHtml(`Welcome aboard, ${c.name || 'there'}! 🎉`,
-            `<p>We're thrilled to be working with you${c.company ? ` and the team at <b>${c.company}</b>` : ''}.</p>${table}${cta}<p style="color:#94a3b8;font-size:13px;margin-top:8px">Inside your portal you can follow your website project, approve your brand kit, view invoices, and message us. Questions? Just reply to this email.</p>`),
+          emailHtml: wrapHtml(`Welcome aboard, ${esc(c.name) || 'there'}! 🎉`,
+            `<p>We're thrilled to be working with you${c.company ? ` and the team at <b>${esc(c.company)}</b>` : ''}.</p>${table}${cta}<p style="color:#94a3b8;font-size:13px;margin-top:8px">Inside your portal you can follow your website project, approve your brand kit, view invoices, and message us. Questions? Just reply to this email.</p>`),
         }
       },
     },
@@ -76,7 +76,7 @@ export const REGISTRY = {
         body: 'We\'ve started your website project — fill out the quick intake form so we can begin.',
         link: '/portal/website-intake',
         emailSubject: 'Please complete your website intake',
-        emailHtml: wrapHtml(`Let's build your website, ${p.clientName || 'there'}!`,
+        emailHtml: wrapHtml(`Let's build your website, ${esc(p.clientName) || 'there'}!`,
           `<p>We've set up your website project. To get started, complete the short intake form — it covers your pages, services, and style preferences.</p>${button('https://www.hazetechsolutions.com/portal/website-intake', 'Complete intake form')}<p style="color:#94a3b8;font-size:13px">It only takes a couple of minutes. Reply here if you have any questions.</p>`),
       }),
     },
@@ -101,7 +101,7 @@ export const REGISTRY = {
         link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
         emailSubject: `Website intake submitted${p.clientName ? ` — ${p.clientName}` : ''}`,
         emailHtml: wrapHtml('Intake submitted',
-          `<p><b>${p.clientName || 'A client'}</b> submitted their website intake. You can generate the scaffold whenever you're ready.</p>${button(p.clientId ? `https://www.hazetechsolutions.com/admin/clients/${p.clientId}` : 'https://www.hazetechsolutions.com/admin/clients', 'Review intake')}`),
+          `<p><b>${esc(p.clientName) || 'A client'}</b> submitted their website intake. You can generate the scaffold whenever you're ready.</p>${button(p.clientId ? `https://www.hazetechsolutions.com/admin/clients/${p.clientId}` : 'https://www.hazetechsolutions.com/admin/clients', 'Review intake')}`),
       }),
     },
   ],
@@ -115,7 +115,7 @@ export const REGISTRY = {
         body: 'Your website project has finished generating. Reach out to your team for next steps.',
         link: '/portal/dashboard',
         emailSubject: 'Your website is ready 🎉',
-        emailHtml: wrapHtml(`Great news, ${p.clientName || 'there'} — your website is ready! 🎉`,
+        emailHtml: wrapHtml(`Great news, ${esc(p.clientName) || 'there'} — your website is ready! 🎉`,
           `<p>Your website project has finished generating. Log in to your portal to see what's next.</p>${button('https://www.hazetechsolutions.com/portal/dashboard', 'View in portal')}`),
       }),
     },
@@ -140,7 +140,7 @@ export const REGISTRY = {
         link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
         emailSubject: 'Website generation failed',
         emailHtml: wrapHtml('Website generation failed',
-          `<p>Scaffold generation failed for <b>${p.clientName || p.clientId}</b>.</p>${detailTable([['Error', p.error]])}${button(p.clientId ? `https://www.hazetechsolutions.com/admin/clients/${p.clientId}` : 'https://www.hazetechsolutions.com/admin/clients', 'Open client')}`),
+          `<p>Scaffold generation failed for <b>${esc(p.clientName || p.clientId)}</b>.</p>${detailTable([['Error', p.error]])}${button(p.clientId ? `https://www.hazetechsolutions.com/admin/clients/${p.clientId}` : 'https://www.hazetechsolutions.com/admin/clients', 'Open client')}`),
       }),
     },
   ],
@@ -154,7 +154,7 @@ export const REGISTRY = {
         body: 'Pick your favorite logo in the portal to kick off banner generation.',
         link: '/portal/brand-kit',
         emailSubject: 'Your logos are ready — pick your favorite',
-        emailHtml: wrapHtml(`Your logo options are ready, ${p.clientName || 'there'}!`,
+        emailHtml: wrapHtml(`Your logo options are ready, ${esc(p.clientName) || 'there'}!`,
           `<p>We've generated your logo concepts. Choose your favorite in the portal and we'll generate the rest of your brand kit (banners, etc.) from it.</p>${button('https://www.hazetechsolutions.com/portal/brand-kit', 'Choose your logo')}`),
       }),
     },
@@ -178,7 +178,7 @@ export const REGISTRY = {
         body: 'Your full brand kit has been generated. View and download it in the portal.',
         link: '/portal/brand-kit',
         emailSubject: 'Your brand kit is ready 🎨',
-        emailHtml: wrapHtml(`Your brand kit is ready, ${p.clientName || 'there'}! 🎨`,
+        emailHtml: wrapHtml(`Your brand kit is ready, ${esc(p.clientName) || 'there'}! 🎨`,
           `<p>Your complete brand kit — logos, banners, and assets — is done. View and download everything from your portal.</p>${button('https://www.hazetechsolutions.com/portal/brand-kit', 'View your brand kit')}`),
       }),
     },
@@ -202,7 +202,7 @@ export const REGISTRY = {
         body: `We received your payment${p.amount ? ` of ${money(p.amount)}` : ''}.`,
         link: '/portal/invoices',
         emailSubject: 'Payment received — thank you',
-        emailHtml: wrapHtml(`Thank you, ${p.clientName || 'there'}!`,
+        emailHtml: wrapHtml(`Thank you, ${esc(p.clientName) || 'there'}!`,
           `<p>We've received your payment — thank you.</p>${detailTable([['Amount', money(p.amount)], ['Plan', p.planName]])}${button('https://www.hazetechsolutions.com/portal/invoices', 'View invoices')}`),
       }),
     },
@@ -215,7 +215,7 @@ export const REGISTRY = {
         link: '/admin/invoices',
         emailSubject: `Payment received${p.amount ? ` — ${money(p.amount)}` : ''}`,
         emailHtml: wrapHtml('Payment received',
-          `<p><b>${p.clientName || p.clientEmail || 'A client'}</b> paid an invoice.</p>${detailTable([['Amount', money(p.amount)], ['Client', p.clientEmail]])}`),
+          `<p><b>${esc(p.clientName || p.clientEmail || 'A client')}</b> paid an invoice.</p>${detailTable([['Amount', money(p.amount)], ['Client', p.clientEmail]])}`),
       }),
     },
   ],
@@ -239,7 +239,7 @@ export const REGISTRY = {
         link: '/admin/clients',
         emailSubject: 'New subscription',
         emailHtml: wrapHtml('New subscription',
-          `<p><b>${p.clientName || p.clientEmail || 'A client'}</b> started a subscription.</p>${detailTable([['Plan', p.planName], ['Client', p.clientEmail]])}`),
+          `<p><b>${esc(p.clientName || p.clientEmail || 'A client')}</b> started a subscription.</p>${detailTable([['Plan', p.planName], ['Client', p.clientEmail]])}`),
       }),
     },
   ],
