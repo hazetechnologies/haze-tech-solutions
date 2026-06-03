@@ -6,6 +6,7 @@ import {
   LogOut, ExternalLink, ChevronRight, Share2,
 } from 'lucide-react'
 import { useCart } from '../../lib/cart'
+import NotificationBell from '../../components/NotificationBell'
 
 const NAV = [
   { to: '/portal/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
@@ -95,17 +96,20 @@ export default function PortalLayout() {
       {/* Main content */}
       <div style={{ marginLeft: 240 }}>
         <header style={styles.header}>
-          <div>
-            <h1 style={styles.pageTitle}>{crumbs[crumbs.length - 1] || 'Dashboard'}</h1>
-            <div style={styles.breadcrumbs}>
-              <span style={styles.crumb}>Portal</span>
-              {crumbs.map((c, i) => (
-                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <ChevronRight size={12} color="#334155" />
-                  <span style={{ ...styles.crumb, ...(i === crumbs.length - 1 ? { color: '#00D4FF' } : {}) }}>{c}</span>
-                </span>
-              ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <h1 style={styles.pageTitle}>{crumbs[crumbs.length - 1] || 'Dashboard'}</h1>
+              <div style={styles.breadcrumbs}>
+                <span style={styles.crumb}>Portal</span>
+                {crumbs.map((c, i) => (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ChevronRight size={12} color="#334155" />
+                    <span style={{ ...styles.crumb, ...(i === crumbs.length - 1 ? { color: '#00D4FF' } : {}) }}>{c}</span>
+                  </span>
+                ))}
+              </div>
             </div>
+            <NotificationBell />
           </div>
         </header>
 

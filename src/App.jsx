@@ -24,6 +24,7 @@ import FaqManager         from './pages/admin/FaqManager'
 import AutomationTriggers from './pages/admin/AutomationTriggers'
 import SocialAudits       from './pages/admin/SocialAudits'
 import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
+import AdminNotifications from './pages/admin/AdminNotifications'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="business-info"   element={<BusinessInfo />} />
             <Route path="faqs"            element={<FaqManager />} />
             <Route path="triggers"        element={<AutomationTriggers />} />
+            <Route path="notifications"   element={<AdminNotifications />} />
             <Route path="social-audits"   element={<SocialAudits />} />
             <Route path="social-audits/:id" element={<SocialAuditDetail />} />
           </Route>
