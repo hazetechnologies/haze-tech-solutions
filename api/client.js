@@ -44,8 +44,12 @@ async function updateClient(req, res, adminClient) {
     patch.subscription_plan_id = subscription_plan_id || null
     let planTerms = null
     if (subscription_plan_id) {
-      const { data: plan } = await adminClient.from('subscription_plans').select('billing_cycle').eq('id', subscription_plan_id).maybeSingle()
+      const { data: plan } = await adminClient.from('subscription_plans').select('billing_cycle, product_id').eq('id', subscription_plan_id).maybeSingle()
       if (!plan) return res.status(400).json({ error: 'bad_request', message: 'subscription_plan_id not found' })
+      // A product-scoped plan must match the submitted product (mirrors create-client).
+      if (plan.product_id && product_id !== undefined && plan.product_id !== (product_id || null)) {
+        return res.status(400).json({ error: 'plan_product_mismatch', message: 'Selected plan does not belong to the selected product' })
+      }
       planTerms = plan.billing_cycle
     }
     patch.subscription_terms = planTerms
