@@ -1,7 +1,7 @@
 // api/website.js
 // Consolidated router for cross-feature endpoints, dispatched by ?action=.
 // Reduces serverless-function count (Hobby plan caps at 12).
-// Currently hosts: website-funnel (activate/intake/start/status),
+// Currently hosts: website-funnel (activate/get-project/intake/start/status),
 // brand-kit logo approval (approve-logo), and Stripe billing
 // (stripe-checkout/stripe-portal/stripe-send-invoice/public-checkout/portal-checkout).
 // The Stripe webhook lives separately (api/stripe-webhook.js) because it
@@ -19,6 +19,7 @@ export default async function handler(req, res) {
   const action = (req.query?.action || '').toString()
   switch (action) {
     case 'activate':            return req.method === 'POST' ? activate(req, res)         : methodNotAllowed(res, 'POST')
+    case 'get-project':         return req.method === 'GET'  ? getProject(req, res)       : methodNotAllowed(res, 'GET')
     case 'intake':              return req.method === 'POST' ? intake(req, res)           : methodNotAllowed(res, 'POST')
     case 'start':               return req.method === 'POST' ? start(req, res)            : methodNotAllowed(res, 'POST')
     case 'status':              return req.method === 'GET'  ? status(req, res)           : methodNotAllowed(res, 'GET')
@@ -69,6 +70,31 @@ async function activate(req, res) {
   if (insertErr) return res.status(500).json({ error: 'insert_failed', message: insertErr.message })
 
   return res.status(200).json({ project_id: created.id })
+}
+
+// GET ?action=get-project&client_id=<id> — admin loads a client's website
+// project. Reads via the service-role client so it is NOT subject to the
+// website_projects RLS (whose only SELECT policy scopes reads to the client
+// that OWNS the row). The admin browser owns no client row, so a direct
+// browser read returns zero rows — which previously made "Activate" appear to
+// do nothing (insert succeeded via service role, re-read via browser RLS came
+// back empty). 404 = no project yet (an expected state, not an error).
+async function getProject(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { adminClient } = ctx
+
+  const client_id = (req.query?.client_id || '').toString()
+  if (!client_id) return res.status(400).json({ error: 'bad_request', message: 'client_id required' })
+
+  const { data, error } = await adminClient
+    .from('website_projects')
+    .select('id, client_id, status, progress_message, repo_url, repo_name, error, ai_content, inputs, template_id, updated_at')
+    .eq('client_id', client_id).maybeSingle()
+  if (error) return res.status(500).json({ error: 'db_error', message: error.message })
+  if (!data) return res.status(404).json({ error: 'not_found', message: 'No website project for this client' })
+
+  return res.status(200).json(data)
 }
 
 // POST ?action=intake — client submits intake form
