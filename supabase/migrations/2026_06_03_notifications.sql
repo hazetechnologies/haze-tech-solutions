@@ -38,3 +38,9 @@ create policy notifications_admin_all on notifications
 -- Track which status we've already notified on, so the watcher cron emits once.
 alter table website_projects add column if not exists notified_status text;
 alter table brand_kits       add column if not exists notified_status text;
+
+-- Seed existing rows so the status-watcher cron only fires on FUTURE
+-- transitions (otherwise every already-'done' project/kit would emit a
+-- historical "ready" notification on the first cron run).
+update website_projects set notified_status = status where notified_status is null;
+update brand_kits       set notified_status = status where notified_status is null;
