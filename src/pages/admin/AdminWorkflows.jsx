@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Workflow, Check, Mail, Bell } from 'lucide-react'
+import { Workflow, Check, Mail, Bell, X, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 // Catalog of the configured notification automations. Mirrors the server-side
 // registry in api/_lib/notification-registry.js (kept in sync by hand — these
-// are documentation of what is wired, the source of truth is the registry).
+// are documentation of what is wired; the source of truth is the registry).
 const CATALOG = [
   { type: 'client.created',            label: 'Welcome new client',        category: 'Welcome', client: 'email + in-app',  admin: 'email + in-app', desc: 'Fires when a client is created (lead-convert or self-signup).' },
   { type: 'website.intake_submitted',  label: 'Website intake submitted',  category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'A client submits their website intake form.' },
@@ -21,6 +21,9 @@ const CAT_COLOR = { Welcome: '#4ADE80', Status: '#00CFFF', Payment: '#FCD34D' }
 export default function AdminWorkflows() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [preview, setPreview] = useState(null) // { workflow, recipients } | null
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewErr, setPreviewErr] = useState(null)
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -34,6 +37,25 @@ export default function AdminWorkflows() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const openPreview = async (workflow) => {
+    setPreview({ workflow, recipients: null })
+    setPreviewLoading(true)
+    setPreviewErr(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/website?action=workflow-preview&type=${encodeURIComponent(workflow.type)}`, {
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || data.error || `Server error (${res.status})`)
+      setPreview({ workflow, recipients: data.recipients || [] })
+    } catch (e) {
+      setPreviewErr(e.message)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
 
   const markRead = async (id) => {
     const now = new Date().toISOString()
@@ -54,7 +76,7 @@ export default function AdminWorkflows() {
         <h2 style={{ color: '#F1F5F9', fontSize: 18, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Workflow size={18} color="#00CFFF" /> Workflows &amp; Automations
         </h2>
-        <p style={{ fontSize: 13, color: '#475569', margin: '4px 0 0' }}>Event-driven client + admin notifications across email and in-app. Add an event in the notification registry to extend.</p>
+        <p style={{ fontSize: 13, color: '#475569', margin: '4px 0 0' }}>Event-driven client + admin notifications across email and in-app. Click a workflow to view its config and preview the emails.</p>
       </div>
 
       {/* Catalog of active automations */}
@@ -62,7 +84,9 @@ export default function AdminWorkflows() {
         <div style={{ color: '#94A3B8', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Active automations ({CATALOG.length})</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {CATALOG.map((w) => (
-            <div key={w.type} style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+            <button key={w.type} onClick={() => openPreview(w)} style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', width: '100%' }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(0,212,255,0.4)')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}>
               <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 999, background: '#22C55E' }} title="Active" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -75,7 +99,8 @@ export default function AdminWorkflows() {
                 <span>Client: <span style={{ color: w.client === '—' ? '#475569' : '#CBD5E1' }}>{w.client}</span></span>
                 <span>Admin: <span style={{ color: w.admin === '—' ? '#475569' : '#CBD5E1' }}>{w.admin}</span></span>
               </div>
-            </div>
+              <ChevronRight size={16} color="#475569" style={{ flexShrink: 0 }} />
+            </button>
           ))}
         </div>
         <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#475569' }}>
@@ -113,6 +138,62 @@ export default function AdminWorkflows() {
             </div>
           ))}
         </div>
+      </div>
+
+      {preview && (
+        <WorkflowPreviewModal
+          workflow={preview.workflow}
+          recipients={preview.recipients}
+          loading={previewLoading}
+          error={previewErr}
+          onClose={() => setPreview(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function WorkflowPreviewModal({ workflow, recipients, loading, error, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,8,23,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#0F172A', border: '1px solid rgba(0,212,255,0.15)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#F1F5F9', margin: 0 }}>{workflow.label}</h3>
+            <div style={{ color: '#64748B', fontSize: 12, marginTop: 2, fontFamily: 'ui-monospace, monospace' }}>{workflow.type}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+
+        <div style={{ color: '#94A3B8', fontSize: 13, marginBottom: 16 }}>{workflow.desc}</div>
+
+        {loading && <div style={{ color: '#64748B', fontSize: 13 }}>Rendering preview…</div>}
+        {error && <div style={{ color: '#FCA5A5', fontSize: 13, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: 12 }}>{error}</div>}
+
+        {!loading && !error && recipients && recipients.map((r, i) => (
+          <div key={i} style={{ marginBottom: 18, border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(255,255,255,0.03)' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: r.audience === 'client' ? '#7DD3FC' : '#FCD34D' }}>{r.audience}</span>
+              <span style={{ fontSize: 11, color: '#64748B' }}>{r.emailHtml ? 'email + in-app' : 'in-app only'}</span>
+            </div>
+            <div style={{ padding: 14 }}>
+              <div style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>In-app notification</div>
+              <div style={{ color: '#F1F5F9', fontSize: 13, fontWeight: 600 }}>{r.title}</div>
+              <div style={{ color: '#94A3B8', fontSize: 12.5, marginTop: 2 }}>{r.body}</div>
+              {r.link && <div style={{ color: '#7DD3FC', fontSize: 11, marginTop: 4 }}>→ {r.link}</div>}
+
+              {r.emailHtml && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Email preview — subject: <span style={{ color: '#CBD5E1', textTransform: 'none' }}>{r.emailSubject}</span></div>
+                  <iframe title={`email-${i}`} srcDoc={r.emailHtml} style={{ width: '100%', height: 260, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, background: '#fff' }} sandbox="" />
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        {!loading && !error && recipients && recipients.length === 0 && (
+          <div style={{ color: '#64748B', fontSize: 13 }}>No recipients configured for this workflow.</div>
+        )}
       </div>
     </div>
   )

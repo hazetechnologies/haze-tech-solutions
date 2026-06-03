@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from './_lib/require-admin.js'
 import { getStripe, getSetting, siteUrl } from './_lib/stripe.js'
 import { emitNotification } from './_lib/notifications.js'
+import { REGISTRY } from './_lib/notification-registry.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
     case 'public-cart-checkout':return req.method === 'POST' ? publicCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-cart-checkout':return req.method === 'POST' ? portalCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-social':       return req.method === 'POST' ? portalSocial(req, res)     : methodNotAllowed(res, 'POST')
+    case 'workflow-preview':    return req.method === 'GET'  ? workflowPreview(req, res)  : methodNotAllowed(res, 'GET')
     case 'cron-notify-status':  return req.method === 'GET'  ? cronNotifyStatus(req, res) : methodNotAllowed(res, 'GET')
     case 'cron-admin-digest':   return req.method === 'GET'  ? cronAdminDigest(req, res)  : methodNotAllowed(res, 'GET')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
@@ -98,6 +100,43 @@ async function getProject(req, res) {
   if (!data) return res.status(404).json({ error: 'not_found', message: 'No website project for this client' })
 
   return res.status(200).json(data)
+}
+
+// GET ?action=workflow-preview&type=<eventType> — admin previews a notification
+// workflow: renders the registry templates with sample data so the admin can
+// see exactly what each recipient (client/admin) gets, including the email HTML.
+const PREVIEW_SAMPLE = {
+  client: { id: 'sample-client', name: 'Jane Doe', email: 'jane@example.com', company: 'Acme Co' },
+  clientId: 'sample-client',
+  clientName: 'Jane Doe',
+  clientEmail: 'jane@example.com',
+  source: 'lead-convert',
+  amount: '499.00',
+  planName: 'Growth Plan',
+  error: 'Example: scaffold step timed out',
+}
+
+async function workflowPreview(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+
+  const type = (req.query?.type || '').toString()
+  if (!type || !REGISTRY[type]) {
+    return res.status(400).json({ error: 'bad_request', message: 'unknown or missing workflow type' })
+  }
+  const recipients = REGISTRY[type].map((r) => {
+    let c = {}
+    try { c = r.render(PREVIEW_SAMPLE) } catch (e) { c = { title: '(render error)', body: e?.message || '' } }
+    return {
+      audience: r.audience,
+      title: c.title || '',
+      body: c.body || '',
+      link: c.link || null,
+      emailSubject: c.emailSubject || null,
+      emailHtml: c.emailHtml || null, // null = in-app only (no email for this recipient)
+    }
+  })
+  return res.status(200).json({ type, recipients })
 }
 
 // ─── Cron: notification status-watcher + daily admin digest ──────────────────
