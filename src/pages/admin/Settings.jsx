@@ -1,18 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Bot, Key, CreditCard, Zap } from 'lucide-react'
+import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Mail, Key, CreditCard, Zap } from 'lucide-react'
 
 const MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (Best quality)' },
   { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast, low cost)' },
   { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
   { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Cheapest)' },
-]
-
-const PERSONALITIES = [
-  { value: 'professional', label: 'Professional' },
-  { value: 'friendly', label: 'Friendly & Warm' },
-  { value: 'casual', label: 'Casual & Fun' },
 ]
 
 export default function Settings() {
@@ -100,7 +94,7 @@ export default function Settings() {
 
       <div>
         <h2 style={styles.pageTitle}>Settings</h2>
-        <p style={{ fontSize: '13px', color: '#475569', margin: 0 }}>Manage API keys, chatbot behavior, and AI models</p>
+        <p style={{ fontSize: '13px', color: '#475569', margin: 0 }}>Manage API keys, email, billing, and AI models</p>
       </div>
 
       {error && <div style={styles.errorBanner}><AlertCircle size={15} /> {error}</div>}
@@ -135,106 +129,58 @@ export default function Settings() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div>
-              <label style={styles.label}>Report Model</label>
-              <p style={styles.fieldDesc}>For automation plan generation</p>
-              <select value={settings.report_model || 'gpt-4o'} onChange={e => set('report_model', e.target.value)} style={styles.select}>
-                {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={styles.label}>Chatbot Model</label>
-              <p style={styles.fieldDesc}>For website chat responses</p>
-              <select value={settings.chatbot_model || 'gpt-4o-mini'} onChange={e => set('chatbot_model', e.target.value)} style={styles.select}>
-                {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-            </div>
+          <div>
+            <label style={styles.label}>Report Model</label>
+            <p style={styles.fieldDesc}>For automation plan generation (the chatbot model lives on the Chat Bot page)</p>
+            <select value={settings.report_model || 'gpt-4o'} onChange={e => set('report_model', e.target.value)} style={styles.select}>
+              {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
           </div>
         </div>
       </div>
 
-      {/* ── Chatbot Configuration ── */}
+      {/* ── Email (SMTP) Configuration ── */}
       <div style={styles.card}>
         <div style={styles.cardHeader}>
-          <div style={{ ...styles.cardIcon, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)' }}>
-            <Bot size={18} color="#A78BFA" />
+          <div style={{ ...styles.cardIcon, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+            <Mail size={18} color="#4ADE80" />
           </div>
           <div>
-            <h3 style={styles.cardTitle}>Chatbot Configuration</h3>
-            <p style={styles.cardDesc}>Personality, greeting, and behavior</p>
+            <h3 style={styles.cardTitle}>Email (SMTP)</h3>
+            <p style={styles.cardDesc}>Powers client + admin notification emails (welcome, status, payment)</p>
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          <div>
-            <label style={styles.label}>System Prompt</label>
-            <p style={styles.fieldDesc}>The core instruction that defines the chatbot's identity and behavior</p>
-            <textarea
-              value={settings.chatbot_system_prompt || ''}
-              onChange={e => set('chatbot_system_prompt', e.target.value)}
-              placeholder="You are Haze, the friendly AI assistant for Haze Tech Solutions..."
-              rows={5}
-              style={{ ...styles.input, resize: 'vertical', lineHeight: 1.6 }}
-            />
-          </div>
-
-          <div>
-            <label style={styles.label}>Greeting Message</label>
-            <p style={styles.fieldDesc}>First message visitors see when they open the chat</p>
-            <textarea
-              value={settings.chatbot_greeting || ''}
-              onChange={e => set('chatbot_greeting', e.target.value)}
-              placeholder="Hey! I'm Haze, your AI assistant. How can I help you today?"
-              rows={2}
-              style={{ ...styles.input, resize: 'vertical', lineHeight: 1.6 }}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px' }}>
             <div>
-              <label style={styles.label}>Personality / Tone</label>
-              <select value={settings.chatbot_personality || 'professional'} onChange={e => set('chatbot_personality', e.target.value)} style={styles.select}>
-                {PERSONALITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
+              <label style={styles.label}>SMTP Host</label>
+              <p style={styles.fieldDesc}>e.g. smtp.hostinger.com</p>
+              <input type="text" value={settings.SMTP_HOST || ''} onChange={e => set('SMTP_HOST', e.target.value)} placeholder="smtp.hostinger.com" style={styles.input} />
             </div>
             <div>
-              <label style={styles.label}>Max Response Length</label>
-              <p style={styles.fieldDesc}>Tokens (roughly 1 token = 4 chars)</p>
-              <input
-                type="number"
-                value={settings.chatbot_max_tokens || '300'}
-                onChange={e => set('chatbot_max_tokens', e.target.value)}
-                min="50" max="2000"
-                style={styles.input}
-              />
+              <label style={styles.label}>Port</label>
+              <p style={styles.fieldDesc}>465 (SSL) / 587</p>
+              <input type="number" value={settings.SMTP_PORT || ''} onChange={e => set('SMTP_PORT', e.target.value)} placeholder="465" style={styles.input} />
             </div>
           </div>
-
           <div>
-            <label style={styles.label}>Lead Capture</label>
-            <p style={styles.fieldDesc}>Chatbot will guide visitors to share their name and email</p>
-            <div
-              onClick={() => set('chatbot_lead_capture', settings.chatbot_lead_capture === 'false' ? 'true' : 'false')}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', userSelect: 'none' }}
-            >
-              <div style={{
-                width: 44, height: 24, borderRadius: 12, position: 'relative',
-                background: settings.chatbot_lead_capture !== 'false' ? 'rgba(0,212,255,0.4)' : 'rgba(255,255,255,0.1)',
-                transition: 'background 0.2s',
-              }}>
-                <div style={{
-                  width: 18, height: 18, borderRadius: '50%', position: 'absolute', top: 3,
-                  left: settings.chatbot_lead_capture !== 'false' ? 23 : 3,
-                  background: settings.chatbot_lead_capture !== 'false' ? '#00D4FF' : '#475569',
-                  transition: 'left 0.2s, background 0.2s',
-                }} />
-              </div>
-              <span style={{ fontSize: '13px', color: '#94A3B8' }}>
-                {settings.chatbot_lead_capture !== 'false' ? 'Enabled' : 'Disabled'}
-              </span>
-            </div>
+            <label style={styles.label}>SMTP Username</label>
+            <p style={styles.fieldDesc}>Full mailbox address. The "From" on every email is this exact address — aliases get rejected (553).</p>
+            <input type="text" value={settings.SMTP_USER || ''} onChange={e => set('SMTP_USER', e.target.value)} placeholder="info@hazetechsolutions.com" style={styles.input} />
           </div>
+          <div>
+            <label style={styles.label}>SMTP Password</label>
+            <input type="password" value={settings.SMTP_PASS || ''} onChange={e => set('SMTP_PASS', e.target.value)} placeholder="••••••••" style={styles.input} />
+          </div>
+          <div>
+            <label style={styles.label}>Admin Notification Email</label>
+            <p style={styles.fieldDesc}>Where admin alerts go (defaults to info@hazetechsolutions.com)</p>
+            <input type="email" value={settings.ADMIN_NOTIFY_EMAIL || ''} onChange={e => set('ADMIN_NOTIFY_EMAIL', e.target.value)} placeholder="info@hazetechsolutions.com" style={styles.input} />
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: 0, lineHeight: 1.5 }}>
+            Until these are filled, notifications still appear in-app (Workflows + client portal) but no emails send. The 5-minute status cron + daily digest also need a <code style={{ color: '#94A3B8' }}>CRON_SECRET</code> set as a Vercel environment variable.
+          </p>
         </div>
       </div>
 
