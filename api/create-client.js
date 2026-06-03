@@ -1,4 +1,7 @@
 import { requireAdmin } from './_lib/require-admin.js'
+import { emitNotification } from './_lib/notifications.js'
+
+const SITE_URL = process.env.VITE_SITE_URL || 'https://www.hazetechsolutions.com'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -69,6 +72,28 @@ export default async function handler(req, res) {
       await adminClient.auth.admin.deleteUser(authData.user.id).catch(e => console.error('rollback delete failed:', e))
       return res.status(400).json({ error: 'client_insert_failed', message: insertError.message })
     }
+
+    // Generate a set/reset-password action link so the new client can set their
+    // own password from the branded welcome email (no email is sent by this
+    // call — we deliver it ourselves via emitNotification). Best-effort.
+    let setPasswordUrl = null
+    try {
+      const { data: linkData } = await adminClient.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: { redirectTo: `${SITE_URL}/portal/accept-invite` },
+      })
+      setPasswordUrl = linkData?.properties?.action_link || null
+    } catch (e) {
+      console.error('create-client: generateLink failed:', e?.message || e)
+    }
+
+    // Welcome the client (with the set-password link) + alert admin. Best-effort.
+    await emitNotification(adminClient, 'client.created', {
+      client: { id: client.id, name, email, company: company || null, product: productName, price: price ? Number(price) : null },
+      setPasswordUrl,
+      source: 'admin',
+    })
 
     return res.status(200).json({ client })
   } catch (err) {
