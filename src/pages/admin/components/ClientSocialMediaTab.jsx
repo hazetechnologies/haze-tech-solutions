@@ -17,8 +17,6 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
   const [error, setError] = useState(null)
   const [lastResult, setLastResult] = useState(null)
   const [platforms, setPlatforms] = useState(null)
-  const [connectLink, setConnectLink] = useState(null)
-  const [copied, setCopied] = useState(false)
   const [plans, setPlans] = useState(null)
   const [posts, setPosts] = useState(null)
 
@@ -68,21 +66,6 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
   const loadPlatforms = async () => {
     try { const d = await hspProxy(`/tenants/${client.hsp_user_id}/connected-platforms`); setPlatforms(d.platforms || []) }
     catch (err) { setError(err.message) }
-  }
-
-  const issueConnectLink = async () => {
-    setBusy(true); setError(null); setConnectLink(null); setCopied(false)
-    try { const d = await hspProxy(`/tenants/${client.hsp_user_id}/connect-links`, 'POST', {}); setConnectLink(d.url) }
-    catch (err) { setError(err.message || 'Could not issue link') }
-    finally { setBusy(false) }
-  }
-
-  const [emailed, setEmailed] = useState(null)
-  const emailConnectLink = async () => {
-    setBusy(true); setError(null); setEmailed(null)
-    try { const d = await hspProxy(`/tenants/${client.hsp_user_id}/connect-links/email`, 'POST', {}); setEmailed(d.to || true) }
-    catch (err) { setError(err.message || 'Could not email connect link') }
-    finally { setBusy(false) }
   }
 
   useEffect(() => { if (activated) { loadPlatforms(); loadContent() } }, [activated, client?.hsp_user_id])
@@ -175,10 +158,10 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
             <div style={{ color: '#F1F5F9', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Channels</div>
             {platforms === null && <div style={{ color: '#64748B', fontSize: 12 }}>Loading…</div>}
             {platforms && platforms.length === 0 && (
-              <div style={{ color: '#94A3B8', fontSize: 13, marginBottom: 12 }}>No channels connected yet. Send the client a connect link below.</div>
+              <div style={{ color: '#94A3B8', fontSize: 13, marginBottom: 4 }}>No channels connected yet. The client connects their own channels from the Social page in their portal.</div>
             )}
             {platforms && platforms.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
                 {platforms.map((p, i) => (
                   <span key={i} style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', color: '#86EFAC', borderRadius: 999, padding: '4px 12px', fontSize: 12 }}>
                     {p.platform}{p.handle ? ` · @${p.handle}` : ''}
@@ -186,33 +169,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
                 ))}
               </div>
             )}
-            <button onClick={issueConnectLink} disabled={busy} style={{
-              background: 'transparent', border: '1px solid rgba(0,212,255,0.4)', color: '#7DD3FC',
-              borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: busy ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
-            }}>
-              <Share2 size={13} /> {busy ? 'Issuing…' : 'Issue connect link for client'}
-            </button>
-            <button onClick={emailConnectLink} disabled={busy} style={{
-              marginLeft: 8, background: 'transparent', border: '1px solid rgba(0,212,255,0.4)', color: '#7DD3FC',
-              borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: busy ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
-            }}>
-              <Share2 size={13} /> {busy ? 'Emailing…' : 'Email connect link to client'}
-            </button>
-            {connectLink && (
-              <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input readOnly value={connectLink} onFocus={(e) => e.target.select()} style={{
-                  flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 6, padding: '6px 10px', color: '#CBD5E1', fontSize: 11, fontFamily: 'ui-monospace, monospace',
-                }} />
-                <button onClick={() => { navigator.clipboard.writeText(connectLink); setCopied(true) }} style={{
-                  background: '#00D4FF', color: '#020817', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                }}>{copied ? 'Copied' : 'Copy'}</button>
-              </div>
-            )}
-            {connectLink && <div style={{ color: '#64748B', fontSize: 11, marginTop: 6 }}>Send this to the client — it expires in 5 minutes and only lets them connect their channels.</div>}
-            {emailed && <div style={{ color: '#86EFAC', fontSize: 11, marginTop: 6 }}>Connect link emailed{typeof emailed === 'string' ? ` to ${emailed}` : ''} — expires in 48h.</div>}
+            <div style={{ color: '#64748B', fontSize: 11, marginTop: 8 }}>Channels are connected by the client from their portal Social page.</div>
           </div>
 
           <div style={{ marginTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 16 }}>
@@ -223,7 +180,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
                 border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700,
                 cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
               }}>
-                <Share2 size={12} /> Generate / review in workspace
+                <Share2 size={12} /> Open Haze Creator
               </button>
             </div>
 
@@ -236,7 +193,7 @@ export default function ClientSocialMediaTab({ client, onClientUpdated }) {
 
             {posts === null && <div style={{ color: '#64748B', fontSize: 12 }}>Loading…</div>}
             {posts && posts.length === 0 && (
-              <div style={{ color: '#94A3B8', fontSize: 13 }}>No posts yet. Use "Generate / review in workspace" to create a content plan.</div>
+              <div style={{ color: '#94A3B8', fontSize: 13 }}>No posts yet. Use "Open Haze Creator" to create a content plan.</div>
             )}
             {posts && posts.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
