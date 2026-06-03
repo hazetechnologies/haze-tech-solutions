@@ -17,7 +17,9 @@ function ChatWidgetInner() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [config, setConfig] = useState(null)        // { greeting, avatarUrl, followupEnabled, followupDelaySec, followupMessage }
-  const [followupFired, setFollowupFired] = useState(false)
+  const [followupFired, setFollowupFired] = useState(() => {
+    try { return sessionStorage.getItem('haze_chat_followup') === '1' } catch { return false }
+  })
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -32,7 +34,7 @@ function ChatWidgetInner() {
       setConfig(cfg)
       // Swap in the configured greeting only if the visitor hasn't interacted yet.
       if (cfg.greeting) {
-        setMessages(prev => (prev.length === 1 && prev[0].role === 'assistant'
+        setMessages(prev => (prev.length === 1 && prev[0].role === 'assistant' && prev[0].text === DEFAULT_GREETING
           ? [{ role: 'assistant', text: cfg.greeting }]
           : prev))
       }
@@ -50,6 +52,7 @@ function ChatWidgetInner() {
     const t = setTimeout(() => {
       setMessages(prev => [...prev, { role: 'assistant', text: config.followupMessage || "Still there? Happy to help — just ask, or leave your email and we'll follow up." }])
       setFollowupFired(true)
+      try { sessionStorage.setItem('haze_chat_followup', '1') } catch { /* ignore */ }
     }, (config.followupDelaySec || 30) * 1000)
     return () => clearTimeout(t)
   }, [open, config, followupFired, loading, messages])
