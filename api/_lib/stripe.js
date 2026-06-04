@@ -17,10 +17,16 @@ function adminClient() {
   )
 }
 
-/** Read a value from admin_settings (DB) with env-var fallback. Cached 60s. */
-export async function getSetting(key, envFallbackName) {
-  const cached = settingCache.get(key)
-  if (cached && cached.expiresAt > Date.now()) return cached.value
+/**
+ * Read a value from admin_settings (DB) with env-var fallback. Cached 60s.
+ * Pass { fresh: true } to bypass the read cache (e.g. an admin action that runs
+ * immediately after saving a setting); it still refreshes the cache afterwards.
+ */
+export async function getSetting(key, envFallbackName, opts = {}) {
+  if (!opts.fresh) {
+    const cached = settingCache.get(key)
+    if (cached && cached.expiresAt > Date.now()) return cached.value
+  }
 
   const { data } = await adminClient()
     .from('admin_settings').select('value').eq('key', key).maybeSingle()

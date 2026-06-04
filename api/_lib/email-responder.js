@@ -36,9 +36,11 @@ const DEFAULT_BLOCKLIST = [
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
-/** Read all email_responder_* settings (DB-first, env fallback) with defaults. */
-export async function getResponderConfig() {
-  const g = (k, env) => getSetting(k, env)
+/** Read all email_responder_* settings (DB-first, env fallback) with defaults.
+ * Pass { fresh: true } to bypass the 60s settings cache — used by the admin
+ * "Run now" action so a just-saved toggle/prompt takes effect immediately. */
+export async function getResponderConfig(opts = {}) {
+  const g = (k, env) => getSetting(k, env, opts)
   const [
     enabled, inbound, leads, imapHost, imapPort, model, maxTokens,
     personality, systemPrompt, signature, deferMessage, maxPerRun, blocklist,
@@ -416,8 +418,8 @@ export async function pollLeads(sb, cfg) {
 
 // ── Orchestrator (shared by the cron and the admin "Run now" action) ─────────
 
-export async function runOnce(sb) {
-  const cfg = await getResponderConfig()
+export async function runOnce(sb, opts = {}) {
+  const cfg = await getResponderConfig(opts)
   if (!cfg.enabled) return { enabled: false, inbound: null, leads: null }
   const inbound = cfg.inboundEnabled ? await pollInbound(sb, cfg) : { disabled: true }
   const leads = cfg.leadsEnabled ? await pollLeads(sb, cfg) : { disabled: true }
