@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import emailjs from '@emailjs/browser'
-import { supabase } from '../lib/supabase'
 import {
   ArrowLeft, Search, CheckCircle, XCircle, AlertTriangle,
   Zap, Smartphone, Shield, TrendingUp, ExternalLink, RotateCcw, Check,
@@ -148,20 +147,26 @@ export default function AuditPage() {
 
       // Save audit lead to Supabase
       const scores = getScores({ mobile, desktop, design })
-      supabase.from('leads').insert({
-        name: lead.name,
-        email: lead.email,
-        business_name: url,
-        service_interest: 'Website Audit',
-        source: 'audit',
-        url,
-        perf_score: scores.perf,
-        seo_score: scores.seo,
-        mobile_score: scores.mobile,
-        security_score: scores.security,
-        cro_score: scores.cro,
-        overall_score: scores.overall,
-      }).then(({ error }) => { if (error) console.error('Supabase audit save error:', error) })
+      // Save the audit lead via the service-role endpoint (leads table no longer
+      // accepts anon inserts).
+      fetch('/api/submit-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: lead.name,
+          email: lead.email,
+          business_name: url,
+          service_interest: 'Website Audit',
+          source: 'audit',
+          url,
+          perf_score: scores.perf,
+          seo_score: scores.seo,
+          mobile_score: scores.mobile,
+          security_score: scores.security,
+          cro_score: scores.cro,
+          overall_score: scores.overall,
+        }),
+      }).catch(err => console.error('Audit lead save error:', err))
 
       trackEvent('website_audit_completed', { url, overall_score: scores.overall })
       setAuditData({ mobile, desktop, design, url })

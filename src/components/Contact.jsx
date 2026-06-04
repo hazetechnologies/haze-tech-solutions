@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { identifyLead, trackEvent } from '../lib/telemetry'
 
 // EmailJS credentials
@@ -69,10 +68,22 @@ export default function Contact() {
         leadData.payment_process = form.payment_process || null
         leadData.vendor_process = form.vendor_process || null
       }
-      const { data: insertedLead, error: insertError } = await supabase.from('leads').insert(leadData).select().single()
-      if (insertError) {
-        console.error('Supabase lead save error:', insertError)
-      } else {
+      // Save the lead via the service-role endpoint (the leads table no longer
+      // allows anon inserts/reads).
+      let insertedLead = null
+      try {
+        const r = await fetch('/api/submit-lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leadData),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (r.ok) insertedLead = j.lead
+        else console.error('Lead save error:', j.message || j.error)
+      } catch (err) {
+        console.error('Lead save error:', err)
+      }
+      if (insertedLead) {
         // Trigger lead nurture email sequence
         fetch('https://n8n.srv934577.hstgr.cloud/webhook/lead-nurture', {
           method: 'POST',
@@ -80,7 +91,7 @@ export default function Contact() {
           body: JSON.stringify({ name: form.name, email: form.email, service: form.service }),
         }).catch(console.error)
         // If AI Automation, generate automation report via our serverless function
-        if (insertedLead && (form.service === 'AI Automation' || form.service === 'All Three')) {
+        if (form.service === 'AI Automation' || form.service === 'All Three') {
           fetch('/api/generate-report', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
