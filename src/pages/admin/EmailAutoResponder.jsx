@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Save, RefreshCw, AlertCircle, CheckCircle, Mail, Play, ShieldAlert } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import FaqManager from './FaqManager'
 
 const MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (Best quality)' },
@@ -303,12 +302,6 @@ export default function EmailAutoResponder() {
         </div>
       )}
 
-      {/* FAQs — shared with the Chat Bot (same chatbot_faqs table) */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 24 }}>
-        <h3 style={{ ...styles.pageTitle, marginBottom: 4 }}>FAQs — shared with the Chat Bot</h3>
-        <p style={{ fontSize: '13px', color: '#475569', margin: '0 0 16px' }}>The email agent answers from these same questions &amp; answers. Editing here also updates the <Link to="/admin/chatbot" style={styles.link}>Chat Bot</Link>.</p>
-        <FaqManager />
-      </div>
     </div>
   )
 }
