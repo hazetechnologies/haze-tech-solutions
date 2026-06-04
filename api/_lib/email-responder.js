@@ -13,7 +13,7 @@ import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { getSetting } from './stripe.js'
 import { trackedOpenAi } from './tracked-openai.js'
-import { sendEmail, wrapHtml, escapeHtml } from './email.js'
+import { sendEmail } from './email.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -182,14 +182,8 @@ export async function draftReply({ cfg, knowledge, kind, fromName, subject, body
 
 // ── Outgoing reply rendering ─────────────────────────────────────────────────
 
-function replyHtml(text, signature) {
-  const bodyHtml = escapeHtml(text).replace(/\n/g, '<br/>')
-  const sig = signature ? `<div style="margin-top:18px;color:#94a3b8">${escapeHtml(signature).replace(/\n/g, '<br/>')}</div>` : ''
-  // wrapHtml renders an <h1> title; a blank title keeps the reply clean (no
-  // duplicated subject heading) while reusing the branded shell + footer.
-  return wrapHtml('', `<div>${bodyHtml}</div>${sig}`)
-}
-
+// Replies are sent as plain text (no branded HTML template), so we only build a
+// text body. Signature, if set, is appended in plain text.
 function replyText(text, signature) {
   return signature ? `${text}\n\n${signature}` : text
 }
@@ -353,7 +347,6 @@ export async function pollInbound(sb, cfg) {
         const status = await sendEmail({
           to: fromAddr,
           subject: /^re:/i.test(subject) ? subject : `Re: ${subject || 'your message'}`,
-          html: replyHtml(text, cfg.signature),
           text: replyText(text, cfg.signature),
           inReplyTo: messageId || undefined,
           references: messageId || undefined,
@@ -416,7 +409,6 @@ export async function pollLeads(sb, cfg) {
       const status = await sendEmail({
         to: lead.email,
         subject: 'Thanks for reaching out to Haze Tech Solutions',
-        html: replyHtml(text, cfg.signature),
         text: replyText(text, cfg.signature),
         headers: { 'Auto-Submitted': 'auto-replied' },
       })

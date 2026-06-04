@@ -95,7 +95,10 @@ export async function sendEmail({ to, subject, html, text, inReplyTo, references
       replyTo: replyTo || undefined,
       subject,
       text: text || subject,
-      html: html || wrapHtml(subject, `<p>${subject}</p>`),
+      // Only attach an HTML part when the caller provides one. Omitting it sends
+      // a genuine plain-text email (no branded template) — used by the email
+      // auto-responder, which replies in plain text.
+      ...(html ? { html } : {}),
       inReplyTo: inReplyTo || undefined,
       references: references || inReplyTo || undefined,
       headers: headers || undefined,
