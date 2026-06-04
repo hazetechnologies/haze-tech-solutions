@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { trackEvent } from '../../lib/telemetry'
 import { CheckCircle2, AlertCircle } from 'lucide-react'
@@ -108,7 +108,9 @@ export default function AcceptInvite() {
             <AlertCircle size={20} />
             <div>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>Invite link expired or invalid</div>
-              <div style={{ fontSize: 12, opacity: 0.85 }}>Please contact your account manager to receive a new invite.</div>
+              <div style={{ fontSize: 12, opacity: 0.85 }}>
+                Get a fresh link yourself: go to the <Link to="/portal/login" style={{ color: '#7dd3fc' }}>portal login</Link> and use “Forgot or need to set your password”.
+              </div>
             </div>
           </div>
         )}

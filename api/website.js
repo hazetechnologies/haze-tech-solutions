@@ -13,6 +13,7 @@ import { emitNotification } from './_lib/notifications.js'
 import { REGISTRY } from './_lib/notification-registry.js'
 import { sendEmail, wrapHtml } from './_lib/email.js'
 import { runOnce as runEmailResponder } from './_lib/email-responder.js'
+import { mintResetToken, sendResetEmail } from './_lib/portal-reset.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -46,6 +47,8 @@ export default async function handler(req, res) {
     case 'cron-admin-digest':   return req.method === 'GET'  ? cronAdminDigest(req, res)  : methodNotAllowed(res, 'GET')
     case 'cron-email-autoresponder': return req.method === 'GET'  ? cronEmailAutoresponder(req, res) : methodNotAllowed(res, 'GET')
     case 'email-responder-run-now':  return req.method === 'POST' ? emailResponderRunNow(req, res)   : methodNotAllowed(res, 'POST')
+    case 'request-portal-link': return req.method === 'POST' ? requestPortalLink(req, res) : methodNotAllowed(res, 'POST')
+    case 'portal-reset':        return req.method === 'POST' ? portalReset(req, res)       : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -296,6 +299,56 @@ async function emailResponderRunNow(req, res) {
   } catch (e) {
     console.error('[email-responder-run-now] failed:', e?.message || e)
     return res.status(500).json({ error: 'responder_failed', message: e?.message || String(e) })
+  }
+}
+
+// POST ?action=request-portal-link — public. Body: { email }. If a client with
+// that email exists, mint a SafeLinks-safe reset token and email it (Hostinger
+// SMTP). Always returns 200 with no detail (no account enumeration).
+async function requestPortalLink(req, res) {
+  const email = (req.body?.email || '').toString().trim().toLowerCase()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ error: 'bad_request', message: 'A valid email is required' })
+  }
+  try {
+    const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+    // Case-insensitive exact match; escape LIKE wildcards so the email can't be a pattern.
+    const escaped = email.replace(/[\\%_]/g, '\\$&')
+    const { data: clients } = await sb.from('clients').select('user_id, name, email').ilike('email', escaped).limit(5)
+    const client = (clients || []).find((c) => (c.email || '').toLowerCase() === email)
+    if (client) {
+      const url = await mintResetToken(sb, client.user_id, client.email)
+      await sendResetEmail(client.email, client.name, url, { invite: false })
+    }
+  } catch (e) {
+    console.error('[request-portal-link] failed:', e?.message || e)
+    // fall through to the same generic response — never reveal account state
+  }
+  return res.status(200).json({ ok: true })
+}
+
+// POST ?action=portal-reset — public. Body: { token, password }. Validates the
+// single-use token and sets the user's password via the service role.
+async function portalReset(req, res) {
+  const token = (req.body?.token || '').toString()
+  const password = (req.body?.password || '').toString()
+  if (!token || password.length < 8) {
+    return res.status(400).json({ error: 'bad_request', message: 'A token and a password of at least 8 characters are required' })
+  }
+  try {
+    const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+    const { data: row } = await sb.from('portal_reset_tokens').select('token, user_id, used_at, expires_at').eq('token', token).maybeSingle()
+    if (!row || row.used_at || new Date(row.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'invalid_or_expired', message: 'This link is invalid or has expired. Please request a new one.' })
+    }
+    const { error: upErr } = await sb.auth.admin.updateUserById(row.user_id, { password, email_confirm: true })
+    if (upErr) return res.status(400).json({ error: 'update_failed', message: upErr.message })
+    // Burn the token (idempotent: only the row we just used).
+    await sb.from('portal_reset_tokens').update({ used_at: new Date().toISOString() }).eq('token', token).is('used_at', null)
+    return res.status(200).json({ ok: true })
+  } catch (e) {
+    console.error('[portal-reset] failed:', e?.message || e)
+    return res.status(500).json({ error: 'internal_error', message: 'Could not set your password. Please try again.' })
   }
 }
 

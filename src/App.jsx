@@ -39,6 +39,7 @@ import PortalDashboard      from './pages/portal/PortalDashboard'
 import PortalProject        from './pages/portal/PortalProject'
 import PortalInvoices       from './pages/portal/PortalInvoices'
 import AcceptInvite         from './pages/portal/AcceptInvite'
+import PortalReset          from './pages/portal/PortalReset'
 import PortalWebsiteIntake  from './pages/portal/PortalWebsiteIntake'
 import PortalBrandKit       from './pages/portal/PortalBrandKit'
 import PortalServices       from './pages/portal/PortalServices'
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/audit/:id" element={<AuditResults />} />
           <Route path="/free-social-audit" element={<FreeSocialAudit />} />
           <Route path="/portal/accept-invite" element={<AcceptInvite />} />
+          <Route path="/portal/reset" element={<PortalReset />} />
           <Route path="/blog"   element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/pricing" element={<PricingPage />} />

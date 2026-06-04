@@ -1,5 +1,6 @@
 import { requireAdmin } from './_lib/require-admin.js'
 import { emitNotification } from './_lib/notifications.js'
+import { mintResetToken } from './_lib/portal-reset.js'
 
 const SITE_URL = process.env.VITE_SITE_URL || 'https://www.hazetechsolutions.com'
 
@@ -73,19 +74,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'client_insert_failed', message: insertError.message })
     }
 
-    // Generate a set/reset-password action link so the new client can set their
-    // own password from the branded welcome email (no email is sent by this
-    // call — we deliver it ourselves via emitNotification). Best-effort.
+    // Mint a SafeLinks-safe set-password link (our own token → /portal/reset) so
+    // the welcome email's button isn't burned by email scanners like Outlook
+    // SafeLinks the way Supabase's one-time recovery links are. No email is sent
+    // here — we deliver it ourselves via emitNotification. Best-effort.
     let setPasswordUrl = null
     try {
-      const { data: linkData } = await adminClient.auth.admin.generateLink({
-        type: 'recovery',
-        email,
-        options: { redirectTo: `${SITE_URL}/portal/accept-invite` },
-      })
-      setPasswordUrl = linkData?.properties?.action_link || null
+      setPasswordUrl = await mintResetToken(adminClient, authData.user.id, email)
     } catch (e) {
-      console.error('create-client: generateLink failed:', e?.message || e)
+      console.error('create-client: mintResetToken failed:', e?.message || e)
     }
 
     // Welcome the client (with the set-password link) + alert admin. Best-effort.
