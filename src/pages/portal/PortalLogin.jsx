@@ -14,6 +14,24 @@ export default function PortalLogin() {
   const [error, setError]       = useState(null)
   const [loading, setLoading]   = useState(false)
 
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotBusy, setForgotBusy] = useState(false)
+
+  const handleForgot = async () => {
+    if (!email.trim()) { setError('Enter your email above first, then click “Email me a link”.'); return }
+    setForgotBusy(true); setError(null)
+    try {
+      await fetch('/api/website?action=request-portal-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+    } catch { /* swallow — same generic confirmation either way */ }
+    setForgotBusy(false)
+    setForgotSent(true)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!email.trim() || !password) return
@@ -109,6 +127,24 @@ export default function PortalLogin() {
           </button>
         </form>
 
+        {/* Forgot / set password — SafeLinks-safe self-service */}
+        {forgotSent ? (
+          <div style={styles.forgotNote}>
+            If an account exists for that email, we’ve sent a link to set your password. Check your inbox (and spam).
+          </div>
+        ) : forgotOpen ? (
+          <div style={styles.forgotNote}>
+            Enter your email above, then:
+            <button type="button" onClick={handleForgot} disabled={forgotBusy} style={styles.forgotBtn}>
+              {forgotBusy ? 'Sending…' : 'Email me a link'}
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setForgotOpen(true)} style={styles.forgotLink}>
+            Forgot or need to set your password?
+          </button>
+        )}
+
         <Link to="/" style={styles.backLink}>Back to main site</Link>
       </div>
     </div>
@@ -178,5 +214,19 @@ const styles = {
   backLink: {
     display: 'block', textAlign: 'center', fontSize: '13px',
     color: '#475569', textDecoration: 'none',
+  },
+  forgotLink: {
+    display: 'block', width: '100%', textAlign: 'center', background: 'none', border: 'none',
+    color: '#64748B', fontSize: '13px', cursor: 'pointer', marginBottom: '14px',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+  },
+  forgotNote: {
+    fontSize: '13px', color: '#94A3B8', lineHeight: 1.6, textAlign: 'center', marginBottom: '14px',
+  },
+  forgotBtn: {
+    display: 'inline-block', marginTop: '8px', padding: '9px 16px',
+    background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: '8px',
+    color: '#00D4FF', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
 }
