@@ -12,6 +12,7 @@ import { getStripe, getSetting, siteUrl } from './_lib/stripe.js'
 import { emitNotification } from './_lib/notifications.js'
 import { REGISTRY } from './_lib/notification-registry.js'
 import { sendEmail, wrapHtml } from './_lib/email.js'
+import { runOnce as runEmailResponder } from './_lib/email-responder.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -43,6 +44,8 @@ export default async function handler(req, res) {
     case 'send-test-email':     return req.method === 'POST' ? sendTestEmail(req, res)    : methodNotAllowed(res, 'POST')
     case 'cron-notify-status':  return req.method === 'GET'  ? cronNotifyStatus(req, res) : methodNotAllowed(res, 'GET')
     case 'cron-admin-digest':   return req.method === 'GET'  ? cronAdminDigest(req, res)  : methodNotAllowed(res, 'GET')
+    case 'cron-email-autoresponder': return req.method === 'GET'  ? cronEmailAutoresponder(req, res) : methodNotAllowed(res, 'GET')
+    case 'email-responder-run-now':  return req.method === 'POST' ? emailResponderRunNow(req, res)   : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -263,6 +266,35 @@ async function cronAdminDigest(req, res) {
   const adminTo = (await getSetting('ADMIN_NOTIFY_EMAIL', 'ADMIN_NOTIFY_EMAIL')) || 'info@hazetechsolutions.com'
   const status = await sendEmail({ to: adminTo, subject: `Haze Tech daily digest — ${rows.length} events`, html: wrapHtml('Daily digest', `<ul>${list}</ul>`) })
   return res.status(200).json({ ok: true, sent: status === 'sent', count: rows.length })
+}
+
+// GET ?action=cron-email-autoresponder — poll the mailbox (IMAP) + new leads and
+// send FAQ-aware auto-replies. CRON_SECRET-gated. Spam/notifications/automated
+// mail is filtered out and left unread (see api/_lib/email-responder.js).
+async function cronEmailAutoresponder(req, res) {
+  if (!requireCron(req, res)) return
+  const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+  try {
+    const result = await runEmailResponder(sb)
+    return res.status(200).json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[cron-email-autoresponder] failed:', e?.message || e)
+    return res.status(500).json({ error: 'responder_failed', message: e?.message || String(e) })
+  }
+}
+
+// POST ?action=email-responder-run-now — admin triggers one responder pass from
+// the admin UI (no CRON_SECRET needed). Same logic as the cron.
+async function emailResponderRunNow(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  try {
+    const result = await runEmailResponder(ctx.adminClient)
+    return res.status(200).json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[email-responder-run-now] failed:', e?.message || e)
+    return res.status(500).json({ error: 'responder_failed', message: e?.message || String(e) })
+  }
 }
 
 // POST ?action=intake — client submits intake form

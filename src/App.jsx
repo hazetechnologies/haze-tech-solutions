@@ -21,6 +21,7 @@ import ProductsManager from './pages/admin/ProductsManager'
 import Settings           from './pages/admin/Settings'
 import BusinessInfo       from './pages/admin/BusinessInfo'
 import AdminChatbot       from './pages/admin/AdminChatbot'
+import EmailAutoResponder from './pages/admin/EmailAutoResponder'
 import AutomationTriggers from './pages/admin/AutomationTriggers'
 import SocialAudits       from './pages/admin/SocialAudits'
 import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="settings"        element={<Settings />} />
             <Route path="business-info"   element={<BusinessInfo />} />
             <Route path="chatbot"         element={<AdminChatbot />} />
+            <Route path="email-responder" element={<EmailAutoResponder />} />
             <Route path="triggers"        element={<AutomationTriggers />} />
             <Route path="workflows"       element={<AdminWorkflows />} />
             <Route path="social-audits"   element={<SocialAudits />} />
