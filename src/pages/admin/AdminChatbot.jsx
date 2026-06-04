@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Save, RefreshCw, AlertCircle, CheckCircle, Bot } from 'lucide-react'
-import FaqManager from './FaqManager'
 
 const MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (Best quality)' },
@@ -80,7 +79,7 @@ export default function AdminChatbot() {
 
       <div>
         <h2 style={styles.pageTitle}>Chat Bot</h2>
-        <p style={{ fontSize: '13px', color: '#475569', margin: 0 }}>Configure the website chatbot and manage the FAQs it answers from</p>
+        <p style={{ fontSize: '13px', color: '#475569', margin: 0 }}>Configure the website chatbot. It answers from the shared FAQs (see the FAQs tab).</p>
       </div>
 
       {error && <div style={styles.errorBanner}><AlertCircle size={15} /> {error}</div>}
@@ -231,13 +230,6 @@ export default function AdminChatbot() {
           </div>
         </div>
       )}
-
-      {/* FAQs — the knowledge base the chatbot answers from */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 24 }}>
-        <h3 style={{ ...styles.pageTitle, marginBottom: 4 }}>FAQs</h3>
-        <p style={{ fontSize: '13px', color: '#475569', margin: '0 0 16px' }}>Questions &amp; answers the chatbot draws on when responding to visitors</p>
-        <FaqManager />
-      </div>
     </div>
   )
 }
