@@ -76,18 +76,29 @@ export function wrapHtml(title, bodyHtml) {
 
 // Best-effort send. Never throws; returns a status string the caller records.
 // Returns 'sent' | 'failed' | 'skipped'.
-export async function sendEmail({ to, subject, html, text }) {
+//
+// Optional reply-threading fields (used by the email auto-responder):
+//   inReplyTo  — the original message's Message-ID, for In-Reply-To/References
+//   references — string/array for the References header (defaults to inReplyTo)
+//   headers    — extra raw headers, e.g. { 'Auto-Submitted': 'auto-replied' }
+// `from` MUST stay the authenticated SMTP_USER (Hostinger 553s on alias From),
+// so we thread/route the human-visible sender via fromName + replyTo instead.
+export async function sendEmail({ to, subject, html, text, inReplyTo, references, headers, replyTo, fromName }) {
   if (!to) return 'skipped'
   let t
   try { t = await getTransport() } catch { return 'failed' }
   if (!t) return 'skipped' // SMTP not configured
   try {
     await t.transporter.sendMail({
-      from: t.from,
+      from: fromName ? { name: fromName, address: t.from } : t.from,
       to,
+      replyTo: replyTo || undefined,
       subject,
       text: text || subject,
       html: html || wrapHtml(subject, `<p>${subject}</p>`),
+      inReplyTo: inReplyTo || undefined,
+      references: references || inReplyTo || undefined,
+      headers: headers || undefined,
     })
     return 'sent'
   } catch (e) {

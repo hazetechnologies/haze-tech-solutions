@@ -1,7 +1,11 @@
 {
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "functions": {
+    "api/website.js": { "maxDuration": 60 }
+  },
   "crons": [
     { "path": "/api/website?action=cron-notify-status", "schedule": "*/5 * * * *" },
-    { "path": "/api/website?action=cron-admin-digest", "schedule": "0 13 * * *" }
+    { "path": "/api/website?action=cron-admin-digest", "schedule": "0 13 * * *" },
+    { "path": "/api/website?action=cron-email-autoresponder", "schedule": "*/5 * * * *" }
   ]
 }

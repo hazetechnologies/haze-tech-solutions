@@ -1,0 +1,375 @@
+// api/_lib/email-responder.js
+// Email auto-responder agent. Two sources, one brain:
+//   - pollInbound(): reads the Hostinger mailbox over IMAP and replies to real
+//     human inquiries, drawing answers from the SAME FAQ knowledge base as the
+//     website chatbot (chatbot_faqs + business_info).
+//   - pollLeads(): sends a one-time FAQ-aware reply to new contact/lead-form rows.
+// Both go through draftReply(), which classifies each message as ANSWER / DEFER /
+// IGNORE so spam, marketing, and automated notifications never get a response.
+//
+// This module is imported by api/website.js (it is NOT a serverless endpoint, so
+// it does not count toward Vercel's 12-function Hobby cap).
+import { ImapFlow } from 'imapflow'
+import { simpleParser } from 'mailparser'
+import { getSetting } from './stripe.js'
+import { trackedOpenAi } from './tracked-openai.js'
+import { sendEmail, wrapHtml, escapeHtml } from './email.js'
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+const TONES = {
+  professional: 'Be professional, knowledgeable, and concise.',
+  friendly: 'Be warm, friendly, and conversational.',
+  casual: 'Be casual and approachable.',
+}
+
+const DEFAULT_DEFER =
+  'Thanks for reaching out! One of our team members will personally review your message and follow up with you shortly.'
+
+// Senders we never auto-reply to (substring match on the From address, lowercase).
+const DEFAULT_BLOCKLIST = [
+  'noreply', 'no-reply', 'donotreply', 'do-not-reply', 'mailer-daemon', 'postmaster',
+  'bounce', 'notification', 'vercel.com', 'supabase', 'stripe.com', 'github.com',
+  'google.com', 'paypal', 'facebookmail.com', 'mailchimp', 'sendgrid', 'amazonaws',
+].join(',')
+
+// ── Config ───────────────────────────────────────────────────────────────────
+
+/** Read all email_responder_* settings (DB-first, env fallback) with defaults. */
+export async function getResponderConfig() {
+  const g = (k, env) => getSetting(k, env)
+  const [
+    enabled, inbound, leads, imapHost, imapPort, model, maxTokens,
+    personality, systemPrompt, signature, deferMessage, maxPerRun, blocklist,
+  ] = await Promise.all([
+    g('email_responder_enabled'),
+    g('email_responder_inbound_enabled'),
+    g('email_responder_leads_enabled'),
+    g('email_responder_imap_host'),
+    g('email_responder_imap_port'),
+    g('email_responder_model'),
+    g('email_responder_max_tokens'),
+    g('email_responder_personality'),
+    g('email_responder_system_prompt'),
+    g('email_responder_signature'),
+    g('email_responder_defer_message'),
+    g('email_responder_max_per_run'),
+    g('email_responder_blocklist'),
+  ])
+  return {
+    enabled: enabled === 'true',
+    inboundEnabled: inbound !== 'false', // sub-toggles default ON when master is on
+    leadsEnabled: leads !== 'false',
+    imapHost: (imapHost || 'imap.hostinger.com').trim(),
+    imapPort: parseInt(imapPort, 10) || 993,
+    model: model || 'gpt-4o-mini',
+    maxTokens: Math.min(1500, Math.max(80, parseInt(maxTokens, 10) || 400)),
+    personality: TONES[personality] ? personality : 'professional',
+    systemPrompt: systemPrompt || 'You are Haze, the email assistant for Haze Tech Solutions.',
+    signature: signature || '',
+    deferMessage: deferMessage || DEFAULT_DEFER,
+    maxPerRun: Math.min(25, Math.max(1, parseInt(maxPerRun, 10) || 5)),
+    blocklist: (blocklist == null ? DEFAULT_BLOCKLIST : blocklist)
+      .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  }
+}
+
+// ── Knowledge base (same source as the chatbot) ──────────────────────────────
+
+async function fetchKnowledge() {
+  const headers = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` }
+  let businessInfo = [], faqs = []
+  try {
+    const [bizRes, faqRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/business_info?select=*&active=eq.true&order=display_order`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/chatbot_faqs?select=*&active=eq.true`, { headers }),
+    ])
+    businessInfo = (await bizRes.json()) || []
+    faqs = (await faqRes.json()) || []
+  } catch (e) {
+    console.error('[email-responder] knowledge fetch failed:', e?.message || e)
+  }
+  return { businessInfo: Array.isArray(businessInfo) ? businessInfo : [], faqs: Array.isArray(faqs) ? faqs : [] }
+}
+
+function buildSystemPrompt(cfg, knowledge, kind) {
+  let p = cfg.systemPrompt
+  p += `\n\nTone: ${TONES[cfg.personality]}`
+
+  if (knowledge.businessInfo.length) {
+    p += '\n\n=== BUSINESS INFORMATION ===\n'
+    for (const i of knowledge.businessInfo) p += `\n[${(i.category || '').toUpperCase()}: ${i.title}]\n${i.content}\n`
+  }
+  if (knowledge.faqs.length) {
+    p += '\n\n=== FREQUENTLY ASKED QUESTIONS ===\n'
+    for (const f of knowledge.faqs) p += `\nQ: ${f.question}\nA: ${f.answer}\n`
+  }
+
+  p += `\n\n=== HOW TO RESPOND ===
+You are replying to an email. Begin your reply with EXACTLY ONE control token on its own first line, then the email body:
+- [[ANSWER]] — the sender is a real person asking something the BUSINESS INFORMATION / FAQs above cover. Answer their question using ONLY that information. Never invent facts, prices, or commitments.
+- [[DEFER]] — the sender is a real person, but their question is NOT covered above. Reply with a brief, warm acknowledgment and tell them a team member will follow up. Do not attempt to answer.`
+  if (kind === 'inbound') {
+    p += `
+- [[IGNORE]] — the message is spam, cold sales/marketing outreach, a newsletter, or an automated/transactional notification (receipts, alerts, system notices) rather than a genuine inquiry. Output ONLY the token and nothing else; we will not send a reply.`
+  }
+  p += `
+
+When deferring, use wording close to: "${cfg.deferMessage}"
+Keep replies concise and well-formatted for email (a short greeting, 1–3 short paragraphs). Do NOT use markdown. Do NOT include a subject line. Do NOT add a signature — it is appended automatically. Write in plain prose.`
+  return p
+}
+
+/**
+ * Classify + draft a reply. Returns { outcome: 'answer'|'defer'|'ignore', text }.
+ * `kind` is 'inbound' or 'lead' (leads never IGNORE — they opted in, so an IGNORE
+ * is coerced to DEFER). On any AI failure, falls back to a safe DEFER.
+ */
+export async function draftReply({ cfg, knowledge, kind, fromName, subject, body, leadFields }) {
+  const systemPrompt = buildSystemPrompt(cfg, knowledge, kind)
+  let userContent
+  if (kind === 'lead') {
+    const f = leadFields || {}
+    userContent = `A new lead just submitted a form on our website. Write them a warm reply.\n` +
+      `Name: ${f.name || fromName || 'there'}\n` +
+      (f.business_name ? `Business: ${f.business_name}\n` : '') +
+      (f.service_interest ? `Interested in: ${f.service_interest}\n` : '') +
+      `\nTheir message:\n${(body || '(no message provided)').slice(0, 4000)}`
+  } else {
+    userContent = `From: ${fromName || 'Unknown'}\nSubject: ${subject || '(no subject)'}\n\nEmail body:\n${(body || '').slice(0, 4000)}`
+  }
+
+  let raw = ''
+  try {
+    const { data } = await trackedOpenAi({
+      apiKey: await getSetting('openai_api_key', 'OPENAI_API_KEY'),
+      model: cfg.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      params: { max_tokens: cfg.maxTokens, temperature: 0.5 },
+      distinctId: 'email-responder',
+      eventProperties: { surface: 'email-responder', kind },
+    })
+    raw = data?.choices?.[0]?.message?.content || ''
+  } catch (e) {
+    console.error('[email-responder] draft failed:', e?.message || e)
+    return { outcome: 'defer', text: cfg.deferMessage }
+  }
+
+  // Parse the leading control token.
+  let outcome = 'defer'
+  const m = raw.match(/^\s*\[\[(ANSWER|DEFER|IGNORE)\]\]/i)
+  if (m) outcome = m[1].toLowerCase()
+  let text = raw.replace(/^\s*\[\[(ANSWER|DEFER|IGNORE)\]\]\s*/i, '').trim()
+
+  if (kind === 'lead' && outcome === 'ignore') outcome = 'defer' // leads always get a reply
+  if (outcome === 'defer' && !text) text = cfg.deferMessage
+  if (outcome === 'ignore') text = ''
+
+  return { outcome, text }
+}
+
+// ── Outgoing reply rendering ─────────────────────────────────────────────────
+
+function replyHtml(text, signature) {
+  const bodyHtml = escapeHtml(text).replace(/\n/g, '<br/>')
+  const sig = signature ? `<div style="margin-top:18px;color:#94a3b8">${escapeHtml(signature).replace(/\n/g, '<br/>')}</div>` : ''
+  // wrapHtml renders an <h1> title; a blank title keeps the reply clean (no
+  // duplicated subject heading) while reusing the branded shell + footer.
+  return wrapHtml('', `<div>${bodyHtml}</div>${sig}`)
+}
+
+function replyText(text, signature) {
+  return signature ? `${text}\n\n${signature}` : text
+}
+
+// ── Inbound IMAP polling ─────────────────────────────────────────────────────
+
+const NO_REPLY_LOCALPART = /(^|[._-])(no-?reply|donotreply|do-not-reply|mailer-daemon|postmaster|bounce|notifications?)([._-]|@|$)/i
+
+// Layer-1 deterministic skip. Returns a reason string to skip, or null to proceed.
+function deterministicSkip(parsed, fromAddr, ourMailbox, blocklist) {
+  const lc = (fromAddr || '').toLowerCase()
+  if (!lc) return 'no-from'
+  if (ourMailbox && lc === ourMailbox.toLowerCase()) return 'self'
+  if (NO_REPLY_LOCALPART.test(lc)) return 'no-reply-sender'
+  for (const term of blocklist) if (term && lc.includes(term)) return `blocklist:${term}`
+
+  const h = parsed.headers // Map of lowercased header name -> value
+  const get = (k) => { const v = h?.get(k); return v == null ? '' : String(typeof v === 'object' ? (v.value ?? '') : v) }
+  const autoSub = get('auto-submitted').toLowerCase()
+  if (autoSub && autoSub !== 'no') return 'auto-submitted'
+  const prec = get('precedence').toLowerCase()
+  if (/bulk|list|junk|auto_reply/.test(prec)) return `precedence:${prec}`
+  if (h?.has('list-id') || h?.has('list-unsubscribe') || h?.has('x-auto-response-suppress')) return 'mailing-list'
+  const returnPath = get('return-path').trim()
+  if (returnPath === '<>' || returnPath === '') { /* empty is fine; <> is a bounce */ if (returnPath === '<>') return 'bounce' }
+  return null
+}
+
+async function logRow(sb, row) {
+  try { await sb.from('email_autoresponses').insert(row) }
+  catch (e) { console.error('[email-responder] log insert failed:', e?.message || e) }
+}
+
+export async function pollInbound(sb, cfg) {
+  const user = await getSetting('SMTP_USER', 'SMTP_USER')
+  const pass = await getSetting('SMTP_PASS', 'SMTP_PASS')
+  if (!user || !pass) return { skipped: 'no-credentials', replied: 0, ignored: 0 }
+
+  const client = new ImapFlow({
+    host: cfg.imapHost,
+    port: cfg.imapPort,
+    secure: cfg.imapPort === 993 || cfg.imapPort === 465,
+    auth: { user, pass },
+    logger: false,
+    socketTimeout: 30_000,
+  })
+
+  let replied = 0, ignored = 0, skipped = 0, scanned = 0
+  try {
+    await client.connect()
+  } catch (e) {
+    console.error('[email-responder] IMAP connect failed:', e?.message || e)
+    return { error: 'imap-connect-failed', detail: e?.message || String(e) }
+  }
+
+  const lock = await client.getMailboxLock('INBOX')
+  try {
+    let uids = []
+    try { uids = await client.search({ seen: false }, { uid: true }) } catch { uids = [] }
+    if (!uids || !uids.length) return { replied, ignored, skipped, scanned }
+
+    // Cheap envelope pass to read Message-IDs, then drop ones we've already handled.
+    const metas = []
+    for await (const msg of client.fetch(uids, { uid: true, envelope: true }, { uid: true })) {
+      metas.push({ uid: msg.uid, messageId: msg.envelope?.messageId || null })
+    }
+    const ids = metas.map((m) => m.messageId).filter(Boolean)
+    let seen = new Set()
+    if (ids.length) {
+      const { data: existing } = await sb.from('email_autoresponses').select('message_id').in('message_id', ids)
+      seen = new Set((existing || []).map((r) => r.message_id))
+    }
+    const todo = metas.filter((m) => !m.messageId || !seen.has(m.messageId)).slice(0, cfg.maxPerRun)
+
+    const knowledge = await fetchKnowledge()
+    for (const meta of todo) {
+      scanned++
+      try {
+        // Download full source for this one message.
+        let source = null
+        for await (const msg of client.fetch(meta.uid, { uid: true, source: true }, { uid: true })) source = msg.source
+        if (!source) continue
+        const parsed = await simpleParser(source)
+        const fromAddr = parsed.from?.value?.[0]?.address || ''
+        const fromName = parsed.from?.value?.[0]?.name || fromAddr
+        const subject = parsed.subject || ''
+        const messageId = parsed.messageId || meta.messageId || null
+
+        // Layer 1 — deterministic skip. Leave UNSEEN so a human still sees it.
+        const skipReason = deterministicSkip(parsed, fromAddr, user, cfg.blocklist)
+        if (skipReason) {
+          skipped++
+          await logRow(sb, { source: 'inbound', to_email: fromAddr, subject, message_id: messageId, reply_status: 'skipped', notes: `skip:${skipReason}`, ai_answered: false })
+          continue
+        }
+
+        // Layer 2 — AI relevance gate + draft.
+        const body = parsed.text || parsed.html?.replace(/<[^>]+>/g, ' ') || ''
+        const { outcome, text } = await draftReply({ cfg, knowledge, kind: 'inbound', fromName, subject, body })
+
+        if (outcome === 'ignore') {
+          ignored++
+          await logRow(sb, { source: 'inbound', to_email: fromAddr, subject, message_id: messageId, reply_status: 'skipped', notes: 'ignore:not-an-inquiry', ai_answered: false })
+          continue // leave UNSEEN
+        }
+
+        const status = await sendEmail({
+          to: fromAddr,
+          subject: /^re:/i.test(subject) ? subject : `Re: ${subject || 'your message'}`,
+          html: replyHtml(text, cfg.signature),
+          text: replyText(text, cfg.signature),
+          inReplyTo: messageId || undefined,
+          references: messageId || undefined,
+          headers: { 'Auto-Submitted': 'auto-replied' },
+        })
+        if (status === 'sent') {
+          replied++
+          // Layer 3 — only replied-to mail is marked read.
+          try { await client.messageFlagsAdd(meta.uid, ['\\Seen'], { uid: true }) } catch { /* non-fatal */ }
+        }
+        await logRow(sb, { source: 'inbound', to_email: fromAddr, subject, message_id: messageId, reply_status: status, notes: outcome === 'answer' ? 'answer' : 'defer', ai_answered: outcome === 'answer' })
+      } catch (e) {
+        console.error('[email-responder] inbound message failed:', e?.message || e)
+      }
+    }
+  } finally {
+    lock.release()
+    try { await client.logout() } catch { /* ignore */ }
+  }
+  return { replied, ignored, skipped, scanned }
+}
+
+// ── Lead-form polling ────────────────────────────────────────────────────────
+
+export async function pollLeads(sb, cfg) {
+  // Eligible: never auto-replied + recent (so enabling later doesn't blast a
+  // backlog). Pre-existing leads were backfilled with auto_replied_at in the
+  // migration, so only genuinely new rows qualify.
+  const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: leads } = await sb.from('leads')
+    .select('id, name, email, business_name, service_interest, message')
+    .is('auto_replied_at', null)
+    .gt('created_at', cutoff)
+    .not('email', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(cfg.maxPerRun)
+
+  if (!leads || !leads.length) return { replied: 0, claimed: 0 }
+
+  const knowledge = await fetchKnowledge()
+  let replied = 0, claimed = 0
+  for (const lead of leads) {
+    // Atomic claim (CAS) so overlapping cron runs can't double-send.
+    const { data: won } = await sb.from('leads')
+      .update({ auto_replied_at: new Date().toISOString() })
+      .eq('id', lead.id).is('auto_replied_at', null).select('id')
+    if (!won || !won.length) continue // another run claimed it
+    claimed++
+
+    try {
+      const { outcome, text } = await draftReply({
+        cfg, knowledge, kind: 'lead',
+        fromName: lead.name, subject: 'Thanks for reaching out',
+        body: lead.message, leadFields: lead,
+      })
+      const status = await sendEmail({
+        to: lead.email,
+        subject: 'Thanks for reaching out to Haze Tech Solutions',
+        html: replyHtml(text, cfg.signature),
+        text: replyText(text, cfg.signature),
+        headers: { 'Auto-Submitted': 'auto-replied' },
+      })
+      if (status === 'sent') replied++
+      await logRow(sb, { source: 'lead', to_email: lead.email, subject: 'lead auto-reply', lead_id: lead.id, reply_status: status, notes: outcome, ai_answered: outcome === 'answer' })
+    } catch (e) {
+      console.error('[email-responder] lead reply failed:', e?.message || e)
+      await logRow(sb, { source: 'lead', to_email: lead.email, lead_id: lead.id, reply_status: 'failed', notes: 'exception', ai_answered: false })
+    }
+  }
+  return { replied, claimed }
+}
+
+// ── Orchestrator (shared by the cron and the admin "Run now" action) ─────────
+
+export async function runOnce(sb) {
+  const cfg = await getResponderConfig()
+  if (!cfg.enabled) return { enabled: false, inbound: null, leads: null }
+  const inbound = cfg.inboundEnabled ? await pollInbound(sb, cfg) : { disabled: true }
+  const leads = cfg.leadsEnabled ? await pollLeads(sb, cfg) : { disabled: true }
+  return { enabled: true, inbound, leads }
+}
