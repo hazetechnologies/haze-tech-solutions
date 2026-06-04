@@ -279,7 +279,12 @@ export async function pollInbound(sb, cfg) {
       const { data: existing } = await sb.from('email_autoresponses').select('message_id').in('message_id', keys)
       seen = new Set((existing || []).map((r) => r.message_id))
     }
-    const todo = metas.filter((m) => !seen.has(m.key)).slice(0, cfg.maxPerRun)
+    // Newest-first: reply to the freshest mail this run rather than draining a
+    // stale unseen backlog oldest-first. metas are ascending (search/fetch order),
+    // so the highest UIDs are newest. Older unseen is still worked through over
+    // subsequent runs (processed messages are logged + filtered above).
+    const fresh = metas.filter((m) => !seen.has(m.key))
+    const todo = fresh.slice(-cfg.maxPerRun).reverse()
     if (!todo.length) return { replied, ignored, skipped, scanned }
 
     const knowledge = await fetchKnowledge()
