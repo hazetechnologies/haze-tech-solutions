@@ -289,7 +289,9 @@ async function emailResponderRunNow(req, res) {
   const ctx = await requireAdmin(req, res)
   if (!ctx) return
   try {
-    const result = await runEmailResponder(ctx.adminClient)
+    // fresh: true bypasses the 60s settings cache so a just-saved enable/prompt
+    // takes effect on this manual run (the cron path stays cached).
+    const result = await runEmailResponder(ctx.adminClient, { fresh: true })
     return res.status(200).json({ ok: true, ...result })
   } catch (e) {
     console.error('[email-responder-run-now] failed:', e?.message || e)
