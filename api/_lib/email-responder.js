@@ -116,8 +116,8 @@ function buildSystemPrompt(cfg, knowledge, kind) {
 
   p += `\n\n=== HOW TO RESPOND ===
 You are replying to an email. Begin your reply with EXACTLY ONE control token on its own first line, then the email body:
-- [[ANSWER]] — the sender is a real person asking something the BUSINESS INFORMATION / FAQs above cover. Answer their question using ONLY that information. Never invent facts, prices, or commitments.
-- [[DEFER]] — the sender is a real person, but their question is NOT covered above. Reply with a brief, warm acknowledgment and tell them a team member will follow up. Do not attempt to answer.`
+- [[ANSWER]] — the sender is a real person with a genuine question about or interest in the business. Answer helpfully using the BUSINESS INFORMATION / FAQs above. This INCLUDES broad or open-ended inquiries such as "what do you offer", "I'm interested in your services", "how can you help me", or "tell me about your pricing" — give a concise, useful overview drawn from the information above and invite a clear next step (a quick call, or sharing a few details about their project). Use ONLY the information provided — never invent specific prices, timelines, guarantees, or commitments that aren't stated above. If only part of their question is covered, answer that part and offer to connect them for the rest. Prefer ANSWER whenever the information above lets you say something genuinely useful.
+- [[DEFER]] — use ONLY when a genuine person asks about something the information above truly cannot address (e.g. account-specific details, a custom quote beyond the listed pricing, or a topic the business does not handle). Briefly acknowledge and say a team member will follow up.`
   if (kind === 'inbound') {
     p += `
 - [[IGNORE]] — the message is spam, cold sales/marketing outreach, a newsletter, or an automated/transactional notification (receipts, alerts, system notices) rather than a genuine inquiry. Output ONLY the token and nothing else; we will not send a reply.`
