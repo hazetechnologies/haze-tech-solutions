@@ -32,6 +32,7 @@ const EMAIL_RESPONDER_KEYS = [
   'email_responder_defer_message',
   'email_responder_max_per_run',
   'email_responder_blocklist',
+  'email_responder_inbound_ack',
 ]
 
 // A reusable toggle row (mirrors the Chat Bot page's switch styling).
@@ -169,6 +170,19 @@ export default function EmailAutoResponder() {
                 <p style={styles.fieldDesc}>Replies to new contact/lead submissions.</p>
                 <Toggle on={leadsOn} onClick={() => set('email_responder_leads_enabled', leadsOn ? 'false' : 'true')} />
               </div>
+            </div>
+
+            {/* Inbound reply behavior */}
+            <div style={{ opacity: masterOn ? 1 : 0.5, pointerEvents: masterOn ? 'auto' : 'none' }}>
+              <label style={styles.label}>Send acknowledgments for inbound email</label>
+              <p style={styles.fieldDesc}>
+                Off (recommended): the agent only emails a reply when it can actually answer from your FAQs. Anything it can't answer is left <strong>unread</strong> for you — no canned "a team member will follow up" emails. Turn on to send those acknowledgments too. (Does not affect form-lead replies.)
+              </p>
+              <Toggle
+                on={settings.email_responder_inbound_ack === 'true'}
+                onClick={() => set('email_responder_inbound_ack', settings.email_responder_inbound_ack === 'true' ? 'false' : 'true')}
+                label={settings.email_responder_inbound_ack === 'true' ? 'Acknowledgments on' : 'Answer-only (no acknowledgments)'}
+              />
             </div>
 
             {/* Mailbox connection */}
