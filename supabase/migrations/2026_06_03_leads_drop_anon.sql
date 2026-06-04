@@ -1,9 +1,14 @@
--- Close the anon read/insert hole on `leads`. The public contact form + audit
--- page now insert via the service-role endpoint api/submit-lead.js, so anon no
--- longer needs INSERT (and the over-broad anon SELECT that leaked every lead's
--- PII can go away entirely).
+-- Close the anon READ leak on `leads`: `leads_anon_select` let anyone with the
+-- public anon key read every lead's PII. The contact form + audit page now read
+-- back their inserted row via the service-role endpoint api/submit-lead.js, so
+-- anon no longer needs SELECT.
+--
+-- We intentionally KEEP `leads_anon_insert`: it is insert-only (not a read
+-- leak), it is no broader than the public /api/submit-lead endpoint, and other
+-- inserters (e.g. the n8n chatbot lead-capture workflow) still POST to
+-- /rest/v1/leads as anon. Removing it would require migrating those callers to
+-- the endpoint first.
 --
 -- APPLY ONLY AFTER the api/submit-lead.js + Contact.jsx + AuditPage.jsx deploy
--- is live, otherwise an old cached frontend would fail to capture leads.
-drop policy if exists leads_anon_insert on public.leads;
+-- is live (the old cached frontend's insert().select() needs anon SELECT).
 drop policy if exists leads_anon_select on public.leads;
