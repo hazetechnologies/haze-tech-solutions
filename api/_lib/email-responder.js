@@ -43,7 +43,7 @@ export async function getResponderConfig(opts = {}) {
   const g = (k, env) => getSetting(k, env, opts)
   const [
     enabled, inbound, leads, imapHost, imapPort, model, maxTokens,
-    personality, systemPrompt, signature, deferMessage, maxPerRun, blocklist,
+    personality, systemPrompt, signature, deferMessage, maxPerRun, blocklist, inboundAck,
   ] = await Promise.all([
     g('email_responder_enabled'),
     g('email_responder_inbound_enabled'),
@@ -58,11 +58,15 @@ export async function getResponderConfig(opts = {}) {
     g('email_responder_defer_message'),
     g('email_responder_max_per_run'),
     g('email_responder_blocklist'),
+    g('email_responder_inbound_ack'),
   ])
   return {
     enabled: enabled === 'true',
     inboundEnabled: inbound !== 'false', // sub-toggles default ON when master is on
     leadsEnabled: leads !== 'false',
+    // Inbound replies ONLY when the agent can answer from FAQs. Acknowledgment/
+    // "a team member will follow up" emails are NOT sent unless explicitly enabled.
+    inboundAck: inboundAck === 'true',
     imapHost: (imapHost || 'imap.hostinger.com').trim(),
     imapPort: parseInt(imapPort, 10) || 993,
     model: model || 'gpt-4o-mini',
@@ -334,6 +338,16 @@ export async function pollInbound(sb, cfg) {
           ignored++
           await finalize({ to_email: fromAddr, subject, reply_status: 'skipped', notes: 'ignore:not-an-inquiry' })
           continue // leave UNSEEN
+        }
+
+        // Inbox conversations: don't send canned acknowledgment/"team will follow
+        // up" emails. Only a real FAQ-grounded answer goes out (unless the admin
+        // opts back in via email_responder_inbound_ack). Deferred mail is logged
+        // and left UNSEEN for a human.
+        if (outcome === 'defer' && !cfg.inboundAck) {
+          skipped++
+          await finalize({ to_email: fromAddr, subject, reply_status: 'skipped', notes: 'defer:no-ack-sent' })
+          continue
         }
 
         const status = await sendEmail({

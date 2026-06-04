@@ -163,6 +163,21 @@ export default async function handler(req, res) {
       reply = reply.replace(/\[TRIGGER:[^\]]+\]/g, '').trim()
     }
 
+    // ── Log this exchange for Conversations analytics (best-effort) ──
+    // Stateless chat: each POST carries the full history, so persist only the
+    // newest user turn + this reply. Never blocks the response.
+    if (sessionId) {
+      const lastUser = [...messages].reverse().find((m) => m.role === 'user')
+      const rows = []
+      if (lastUser?.content) rows.push({ session_id: sessionId, channel: 'web', role: 'user', content: String(lastUser.content).slice(0, 4000) })
+      rows.push({ session_id: sessionId, channel: 'web', role: 'assistant', content: reply.slice(0, 4000) })
+      fetch(`${supabaseUrl}/rest/v1/chat_messages`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(rows),
+      }).catch((e) => console.error('chat log failed:', e.message))
+    }
+
     return res.status(200).json({ reply })
   } catch (err) {
     console.error('Chat error:', err)
