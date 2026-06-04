@@ -70,7 +70,9 @@ export async function getResponderConfig() {
     signature: signature || '',
     deferMessage: deferMessage || DEFAULT_DEFER,
     maxPerRun: Math.min(25, Math.max(1, parseInt(maxPerRun, 10) || 5)),
-    blocklist: (blocklist == null ? DEFAULT_BLOCKLIST : blocklist)
+    // Empty/whitespace falls back to defaults so saving the page with a blank
+    // box never silently disables the built-in spam guards (codex H3).
+    blocklist: (blocklist && blocklist.trim() ? blocklist : DEFAULT_BLOCKLIST)
       .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   }
 }
@@ -204,9 +206,17 @@ function deterministicSkip(parsed, fromAddr, ourMailbox, blocklist) {
   if (autoSub && autoSub !== 'no') return 'auto-submitted'
   const prec = get('precedence').toLowerCase()
   if (/bulk|list|junk|auto_reply/.test(prec)) return `precedence:${prec}`
-  if (h?.has('list-id') || h?.has('list-unsubscribe') || h?.has('x-auto-response-suppress')) return 'mailing-list'
-  const returnPath = get('return-path').trim()
-  if (returnPath === '<>' || returnPath === '') { /* empty is fine; <> is a bounce */ if (returnPath === '<>') return 'bounce' }
+  // mailparser collapses List-* headers into a single normalized 'list' key
+  // (codex M1); check that plus the raw names defensively.
+  if (h?.has('list') || h?.has('list-id') || h?.has('list-unsubscribe') || h?.has('x-auto-response-suppress')) return 'mailing-list'
+  // Null Return-Path ("<>") is a bounce/auto-generated message. mailparser may
+  // parse return-path as an address object, so inspect text + address (codex M2).
+  if (h?.has('return-path')) {
+    const rp = h.get('return-path')
+    const rpText = (typeof rp === 'object' ? (rp.text ?? '') : String(rp ?? '')).trim()
+    const rpAddr = (typeof rp === 'object' ? (rp.value?.[0]?.address ?? '') : '').trim()
+    if (rpText === '<>' || (typeof rp === 'object' && rpAddr === '')) return 'bounce'
+  }
   return null
 }
 
@@ -220,13 +230,17 @@ export async function pollInbound(sb, cfg) {
   const pass = await getSetting('SMTP_PASS', 'SMTP_PASS')
   if (!user || !pass) return { skipped: 'no-credentials', replied: 0, ignored: 0 }
 
+  // Bound every network phase well under vercel.json maxDuration:60 so a stalled
+  // IMAP host can't run the function past its budget (codex H4).
   const client = new ImapFlow({
     host: cfg.imapHost,
     port: cfg.imapPort,
     secure: cfg.imapPort === 993 || cfg.imapPort === 465,
     auth: { user, pass },
     logger: false,
-    socketTimeout: 30_000,
+    connectionTimeout: 12_000,
+    greetingTimeout: 8_000,
+    socketTimeout: 20_000,
   })
 
   let replied = 0, ignored = 0, skipped = 0, scanned = 0
@@ -237,33 +251,60 @@ export async function pollInbound(sb, cfg) {
     return { error: 'imap-connect-failed', detail: e?.message || String(e) }
   }
 
-  const lock = await client.getMailboxLock('INBOX')
+  let lock
   try {
+    lock = await client.getMailboxLock('INBOX')
+    // IMAP identity for messages that lack a Message-ID, so dedup never relies
+    // on a nullable column (codex H2).
+    const uidv = client.mailbox?.uidValidity != null ? String(client.mailbox.uidValidity) : 'na'
+
+    // Only scan recent unseen mail — a large spam backlog can't blow the budget
+    // on the envelope pass (codex M4).
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     let uids = []
-    try { uids = await client.search({ seen: false }, { uid: true }) } catch { uids = [] }
+    try { uids = await client.search({ seen: false, since }, { uid: true }) } catch { uids = [] }
     if (!uids || !uids.length) return { replied, ignored, skipped, scanned }
 
-    // Cheap envelope pass to read Message-IDs, then drop ones we've already handled.
+    // Envelope pass → a robust dedup key per message (Message-ID, else uidvalidity:uid).
     const metas = []
     for await (const msg of client.fetch(uids, { uid: true, envelope: true }, { uid: true })) {
-      metas.push({ uid: msg.uid, messageId: msg.envelope?.messageId || null })
+      const messageId = msg.envelope?.messageId || null
+      metas.push({ uid: msg.uid, messageId, key: messageId || `imap:${uidv}:${msg.uid}` })
     }
-    const ids = metas.map((m) => m.messageId).filter(Boolean)
+    const keys = metas.map((m) => m.key)
     let seen = new Set()
-    if (ids.length) {
-      const { data: existing } = await sb.from('email_autoresponses').select('message_id').in('message_id', ids)
+    if (keys.length) {
+      const { data: existing } = await sb.from('email_autoresponses').select('message_id').in('message_id', keys)
       seen = new Set((existing || []).map((r) => r.message_id))
     }
-    const todo = metas.filter((m) => !m.messageId || !seen.has(m.messageId)).slice(0, cfg.maxPerRun)
+    const todo = metas.filter((m) => !seen.has(m.key)).slice(0, cfg.maxPerRun)
+    if (!todo.length) return { replied, ignored, skipped, scanned }
 
     const knowledge = await fetchKnowledge()
     for (const meta of todo) {
       scanned++
+
+      // CLAIM before drafting/sending. The unique partial index on message_id
+      // makes this insert atomic, so two overlapping runs (cron + Run-now) can
+      // never both reply to the same message (codex H1). A 23505 means another
+      // run already owns it → skip.
+      let claimId
       try {
-        // Download full source for this one message.
+        const { data: claim, error: claimErr } = await sb.from('email_autoresponses')
+          .insert({ source: 'inbound', message_id: meta.key, notes: 'processing', ai_answered: false })
+          .select('id').single()
+        if (claimErr) {
+          if (claimErr.code !== '23505') console.error('[email-responder] claim failed:', claimErr.message)
+          continue
+        }
+        claimId = claim.id
+      } catch (e) { console.error('[email-responder] claim threw:', e?.message || e); continue }
+
+      const finalize = (patch) => sb.from('email_autoresponses').update(patch).eq('id', claimId)
+      try {
         let source = null
         for await (const msg of client.fetch(meta.uid, { uid: true, source: true }, { uid: true })) source = msg.source
-        if (!source) continue
+        if (!source) { await finalize({ reply_status: 'skipped', notes: 'no-source' }); continue }
         const parsed = await simpleParser(source)
         const fromAddr = parsed.from?.value?.[0]?.address || ''
         const fromName = parsed.from?.value?.[0]?.name || fromAddr
@@ -274,7 +315,7 @@ export async function pollInbound(sb, cfg) {
         const skipReason = deterministicSkip(parsed, fromAddr, user, cfg.blocklist)
         if (skipReason) {
           skipped++
-          await logRow(sb, { source: 'inbound', to_email: fromAddr, subject, message_id: messageId, reply_status: 'skipped', notes: `skip:${skipReason}`, ai_answered: false })
+          await finalize({ to_email: fromAddr, subject, reply_status: 'skipped', notes: `skip:${skipReason}` })
           continue
         }
 
@@ -284,7 +325,7 @@ export async function pollInbound(sb, cfg) {
 
         if (outcome === 'ignore') {
           ignored++
-          await logRow(sb, { source: 'inbound', to_email: fromAddr, subject, message_id: messageId, reply_status: 'skipped', notes: 'ignore:not-an-inquiry', ai_answered: false })
+          await finalize({ to_email: fromAddr, subject, reply_status: 'skipped', notes: 'ignore:not-an-inquiry' })
           continue // leave UNSEEN
         }
 
@@ -302,13 +343,17 @@ export async function pollInbound(sb, cfg) {
           // Layer 3 — only replied-to mail is marked read.
           try { await client.messageFlagsAdd(meta.uid, ['\\Seen'], { uid: true }) } catch { /* non-fatal */ }
         }
-        await logRow(sb, { source: 'inbound', to_email: fromAddr, subject, message_id: messageId, reply_status: status, notes: outcome === 'answer' ? 'answer' : 'defer', ai_answered: outcome === 'answer' })
+        await finalize({ to_email: fromAddr, subject, reply_status: status, notes: outcome === 'answer' ? 'answer' : 'defer', ai_answered: outcome === 'answer' })
       } catch (e) {
         console.error('[email-responder] inbound message failed:', e?.message || e)
+        try { await finalize({ reply_status: 'failed', notes: 'exception' }) } catch { /* ignore */ }
       }
     }
+  } catch (e) {
+    console.error('[email-responder] inbound poll failed:', e?.message || e)
+    return { error: 'inbound-failed', detail: e?.message || String(e), replied, ignored, skipped, scanned }
   } finally {
-    lock.release()
+    try { lock?.release() } catch { /* ignore */ }
     try { await client.logout() } catch { /* ignore */ }
   }
   return { replied, ignored, skipped, scanned }
@@ -355,9 +400,14 @@ export async function pollLeads(sb, cfg) {
         headers: { 'Auto-Submitted': 'auto-replied' },
       })
       if (status === 'sent') replied++
+      // Release the claim on a genuine transient send failure so a later run
+      // retries (codex design note). 'skipped' (SMTP not configured) keeps the
+      // claim so we don't re-draft via OpenAI on every run while it's misconfigured.
+      else if (status === 'failed') await sb.from('leads').update({ auto_replied_at: null }).eq('id', lead.id)
       await logRow(sb, { source: 'lead', to_email: lead.email, subject: 'lead auto-reply', lead_id: lead.id, reply_status: status, notes: outcome, ai_answered: outcome === 'answer' })
     } catch (e) {
       console.error('[email-responder] lead reply failed:', e?.message || e)
+      await sb.from('leads').update({ auto_replied_at: null }).eq('id', lead.id) // release for retry
       await logRow(sb, { source: 'lead', to_email: lead.email, lead_id: lead.id, reply_status: 'failed', notes: 'exception', ai_answered: false })
     }
   }

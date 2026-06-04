@@ -10,6 +10,8 @@ alter table leads add column if not exists auto_replied_at timestamptz;
 update leads set auto_replied_at = now() where auto_replied_at is null;
 
 -- 2. Auto-response log / inbound dedup.
+-- NOTE: PII-bearing (to_email + subject of real inbound mail). Admin-only via
+-- RLS below; apply a retention policy if needed. Email bodies are NOT stored.
 create table if not exists email_autoresponses (
   id           uuid primary key default gen_random_uuid(),
   source       text not null check (source in ('inbound','lead')),
