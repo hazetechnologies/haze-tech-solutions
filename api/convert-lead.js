@@ -1,7 +1,6 @@
 import { requireAdmin } from './_lib/require-admin.js'
 import { emitNotification } from './_lib/notifications.js'
-
-const SITE_URL = process.env.VITE_SITE_URL || 'https://www.hazetechsolutions.com'
+import { mintResetToken } from './_lib/portal-reset.js'
 
 function err(res, status, code, message, extras = {}) {
   return res.status(status).json({ error: code, message, ...extras })
@@ -98,22 +97,24 @@ async function runHandler(req, res) {
     })
   }
 
-  // Send invite
-  const { data: inviteData, error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(
-    lead.email,
-    { redirectTo: `${SITE_URL}/portal/accept-invite` }
-  )
-  if (inviteErr) {
-    const msg = (inviteErr.message || '').toLowerCase()
-    if (msg.includes('rate limit') || inviteErr.status === 429) {
-      return err(res, 429, 'invite_rate_limited',
-        'Email rate limit reached. Try again in an hour or set up custom SMTP at /admin/secrets.')
+  // Create the auth user WITHOUT sending a Supabase email. We deliver our own
+  // SafeLinks-safe set-password link via the branded welcome email below (over
+  // Hostinger SMTP) instead of Supabase's one-time invite link — which email
+  // scanners (Outlook SafeLinks) pre-burn, and which is rate-limited (2/hr).
+  const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
+    email: lead.email,
+    email_confirm: true,
+  })
+  if (createErr) {
+    const msg = (createErr.message || '').toLowerCase()
+    if (createErr.status === 422 || msg.includes('already') || msg.includes('exists') || msg.includes('registered')) {
+      return err(res, 409, 'client_exists', 'An account with this email already exists')
     }
-    return err(res, 500, 'invite_failed', inviteErr.message)
+    return err(res, 500, 'invite_failed', createErr.message)
   }
 
-  const newUserId = inviteData?.user?.id
-  if (!newUserId) return err(res, 500, 'invite_failed', 'Invite returned no user id')
+  const newUserId = created?.user?.id
+  if (!newUserId) return err(res, 500, 'invite_failed', 'User creation returned no id')
 
   // Insert client row
   const { data: client, error: clientErr } = await adminClient
@@ -160,10 +161,19 @@ async function runHandler(req, res) {
     console.warn(`convert-lead: client ${client.id} created but lead ${lead.id} update failed:`, leadUpdateErr.message)
   }
 
-  // Notify: welcome the client + alert admin of the new client. Best-effort.
-  // No setPasswordUrl here: lead-convert uses Supabase's invite email for that.
+  // Mint a SafeLinks-safe set-password link for the welcome email. Best-effort.
+  let setPasswordUrl = null
+  try {
+    setPasswordUrl = await mintResetToken(adminClient, newUserId, lead.email)
+  } catch (e) {
+    console.error('convert-lead: mintResetToken failed:', e?.message || e)
+  }
+
+  // Notify: welcome the client (with the set-password link) + alert admin of the
+  // new client. Best-effort.
   await emitNotification(adminClient, 'client.created', {
     client: { id: client.id, name, email: lead.email, company: company || null, product: productName, price: price != null && price !== '' ? Number(price) : null },
+    setPasswordUrl,
     source: 'lead-convert',
   })
 
