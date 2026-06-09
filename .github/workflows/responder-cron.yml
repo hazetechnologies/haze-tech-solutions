@@ -24,3 +24,8 @@ jobs:
           curl -sS -m 70 -o /dev/null -w "notify-status: %{http_code}\n" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://www.hazetechsolutions.com/api/website?action=cron-notify-status"
+      - name: Brand-kit resume watchdog
+        run: |
+          curl -sS -m 70 -o /dev/null -w "brand-kit-resume: %{http_code}\n" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://www.hazetechsolutions.com/api/website?action=cron-brand-kit-resume"

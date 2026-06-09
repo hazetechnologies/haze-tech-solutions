@@ -46,6 +46,7 @@ export default async function handler(req, res) {
     case 'cron-notify-status':  return req.method === 'GET'  ? cronNotifyStatus(req, res) : methodNotAllowed(res, 'GET')
     case 'cron-admin-digest':   return req.method === 'GET'  ? cronAdminDigest(req, res)  : methodNotAllowed(res, 'GET')
     case 'cron-email-autoresponder': return req.method === 'GET'  ? cronEmailAutoresponder(req, res) : methodNotAllowed(res, 'GET')
+    case 'cron-brand-kit-resume':    return req.method === 'GET'  ? cronBrandKitResume(req, res)    : methodNotAllowed(res, 'GET')
     case 'email-responder-run-now':  return req.method === 'POST' ? emailResponderRunNow(req, res)   : methodNotAllowed(res, 'POST')
     case 'request-portal-link': return req.method === 'POST' ? requestPortalLink(req, res) : methodNotAllowed(res, 'POST')
     case 'portal-reset':        return req.method === 'POST' ? portalReset(req, res)       : methodNotAllowed(res, 'POST')
@@ -300,6 +301,42 @@ async function emailResponderRunNow(req, res) {
     console.error('[email-responder-run-now] failed:', e?.message || e)
     return res.status(500).json({ error: 'responder_failed', message: e?.message || String(e) })
   }
+}
+
+// GET ?action=cron-brand-kit-resume — watchdog. The brand-kit edge function
+// generates banners ~2 at a time and self-invokes to continue, but a Supabase
+// function invoking ITSELF is unreliable (the parent is killed before the child
+// reliably starts), so a kit can stall mid-banners. An EXTERNAL nudge always
+// works, so this cron re-fires phase='banners' for any kit that's been
+// 'generating' (post logo-approval) with no progress for >2 min. Resume-safe:
+// the edge fn skips banners already in the row. Bounded to recent kits so a
+// permanently-broken kit isn't nudged forever. CRON_SECRET-gated.
+async function cronBrandKitResume(req, res) {
+  if (!requireCron(req, res)) return
+  const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+  const staleBefore = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+  const giveUpBefore = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  const { data: stuck } = await sb.from('brand_kits')
+    .select('id')
+    .eq('status', 'generating')
+    .not('approved_logo_asset_id', 'is', null) // banner phase (logo already approved)
+    .lt('updated_at', staleBefore)             // no progress recently → chain died
+    .gt('created_at', giveUpBefore)            // don't nudge ancient/dead kits forever
+    .limit(5)
+  const nudged = []
+  for (const k of stuck || []) {
+    try {
+      await fetch(`${EDGE_FN}/generate-brand-kit`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kit_id: k.id, phase: 'banners' }),
+      })
+      nudged.push(k.id)
+    } catch (e) {
+      console.error('[cron-brand-kit-resume] nudge failed for', k.id, e?.message || e)
+    }
+  }
+  return res.status(200).json({ ok: true, nudged })
 }
 
 // POST ?action=request-portal-link — public. Body: { email }. If a client with
