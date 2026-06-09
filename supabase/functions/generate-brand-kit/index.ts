@@ -24,12 +24,26 @@ import { resizeToFinalDims } from './post-process.ts'
 import { composeBanner } from './compose-banner.ts'
 import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
 
-const OPENAI_KEY    = Deno.env.get('OPENAI_API_KEY')!
+// DB-first: the admin's openai_api_key (admin_settings) is the single source of
+// truth and wins over the edge secret. Resolved per run in processBrandKit so a
+// key rotation in Admin → Settings propagates here automatically (no redeploy /
+// secret-sync). Starts from the edge-secret value as the bootstrap fallback.
+let OPENAI_KEY      = Deno.env.get('OPENAI_API_KEY') ?? ''
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const KIE_API_KEY   = Deno.env.get('KIE_API_KEY')!
 const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const KIE_BASE      = 'https://api.kie.ai/api/v1'
+
+// Read the OpenAI key from admin_settings (DB), falling back to the edge secret.
+async function resolveOpenAIKey(supabase: { from: (t: string) => any }): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('admin_settings').select('value').eq('key', 'openai_api_key').maybeSingle()
+    if (data?.value) return data.value as string
+  } catch (_) { /* fall back to the edge secret below */ }
+  return Deno.env.get('OPENAI_API_KEY') ?? ''
+}
 
 // Fire a fresh self-invoke of this function for the same kit, banner phase.
 // Used to chain across Supabase Edge Function execution-time caps: when one
@@ -111,6 +125,9 @@ async function processBrandKit(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
+
+  // Always use the admin-configured key (DB-first) for this run.
+  OPENAI_KEY = await resolveOpenAIKey(supabase)
 
   async function update(patch: Record<string, unknown>) {
     await supabase.from('brand_kits').update(patch).eq('id', kit_id)

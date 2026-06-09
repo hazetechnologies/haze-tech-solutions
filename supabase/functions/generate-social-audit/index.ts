@@ -8,7 +8,19 @@ import { renderMarkdown } from './lib/render-markdown.ts'
 import type { RawData, AuditReport } from './lib/types.ts'
 import { trackedOpenAi } from '../_shared/tracked-openai.ts'
 
-const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY')!
+// DB-first: the admin's openai_api_key (admin_settings) wins over the edge
+// secret, resolved per run so a key rotation in Admin → Settings propagates here
+// automatically. Bootstrap fallback is the edge-secret value.
+let OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
+
+async function resolveOpenAIKey(supabase: { from: (t: string) => any }): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('admin_settings').select('value').eq('key', 'openai_api_key').maybeSingle()
+    if (data?.value) return data.value as string
+  } catch (_) { /* fall back to the edge secret below */ }
+  return Deno.env.get('OPENAI_API_KEY') ?? ''
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
@@ -29,6 +41,9 @@ Deno.serve(async (req) => {
 
 async function processAudit(audit_id: string): Promise<void> {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+  // Always use the admin-configured key (DB-first) for this run.
+  OPENAI_KEY = await resolveOpenAIKey(supabase)
 
   async function update(patch: Record<string, unknown>) {
     await supabase.from('social_audits').update(patch).eq('id', audit_id)
