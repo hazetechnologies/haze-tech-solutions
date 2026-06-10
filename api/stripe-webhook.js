@@ -5,6 +5,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { getStripe, getWebhookSecret } from './_lib/stripe.js'
 import { emitNotification } from './_lib/notifications.js'
+import { awardCommissionIfReferred } from './_lib/affiliate-commissions.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -83,6 +84,17 @@ export default async function handler(req, res) {
               clientEmail: subClient?.email,
               planName: sub.items.data[0]?.price?.nickname || undefined,
             })
+            // Affiliate commission on first subscription (idempotent; never throws).
+            const firstAmount = sub.items.data[0]?.price?.unit_amount ?? null
+            if (firstAmount > 0) {
+              await awardCommissionIfReferred(sb, {
+                clientId,
+                baseAmountCents: firstAmount,
+                sourceTable: 'subscriptions',
+                sourceId: sub.id,
+                eventKey: `first_payment:subscription:${sub.id}`,
+              })
+            }
           }
         }
         break
@@ -128,6 +140,16 @@ export default async function handler(req, res) {
             clientEmail: payer?.email,
             amount: inv.amount_paid != null ? (inv.amount_paid / 100).toFixed(2) : undefined,
           })
+          // Affiliate commission on first paid invoice (idempotent; never throws).
+          if (payer?.id && inv.amount_paid > 0) {
+            await awardCommissionIfReferred(sb, {
+              clientId: payer.id,
+              baseAmountCents: inv.amount_paid,
+              sourceTable: 'invoices',
+              sourceId: inv.id,
+              eventKey: `first_payment:invoice:${inv.id}`,
+            })
+          }
         }
         break
       }

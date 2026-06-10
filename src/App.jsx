@@ -27,6 +27,8 @@ import AutomationTriggers from './pages/admin/AutomationTriggers'
 import SocialAudits       from './pages/admin/SocialAudits'
 import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
 import AdminWorkflows     from './pages/admin/AdminWorkflows'
+import AffiliatesManager   from './pages/admin/AffiliatesManager'
+import AffiliateDashboard  from './pages/affiliate/AffiliateDashboard'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
@@ -49,6 +51,8 @@ import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
 import useTelemetryIdentity from './hooks/useTelemetryIdentity'
 import useGaPageviews from './hooks/useGaPageviews'
+import useAffiliateRef from './hooks/useAffiliateRef'
+import RefRedirect from './pages/RefRedirect'
 
 function TelemetryIdentityMount() {
   useTelemetryIdentity()
@@ -61,6 +65,12 @@ function GaPageviewMount() {
   return null
 }
 
+// Inside <BrowserRouter> — captures ?ref=CODE referral attribution per route.
+function AffiliateRefMount() {
+  useAffiliateRef()
+  return null
+}
+
 export default function App() {
   return (
     <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryFallback resetError={resetError} />}>
@@ -68,9 +78,11 @@ export default function App() {
         <TelemetryIdentityMount />
         <BrowserRouter>
           <GaPageviewMount />
+          <AffiliateRefMount />
           <Routes>
           {/* Public */}
           <Route path="/"       element={<MainSite />} />
+          <Route path="/r/:code" element={<RefRedirect />} />
           <Route path="/audit"  element={<AuditPage />} />
           <Route path="/audit/:id" element={<AuditResults />} />
           <Route path="/free-social-audit" element={<FreeSocialAudit />} />
@@ -80,6 +92,7 @@ export default function App() {
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/cart"    element={<CartPage />} />
+          <Route path="/affiliate" element={<AffiliateDashboard />} />
 
           {/* Admin login */}
           <Route path="/admin/login" element={<AdminLogin />} />
@@ -99,6 +112,7 @@ export default function App() {
             <Route path="clients"         element={<ClientManager />} />
             <Route path="clients/:clientId" element={<ClientDetail />} />
             <Route path="products"        element={<ProductsManager />} />
+            <Route path="affiliates"      element={<AffiliatesManager />} />
             <Route path="settings"        element={<Settings />} />
             <Route path="business-info"   element={<BusinessInfo />} />
             <Route path="conversations"   element={<Conversations />} />

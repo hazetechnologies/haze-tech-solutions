@@ -243,4 +243,64 @@ export const REGISTRY = {
       }),
     },
   ],
+
+  'affiliate.signup': [
+    {
+      audience: 'admin',
+      resolveTo: async () => adminEmail(),
+      render: (p) => {
+        const a = p.affiliate || {}
+        return {
+          title: `New affiliate: ${a.name || a.email || 'unknown'}`,
+          body: `${a.email || ''}${a.code ? ` · code ${a.code}` : ''} joined the Partner Program.`,
+          link: '/admin/affiliates',
+          emailSubject: `New affiliate: ${a.name || a.email}`,
+          emailHtml: wrapHtml('New affiliate joined',
+            `<p>A new partner signed up to refer leads:</p>${detailTable([['Name', a.name], ['Email', a.email], ['Referral code', a.code]])}${button('https://www.hazetechsolutions.com/admin/affiliates', 'View affiliates')}`),
+        }
+      },
+    },
+  ],
+
+  'commission.earned': [
+    {
+      audience: 'client', // the affiliate
+      resolveTo: async (_sb, p) => p.affiliate?.email || null,
+      render: (p) => ({
+        title: 'You earned a commission 🎉',
+        body: `A referral became a paying client${p.amount ? ` — you earned ${money(p.amount)}` : ''}. It's pending review.`,
+        link: '/affiliate',
+        emailSubject: 'You earned a referral commission 🎉',
+        emailHtml: wrapHtml('Nice — you earned a commission! 🎉',
+          `<p>One of your referrals just became a paying Haze Tech client.</p>${detailTable([['Commission', money(p.amount)], ['Status', 'Pending review']])}${button('https://www.hazetechsolutions.com/affiliate', 'View your dashboard')}<p style="color:#94a3b8;font-size:13px">We'll let you know when it's approved and paid.</p>`),
+      }),
+    },
+    {
+      audience: 'admin',
+      resolveTo: async () => adminEmail(),
+      render: (p) => ({
+        title: `Commission earned: ${p.affiliate?.name || p.affiliate?.email || ''}`,
+        body: `${money(p.amount) || 'A commission'} owed${p.clientEmail ? ` on ${p.clientEmail}` : ''}.`,
+        link: '/admin/affiliates',
+        emailSubject: `Affiliate commission earned${p.amount ? ` — ${money(p.amount)}` : ''}`,
+        emailHtml: wrapHtml('Affiliate commission earned',
+          `<p><b>${esc(p.affiliate?.name || p.affiliate?.email || 'An affiliate')}</b> earned a commission.</p>${detailTable([['Commission', money(p.amount)], ['Referred client', p.clientEmail], ['Affiliate', p.affiliate?.email]])}${button('https://www.hazetechsolutions.com/admin/affiliates', 'Review commissions')}`),
+      }),
+    },
+  ],
+
+  'commission.paid': [
+    {
+      audience: 'client', // the affiliate
+      resolveTo: async (_sb, p) => p.affiliate?.email || null,
+      render: (p) => ({
+        title: 'Commission paid 💸',
+        body: `Your referral commission${p.amount ? ` of ${money(p.amount)}` : ''} has been paid.`,
+        link: '/affiliate',
+        emailSubject: 'Your referral commission has been paid 💸',
+        emailHtml: wrapHtml('Your commission has been paid! 💸',
+          `<p>We've paid out your referral commission. Thank you for partnering with Haze Tech.</p>${detailTable([['Amount', money(p.amount)], ['Reference', p.payout_ref]])}${button('https://www.hazetechsolutions.com/affiliate', 'View your dashboard')}`),
+      }),
+    },
+  ],
 }

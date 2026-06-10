@@ -7,6 +7,7 @@ import {
   Zap, Smartphone, Shield, TrendingUp, ExternalLink, RotateCcw, Check,
 } from 'lucide-react'
 import { identifyLead, trackEvent } from '../lib/telemetry'
+import { getRefCode } from '../lib/affiliateRef'
 
 const SERVICE_ID = 'service_4uzwhit'
 const TEMPLATE_ID = 'template_oznyojk'
@@ -158,6 +159,7 @@ export default function AuditPage() {
           business_name: url,
           service_interest: 'Website Audit',
           source: 'audit',
+          ref: getRefCode(),
           url,
           perf_score: scores.perf,
           seo_score: scores.seo,

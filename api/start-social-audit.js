@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { lead_id, inputs } = req.body || {}
+  const { lead_id, inputs, ref } = req.body || {}
   if (!inputs || typeof inputs !== 'object') {
     return res.status(400).json({ error: 'inputs required' })
   }
@@ -28,6 +28,15 @@ export default async function handler(req, res) {
   // a leads row so audit submissions show up in the admin CRM.
   let resolvedLeadId = lead_id || null
   const inputEmail = typeof inputs.email === 'string' ? inputs.email.trim().toLowerCase() : ''
+  // Referral attribution for newly-created audit leads (validated, non-blocking).
+  const refRaw = String(ref || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16)
+  let refAffiliateId = null
+  if (refRaw) {
+    try {
+      const { data: aff } = await supabase.from('affiliates').select('id').ilike('code', refRaw).eq('status', 'active').maybeSingle()
+      refAffiliateId = aff?.id || null
+    } catch (e) { console.error('ref lookup failed (non-fatal):', e?.message || e) }
+  }
   if (!resolvedLeadId && inputEmail) {
     try {
       const { data: existing, error: lookupErr } = await supabase
@@ -51,6 +60,8 @@ export default async function handler(req, res) {
             business_name: inputs.business_name || null,
             service_interest: 'Social Media Marketing',
             source: 'free-social-audit',
+            ref_code_raw: refRaw || null,
+            referred_by_affiliate_id: refAffiliateId,
           })
           .select('id')
           .single()
