@@ -1,0 +1,113 @@
+/* brochures/brochure.css — shared HTS brand styles for print-ready A4 one-pagers.
+   Rendered to PDF via Playwright page.pdf({ format:'A4', printBackground:true }). */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --navy: #040D1A;
+  --navy2: #0B1A2E;
+  --cyan: #00CFFF;
+  --orange: #FF6B00;
+  --purple: #A78BFA;
+  --green: #22C55E;
+  --text: #E8F4FF;
+  --mut: #93A8C0;
+  --line: rgba(255,255,255,0.10);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+@page { size: A4; margin: 0; }
+
+html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  width: 210mm;
+  min-height: 297mm;
+}
+
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 16mm 15mm 14mm;
+  background:
+    radial-gradient(circle at 85% -5%, rgba(0,207,255,0.16), transparent 45%),
+    radial-gradient(circle at 0% 105%, rgba(255,107,0,0.12), transparent 40%),
+    var(--navy);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand img { width: 38px; height: 38px; border-radius: 9px; }
+.brand .wm { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 19px; letter-spacing: 0.02em; line-height: 1; }
+.brand .wm .t { color: var(--orange); }
+.brand .tag { font-size: 10.5px; color: var(--mut); letter-spacing: 0.14em; text-transform: uppercase; margin-top: 3px; }
+
+.eyebrow { color: var(--cyan); font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; }
+
+h1 { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 32px; line-height: 1.1; letter-spacing: -0.01em; margin: 10px 0; }
+h1 .accent { color: var(--cyan); }
+.lede { font-size: 14px; color: var(--mut); line-height: 1.55; max-width: 165mm; }
+
+h2 { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.04em; margin-bottom: 10px; }
+
+/* ── Cards / grid ── */
+.grid { display: grid; gap: 10px; }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+.card {
+  background: linear-gradient(180deg, var(--navy2), rgba(11,26,46,0.5));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 15px 16px;
+}
+.card .dot { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-bottom: 9px; }
+.card h3 { font-size: 13.5px; font-weight: 700; margin-bottom: 4px; }
+.card p { font-size: 11.5px; color: var(--mut); line-height: 1.5; }
+
+.bul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.bul li { font-size: 12px; color: var(--text); padding-left: 20px; position: relative; line-height: 1.4; }
+.bul li::before { content: '▸'; position: absolute; left: 0; color: var(--cyan); font-weight: 700; }
+
+/* ── Stats strip ── */
+.stats { display: flex; gap: 26px; }
+.stats .s .n { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 24px; color: var(--cyan); }
+.stats .s .l { font-size: 10.5px; color: var(--mut); text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── Steps ── */
+.steps { display: flex; gap: 10px; }
+.step { flex: 1; background: var(--navy2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; position: relative; }
+.step .num { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 26px; color: rgba(0,207,255,0.35); line-height: 1; }
+.step h3 { font-size: 13px; font-weight: 700; margin: 6px 0 4px; }
+.step p { font-size: 11px; color: var(--mut); line-height: 1.45; }
+
+/* ── Highlight / offer banner ── */
+.offer { background: linear-gradient(120deg, rgba(0,207,255,0.14), rgba(255,107,0,0.12)); border: 1px solid rgba(0,207,255,0.35); border-radius: 14px; padding: 18px 20px; }
+.offer .big { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 26px; }
+.offer .big .hl { color: var(--green); }
+.offer p { font-size: 12px; color: var(--mut); margin-top: 4px; }
+
+/* ── CTA footer ── */
+.cta {
+  margin-top: auto;
+  background: linear-gradient(120deg, var(--cyan), #0099CC);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  color: #021018;
+}
+.cta .h { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 16px; }
+.cta .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+.cta .pill { background: #021018; color: var(--cyan); font-weight: 700; font-size: 13px; padding: 10px 16px; border-radius: 9px; white-space: nowrap; }
+
+.foot { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--mut); margin-top: 10px; letter-spacing: 0.02em; }
+
+.section { margin-top: 16px; }
+.spaced { margin-top: 14px; }
