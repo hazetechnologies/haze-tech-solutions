@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     case 'intake':              return req.method === 'POST' ? intake(req, res)           : methodNotAllowed(res, 'POST')
     case 'start':               return req.method === 'POST' ? start(req, res)            : methodNotAllowed(res, 'POST')
     case 'status':              return req.method === 'GET'  ? status(req, res)           : methodNotAllowed(res, 'GET')
+    case 'public-config':       return req.method === 'GET'  ? publicConfig(req, res)     : methodNotAllowed(res, 'GET')
     case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
     case 'download-asset':      return req.method === 'GET'  ? downloadAsset(req, res)    : methodNotAllowed(res, 'GET')
     case 'hsp-proxy':           return req.method === 'POST' ? hspProxy(req, res)         : methodNotAllowed(res, 'POST')
@@ -57,6 +58,20 @@ export default async function handler(req, res) {
 function methodNotAllowed(res, allow) {
   res.setHeader('Allow', allow)
   return res.status(405).json({ error: 'method_not_allowed', message: `${allow} only` })
+}
+
+// GET ?action=public-config — non-secret runtime config for the public SPA
+// (e.g. the GA4 Measurement ID). Read DB-first from admin_settings so admins
+// can set/rotate it from /admin/settings without a redeploy; env is fallback.
+async function publicConfig(req, res) {
+  let gaMeasurementId = null
+  try {
+    gaMeasurementId = await getSetting('ga_measurement_id', 'GA_MEASUREMENT_ID')
+  } catch {
+    gaMeasurementId = process.env.GA_MEASUREMENT_ID || null
+  }
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
+  return res.status(200).json({ gaMeasurementId: gaMeasurementId || null })
 }
 
 // POST ?action=activate — admin creates a website_projects row

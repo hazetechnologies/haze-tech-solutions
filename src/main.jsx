@@ -9,7 +9,13 @@ import { initGtag } from './lib/gtag'
 
 initPosthog()
 initSentry()
-initGtag()
+
+// GA4: resolve the Measurement ID DB-first (admin_settings via public-config),
+// falling back to the build-time env var if the fetch fails.
+fetch('/api/website?action=public-config')
+  .then((r) => (r.ok ? r.json() : null))
+  .then((cfg) => initGtag(cfg?.gaMeasurementId))
+  .catch(() => initGtag())
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
