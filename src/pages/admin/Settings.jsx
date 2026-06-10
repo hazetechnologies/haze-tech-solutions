@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Mail, Key, CreditCard, Zap } from 'lucide-react'
+import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Mail, Key, CreditCard, Zap, BarChart3 } from 'lucide-react'
 
 const MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (Best quality)' },
@@ -159,6 +159,36 @@ export default function Settings() {
               {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* ── Analytics Configuration ── */}
+      <div style={styles.card}>
+        <div style={styles.cardHeader}>
+          <div style={{ ...styles.cardIcon, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <BarChart3 size={18} color="#FBBF24" />
+          </div>
+          <div>
+            <h3 style={styles.cardTitle}>Google Analytics</h3>
+            <p style={styles.cardDesc}>GA4 pageview + event tracking for the public site, admin, and portal</p>
+          </div>
+        </div>
+
+        <div>
+          <label style={styles.label}>GA4 Measurement ID</label>
+          <p style={styles.fieldDesc}>
+            From your GA4 web data stream at <a href="https://analytics.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#00D4FF' }}>analytics.google.com</a> (Admin → Data streams → your stream). Format: <code style={{ color: '#94A3B8' }}>G-XXXXXXXXXX</code>. Leave blank to disable analytics.
+          </p>
+          <input
+            type="text"
+            value={settings.ga_measurement_id || ''}
+            onChange={e => set('ga_measurement_id', e.target.value.trim())}
+            placeholder="G-XXXXXXXXXX"
+            style={styles.input}
+          />
+          <p style={{ fontSize: 11, color: '#475569', margin: '8px 0 0', lineHeight: 1.5 }}>
+            Applies on the next page load for visitors — no redeploy needed. Confirm hits in GA4 → Reports → Realtime.
+          </p>
         </div>
       </div>
 
