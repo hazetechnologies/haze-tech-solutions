@@ -48,9 +48,16 @@ import PortalSocial          from './pages/portal/PortalSocial'
 import * as Sentry from '@sentry/react'
 import SentryFallback from './components/SentryFallback'
 import useTelemetryIdentity from './hooks/useTelemetryIdentity'
+import useGaPageviews from './hooks/useGaPageviews'
 
 function TelemetryIdentityMount() {
   useTelemetryIdentity()
+  return null
+}
+
+// Inside <BrowserRouter> so useLocation() works — sends a GA4 page_view per route.
+function GaPageviewMount() {
+  useGaPageviews()
   return null
 }
 
@@ -60,6 +67,7 @@ export default function App() {
       <AuthProvider>
         <TelemetryIdentityMount />
         <BrowserRouter>
+          <GaPageviewMount />
           <Routes>
           {/* Public */}
           <Route path="/"       element={<MainSite />} />

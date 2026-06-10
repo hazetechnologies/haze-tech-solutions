@@ -5,9 +5,11 @@ import './index.css'
 import App from './App.jsx'
 import { initPosthog } from './lib/posthog'
 import { initSentry } from './lib/sentry'
+import { initGtag } from './lib/gtag'
 
 initPosthog()
 initSentry()
+initGtag()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
