@@ -31,7 +31,7 @@ async function runHandler(req, res) {
 
   // Load lead
   const { data: lead, error: leadErr } = await adminClient
-    .from('leads').select('id, name, email, business_name, converted_to_client_id').eq('id', lead_id).single()
+    .from('leads').select('id, name, email, business_name, converted_to_client_id, referred_by_affiliate_id').eq('id', lead_id).single()
   if (leadErr || !lead) return err(res, 404, 'lead_not_found', 'Lead not found')
 
   if (lead.converted_to_client_id) {
@@ -57,6 +57,14 @@ async function runHandler(req, res) {
     const { error: linkErr } = await adminClient
       .from('leads').update({ status: 'closed', converted_to_client_id: existing.id }).eq('id', lead.id)
     if (linkErr) return err(res, 500, 'lead_update_failed', linkErr.message)
+
+    // Carry referral attribution onto the existing client if it has none yet.
+    if (lead.referred_by_affiliate_id) {
+      await adminClient.from('clients')
+        .update({ referred_by_affiliate_id: lead.referred_by_affiliate_id })
+        .eq('id', existing.id).is('referred_by_affiliate_id', null)
+        .then(({ error }) => { if (error) console.warn('link-only attribution stamp failed:', error.message) })
+    }
 
     return res.status(200).json({
       client_id: existing.id,
@@ -130,6 +138,7 @@ async function runHandler(req, res) {
       product: productName,                     // denormalized from products.name
       price: price != null && price !== '' ? Number(price) : null,
       subscription_terms: planTerms,            // denormalized from subscription_plans.billing_cycle
+      referred_by_affiliate_id: lead.referred_by_affiliate_id || null,  // carry referral attribution
     })
     .select('id')
     .single()

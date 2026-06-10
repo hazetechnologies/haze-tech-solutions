@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, Link } from 'react-router-dom'
 import { Send, AlertCircle, ArrowLeft, Sparkles, Zap, ShieldCheck } from 'lucide-react'
 import { identifyLead, trackEvent } from '../lib/telemetry'
+import { getRefCode } from '../lib/affiliateRef'
 
 const INITIAL_FORM = {
   name: '',
@@ -65,6 +66,7 @@ export default function FreeSocialAudit() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lead_id: null,
+          ref: getRefCode(),
           inputs: {
             name: form.name,
             email: form.email,

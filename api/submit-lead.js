@@ -46,6 +46,16 @@ export default async function handler(req, res) {
   }
 
   const sb = createClient(url, key)
+
+  // Referral attribution: validate any ref code against an active affiliate.
+  // Invalid codes are recorded raw but never block the lead.
+  const refRaw = String(body.ref || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16)
+  if (refRaw) {
+    row.ref_code_raw = refRaw
+    const { data: aff } = await sb.from('affiliates').select('id').ilike('code', refRaw).eq('status', 'active').maybeSingle()
+    if (aff) row.referred_by_affiliate_id = aff.id
+  }
+
   const { data, error } = await sb.from('leads').insert(row).select('id').single()
   if (error) {
     console.error('submit-lead insert error:', error.message)

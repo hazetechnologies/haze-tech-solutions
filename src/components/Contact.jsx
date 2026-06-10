@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
 import { identifyLead, trackEvent } from '../lib/telemetry'
+import { getRefCode } from '../lib/affiliateRef'
 
 // EmailJS credentials
 const SERVICE_ID = 'service_4uzwhit'
@@ -58,6 +59,7 @@ export default function Contact() {
         service_interest: form.service,
         message: form.message,
         source: 'contact',
+        ref: getRefCode(),
       }
       // Add AI Automation fields if that service was selected
       if (form.service === 'AI Automation' || form.service === 'All Three') {

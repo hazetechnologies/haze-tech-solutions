@@ -51,6 +51,13 @@ export default async function handler(req, res) {
     case 'email-responder-run-now':  return req.method === 'POST' ? emailResponderRunNow(req, res)   : methodNotAllowed(res, 'POST')
     case 'request-portal-link': return req.method === 'POST' ? requestPortalLink(req, res) : methodNotAllowed(res, 'POST')
     case 'portal-reset':        return req.method === 'POST' ? portalReset(req, res)       : methodNotAllowed(res, 'POST')
+    case 'ref-validate':        return req.method === 'GET'  ? refValidate(req, res)       : methodNotAllowed(res, 'GET')
+    case 'affiliate-signup':    return req.method === 'POST' ? affiliateSignup(req, res)   : methodNotAllowed(res, 'POST')
+    case 'affiliate-me':        return req.method === 'GET'  ? affiliateMe(req, res)       : methodNotAllowed(res, 'GET')
+    case 'affiliate-dashboard-data': return req.method === 'GET' ? affiliateDashboardData(req, res) : methodNotAllowed(res, 'GET')
+    case 'admin-affiliates-list':    return req.method === 'GET'  ? adminAffiliatesList(req, res)   : methodNotAllowed(res, 'GET')
+    case 'admin-commissions-list':   return req.method === 'GET'  ? adminCommissionsList(req, res)  : methodNotAllowed(res, 'GET')
+    case 'admin-commission-update':  return req.method === 'POST' ? adminCommissionUpdate(req, res) : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
 }
@@ -72,6 +79,197 @@ async function publicConfig(req, res) {
   }
   res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
   return res.status(200).json({ gaMeasurementId: gaMeasurementId || null })
+}
+
+// ─── Affiliate / Referral program ───────────────────────────────────────────
+
+// Resolve the Supabase-session caller from a Bearer token. On failure writes an
+// error response and returns null (caller should `return`). Mirrors the inline
+// pattern used by intake()/portalSocial().
+async function resolveCaller(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) { res.status(500).json({ error: 'config_error', message: 'Service role key not configured' }); return null }
+  const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')
+  if (!m) { res.status(401).json({ error: 'unauthorized', message: 'Bearer token required' }); return null }
+  let caller, authErr
+  try {
+    ;({ data: { user: caller }, error: authErr } = await createClient(url, anonKey).auth.getUser(m[1].trim()))
+  } catch { res.status(401).json({ error: 'unauthorized', message: 'Token verification failed' }); return null }
+  if (authErr || !caller) { res.status(401).json({ error: 'unauthorized', message: 'Invalid token' }); return null }
+  return { caller, sb: createClient(url, SERVICE_ROLE_KEY) }
+}
+
+// Generate an unambiguous uppercase referral code (no 0/O/1/I). index varies it.
+function genRefCode(len = 7) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let s = ''
+  for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)]
+  return s
+}
+
+// GET ?action=ref-validate&code=ABC — public. Generic response (no ids) to limit
+// code enumeration. The lead-insert path re-validates regardless, so this is UX-only.
+async function refValidate(req, res) {
+  const code = String(req.query?.code || '').trim()
+  res.setHeader('Cache-Control', 'no-store')
+  if (!code) return res.status(200).json({ valid: false })
+  try {
+    const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+    const { data } = await sb.from('affiliates').select('name').ilike('code', code).eq('status', 'active').maybeSingle()
+    return res.status(200).json({ valid: !!data, name: data?.name || null })
+  } catch {
+    return res.status(200).json({ valid: false })
+  }
+}
+
+// POST ?action=affiliate-signup — the logged-in user becomes an affiliate.
+async function affiliateSignup(req, res) {
+  const ctx = await resolveCaller(req, res); if (!ctx) return
+  const { caller, sb } = ctx
+  const body = req.body || {}
+  const name = String(body.name || caller.user_metadata?.name || '').trim().slice(0, 120) || (caller.email || '').split('@')[0]
+  // Already an affiliate? return it (idempotent-ish)
+  const { data: existing } = await sb.from('affiliates').select('id, code, status').eq('user_id', caller.id).maybeSingle()
+  if (existing) return res.status(200).json({ affiliate: existing, already: true })
+
+  // Generate a unique code (retry on collision).
+  let code = null
+  for (let attempt = 0; attempt < 6 && !code; attempt++) {
+    const candidate = genRefCode()
+    const { data: clash } = await sb.from('affiliates').select('id').ilike('code', candidate).maybeSingle()
+    if (!clash) code = candidate
+  }
+  if (!code) return res.status(500).json({ error: 'code_generation_failed', message: 'Could not generate a referral code' })
+
+  const insert = {
+    user_id: caller.id,
+    email: caller.email,
+    name,
+    code,
+    status: 'active',
+    payout_method: body.payout_method ? String(body.payout_method).slice(0, 60) : null,
+    payout_details: body.payout_details && typeof body.payout_details === 'object' ? body.payout_details : null,
+  }
+  const { data: created, error } = await sb.from('affiliates').insert(insert).select('id, code, status').single()
+  if (error) {
+    if (error.code === '23505') { // race on unique(user_id) or code
+      const { data: raced } = await sb.from('affiliates').select('id, code, status').eq('user_id', caller.id).maybeSingle()
+      if (raced) return res.status(200).json({ affiliate: raced, already: true })
+    }
+    return res.status(500).json({ error: 'signup_failed', message: error.message })
+  }
+  try {
+    await emitNotification(sb, 'affiliate.signup', { affiliate: { id: created.id, name, email: caller.email, code: created.code } })
+  } catch (e) { console.error('affiliate.signup notify failed:', e?.message || e) }
+  return res.status(200).json({ affiliate: created, already: false })
+}
+
+const REF_BASE = 'https://www.hazetechsolutions.com'
+
+// GET ?action=affiliate-me — caller's affiliate profile or 404.
+async function affiliateMe(req, res) {
+  const ctx = await resolveCaller(req, res); if (!ctx) return
+  const { caller, sb } = ctx
+  const { data } = await sb.from('affiliates').select('id, code, name, email, status, created_at').eq('user_id', caller.id).maybeSingle()
+  if (!data) return res.status(404).json({ error: 'not_affiliate', message: 'No affiliate profile' })
+  return res.status(200).json({ affiliate: { ...data, link: `${REF_BASE}/r/${data.code}` } })
+}
+
+// GET ?action=affiliate-dashboard-data — IDOR-safe: affiliate resolved from token.
+async function affiliateDashboardData(req, res) {
+  const ctx = await resolveCaller(req, res); if (!ctx) return
+  const { caller, sb } = ctx
+  const { data: aff } = await sb.from('affiliates').select('id, code, name, status').eq('user_id', caller.id).maybeSingle()
+  if (!aff) return res.status(404).json({ error: 'not_affiliate', message: 'No affiliate profile' })
+
+  const [{ count: referrals }, { count: conversions }, { data: comms }] = await Promise.all([
+    sb.from('leads').select('id', { count: 'exact', head: true }).eq('referred_by_affiliate_id', aff.id),
+    sb.from('clients').select('id', { count: 'exact', head: true }).eq('referred_by_affiliate_id', aff.id),
+    sb.from('commissions').select('id, amount_cents, status, created_at, client_id').eq('affiliate_id', aff.id).order('created_at', { ascending: false }),
+  ])
+  const rows = comms || []
+  const sumBy = (s) => rows.filter(c => c.status === s).reduce((t, c) => t + (c.amount_cents || 0), 0)
+  const totals = {
+    earned_cents: rows.filter(c => c.status !== 'void').reduce((t, c) => t + (c.amount_cents || 0), 0),
+    pending_cents: sumBy('pending'),
+    approved_cents: sumBy('approved'),
+    paid_cents: sumBy('paid'),
+  }
+  return res.status(200).json({
+    affiliate: { code: aff.code, name: aff.name, status: aff.status, link: `${REF_BASE}/r/${aff.code}` },
+    stats: { referrals: referrals || 0, conversions: conversions || 0 },
+    totals,
+    commissions: rows,
+  })
+}
+
+// GET ?action=admin-affiliates-list — admin only.
+async function adminAffiliatesList(req, res) {
+  const ctx = await requireAdmin(req, res); if (!ctx) return
+  const { adminClient } = ctx
+  const { data: affs, error } = await adminClient
+    .from('affiliates').select('id, code, name, email, status, created_at').order('created_at', { ascending: false })
+  if (error) return res.status(500).json({ error: 'query_failed', message: error.message })
+  // Rollup owed/paid per affiliate (single query, aggregate in JS).
+  const { data: comms } = await adminClient.from('commissions').select('affiliate_id, amount_cents, status')
+  const byAff = {}
+  for (const c of comms || []) {
+    const b = byAff[c.affiliate_id] || (byAff[c.affiliate_id] = { owed_cents: 0, paid_cents: 0, count: 0 })
+    b.count++
+    if (c.status === 'paid') b.paid_cents += c.amount_cents || 0
+    else if (c.status !== 'void') b.owed_cents += c.amount_cents || 0
+  }
+  return res.status(200).json({ affiliates: (affs || []).map(a => ({ ...a, ...(byAff[a.id] || { owed_cents: 0, paid_cents: 0, count: 0 }) })) })
+}
+
+// GET ?action=admin-commissions-list&status=pending — admin only.
+async function adminCommissionsList(req, res) {
+  const ctx = await requireAdmin(req, res); if (!ctx) return
+  const { adminClient } = ctx
+  let query = adminClient
+    .from('commissions')
+    .select('id, amount_cents, base_amount_cents, status, created_at, approved_at, paid_at, payout_ref, source_table, source_id, affiliate:affiliates(id, name, email, code), client:clients(id, name, email)')
+    .order('created_at', { ascending: false })
+  const status = String(req.query?.status || '').trim()
+  if (['pending', 'approved', 'paid', 'void'].includes(status)) query = query.eq('status', status)
+  const { data, error } = await query
+  if (error) return res.status(500).json({ error: 'query_failed', message: error.message })
+  return res.status(200).json({ commissions: data || [] })
+}
+
+// POST ?action=admin-commission-update — { commission_id, action: approve|mark-paid|void, payout_ref? }
+async function adminCommissionUpdate(req, res) {
+  const ctx = await requireAdmin(req, res); if (!ctx) return
+  const { adminClient } = ctx
+  const { commission_id, action, payout_ref } = req.body || {}
+  if (!commission_id || !action) return res.status(400).json({ error: 'bad_request', message: 'commission_id and action required' })
+
+  const { data: comm } = await adminClient
+    .from('commissions').select('id, status, affiliate_id, amount_cents').eq('id', commission_id).maybeSingle()
+  if (!comm) return res.status(404).json({ error: 'not_found', message: 'Commission not found' })
+
+  const now = new Date().toISOString()
+  let patch = null
+  if (action === 'approve' && comm.status === 'pending') patch = { status: 'approved', approved_at: now }
+  else if (action === 'mark-paid' && (comm.status === 'approved' || comm.status === 'pending')) {
+    patch = { status: 'paid', paid_at: now, payout_ref: payout_ref ? String(payout_ref).slice(0, 200) : null }
+    if (!comm.approved_at && comm.status === 'pending') patch.approved_at = now
+  }
+  else if (action === 'void' && comm.status !== 'paid') patch = { status: 'void' }
+  if (!patch) return res.status(409).json({ error: 'invalid_transition', message: `Cannot ${action} a ${comm.status} commission` })
+
+  const { data: updated, error } = await adminClient
+    .from('commissions').update(patch).eq('id', commission_id).eq('status', comm.status).select('id, status').single()
+  if (error) return res.status(500).json({ error: 'update_failed', message: error.message })
+
+  if (patch.status === 'paid') {
+    try {
+      const { data: aff } = await adminClient.from('affiliates').select('id, name, email').eq('id', comm.affiliate_id).maybeSingle()
+      if (aff) await emitNotification(adminClient, 'commission.paid', { affiliate: aff, amount: (comm.amount_cents / 100).toFixed(2), payout_ref: patch.payout_ref })
+    } catch (e) { console.error('commission.paid notify failed:', e?.message || e) }
+  }
+  return res.status(200).json({ commission: updated })
 }
 
 // POST ?action=activate — admin creates a website_projects row
