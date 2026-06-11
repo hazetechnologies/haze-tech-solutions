@@ -15,6 +15,7 @@ const LOGO = 'https://www.hazetechsolutions.com/favicon.png'
 
 // HTS hero title card — big centered headline that fills the 16:9 frame.
 const title = (headerText, bodyText, extra = {}) => ({ template: 'htsTitle', headerText, bodyText, ...extra })
+const stat = (headerText, stats) => ({ template: 'stat', headerText, stats })
 
 const SCRIPTS = {
   partner: [
@@ -47,6 +48,8 @@ const SCRIPTS = {
     { text: 'We audit the busywork, map the ideal workflow, connect their tools with A I, and deploy it to run around the clock.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Audit', description: 'Find the busywork' }, { title: 'Map', description: 'Design the workflow' }, { title: 'Build', description: 'Connect tools + AI' }, { title: 'Run', description: 'Deploy 24/7' } ] } },
     { text: 'Now leads get answered at 2am, reports write themselves, and their team focuses on what actually grows the business.', scene: title('RUNS 24/7', 'Leads answered at 2am. Reports done by morning.') },
     { text: "It's perfect for any business buried in manual work or slow to follow up.", scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'Owners buried in admin', checked: true }, { text: 'Slow lead follow-up', checked: true }, { text: 'Repetitive daily tasks', checked: true }, { text: 'Copy-pasting between apps', checked: true } ] } },
+    { text: 'As a representative example, a local food business automated its lead follow-up and saw three times faster responses and forty percent more bookings in sixty days.', scene: stat('Example outcome', [ { value: '3x', label: 'faster response' }, { value: '+40%', label: 'more bookings' }, { value: '60 days', label: 'to results' } ]) },
+    { text: 'Custom builds start around twenty-five hundred dollars, and most go live in two to four weeks.', scene: stat('Investment & timeline', [ { value: 'from $2,500', label: 'custom build' }, { value: '2-4 weeks', label: 'to launch' } ]) },
     { text: 'Know a business like that? Refer them and earn at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
   'social-media': [
@@ -54,6 +57,8 @@ const SCRIPTS = {
     { text: 'We set the strategy, plan the content, produce the graphics and video, then schedule, post, and engage.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Strategy', description: 'Voice, goals, platforms' }, { title: 'Plan', description: 'A converting calendar' }, { title: 'Produce', description: 'Graphics + video' }, { title: 'Grow', description: 'Post + engage' } ] } },
     { text: "It's a full content team, strategy, design, and growth, for less than the cost of one employee.", scene: title('A WHOLE CONTENT TEAM', 'For less than one hire.') },
     { text: 'Perfect for owners with no time to post, or who post and see nothing back.', scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'No time to post', checked: true }, { text: 'Random posting, no results', checked: true }, { text: 'Wants growth, no team', checked: true }, { text: 'Needs local visibility', checked: true } ] } },
+    { text: 'As a representative example, a retail boutique grew from twelve thousand to forty-seven thousand followers in ninety days, with four times the engagement.', scene: stat('Example outcome', [ { value: '12K to 47K', label: 'followers / 90 days' }, { value: '4x', label: 'engagement' } ]) },
+    { text: 'Plans run from five hundred to two thousand dollars a month, with content live in about a week.', scene: stat('Investment & timeline', [ { value: '$500-$2K', label: 'per month' }, { value: '~1 week', label: 'to first posts' } ]) },
     { text: 'Know a business that needs it? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
   'website': [
@@ -61,6 +66,8 @@ const SCRIPTS = {
     { text: 'We take their brand and goals, generate A I copy on a brand-aligned design, build and deploy, then optimize for leads.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Intake', description: 'Brand, pages, goals' }, { title: 'Generate', description: 'AI copy + design' }, { title: 'Build', description: 'Build + deploy' }, { title: 'Convert', description: 'Optimize for leads' } ] } },
     { text: "It's live in days, not months, at a fraction of what agencies charge, because A I compresses the work.", scene: title('LIVE IN DAYS', 'Not months. A fraction of the cost.') },
     { text: "Perfect for anyone with no site, an outdated one, or a site that just doesn't bring in business.", scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'No site or outdated', checked: true }, { text: 'Looks fine, no leads', checked: true }, { text: 'Quoted months elsewhere', checked: true }, { text: 'Needs to launch fast', checked: true } ] } },
+    { text: 'As a representative example, a service business launched a new site in under two weeks and was capturing leads in the very first week.', scene: stat('Example outcome', [ { value: 'under 2 wks', label: 'to launch' }, { value: 'Week 1', label: 'first leads' } ]) },
+    { text: 'Websites range from fifteen hundred to seventy-five hundred dollars, and most go live in days, not months.', scene: stat('Investment & timeline', [ { value: '$1.5K-$7.5K', label: 'one-time' }, { value: 'Days', label: 'not months' } ]) },
     { text: 'Know a business that needs a real website? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
   'seo': [
@@ -68,6 +75,8 @@ const SCRIPTS = {
     { text: 'We audit their rankings, optimize on-page and local S E O, amplify with content and paid, then track every lead.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Audit', description: 'Rankings + keywords' }, { title: 'Optimize', description: 'On-page + local' }, { title: 'Amplify', description: 'Content + paid' }, { title: 'Refine', description: 'Track the leads' } ] } },
     { text: 'Now they show up the moment a customer searches for exactly what they sell.', scene: title('SHOW UP FIRST', 'When customers are already searching.') },
     { text: 'Perfect for businesses invisible online or relying only on word of mouth.', scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'Invisible on Google', checked: true }, { text: 'Word-of-mouth only', checked: true }, { text: 'Not in map results', checked: true }, { text: 'Outranked by rivals', checked: true } ] } },
+    { text: 'As a representative example, a professional-services firm grew its organic traffic two hundred and ten percent and cut its bounce rate in half within ninety days.', scene: stat('Example outcome', [ { value: '+210%', label: 'organic traffic' }, { value: '-55%', label: 'bounce rate' }, { value: '90 days', label: 'timeframe' } ]) },
+    { text: 'S E O starts around twelve hundred dollars a month, with early wins in weeks and bigger gains compounding over time.', scene: stat('Investment & timeline', [ { value: 'from $1,200', label: 'per month' }, { value: 'Weeks', label: 'to first wins' } ]) },
     { text: 'Know a business that needs more leads? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
 }
