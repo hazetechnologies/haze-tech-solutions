@@ -4,12 +4,13 @@
 //   2. Logged in, not an affiliate → "Join the Partner Program" form
 //   3. Affiliate → dashboard (share link, stats, commissions, earnings)
 import { useEffect, useState, useCallback } from 'react'
-import { Copy, Check, DollarSign, Users, TrendingUp, LogOut, Loader2 } from 'lucide-react'
+import { Copy, Check, DollarSign, Users, TrendingUp, LogOut, Loader2, Play, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { trackEvent } from '../../lib/telemetry'
 
 const C = { bg: '#040D1A', card: '#0B1A2E', cyan: '#00CFFF', orange: '#FF6B00', green: '#22C55E', text: '#E8F4FF', mut: '#7C93AD', line: 'rgba(255,255,255,0.08)' }
+const R2 = 'https://pub-63148690e7b846428bbe77d952ec92ed.r2.dev/hts-promo'
 const money = (cents) => `$${((cents || 0) / 100).toFixed(2)}`
 
 async function authedFetch(path) {
@@ -157,10 +158,19 @@ function JoinForm({ onJoined }) {
 function Dashboard({ data }) {
   const { affiliate, stats, totals, commissions } = data
   const [copied, setCopied] = useState(false)
+  const [tab, setTab] = useState('overview')
   const copy = () => { navigator.clipboard?.writeText(affiliate.link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800) }) }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[['overview', 'My Dashboard'], ['resources', 'Resources & Training']].map(([k, lab]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ ...tabBtn, ...(tab === k ? tabBtnOn : {}) }}>{lab}</button>
+        ))}
+      </div>
+
+      {tab === 'resources' ? <Resources affiliate={affiliate} /> : (
+       <>
       <Card>
         <label style={lbl}>Your referral link</label>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -205,6 +215,54 @@ function Dashboard({ data }) {
           </table>
         )}
       </Card>
+       </>
+      )}
+    </div>
+  )
+}
+
+// Knowledge base: per-product brochure (PDF) + explainer video for affiliates.
+const KB = [
+  { name: 'AI Automation', tagline: 'Work smarter, not harder.', color: C.cyan, pdf: '/brochures/kb/hts-kb-ai-automation.pdf', video: `${R2}/hts-ai-automation-promo.mp4` },
+  { name: 'Social Media Marketing', tagline: 'Grow your audience on autopilot.', color: C.orange, pdf: '/brochures/kb/hts-kb-social-media.pdf', video: `${R2}/hts-social-media-promo.mp4` },
+  { name: 'Website Development', tagline: 'Sites built to convert.', color: '#A78BFA', pdf: '/brochures/kb/hts-kb-website.pdf', video: `${R2}/hts-website-promo.mp4` },
+  { name: 'SEO & Digital Marketing', tagline: 'Get found. Stay found. Convert.', color: C.green, pdf: '/brochures/kb/hts-kb-seo.pdf', video: `${R2}/hts-seo-promo.mp4` },
+]
+const RECRUIT = [
+  { name: 'Partner one-pager (PDF)', href: '/brochures/hts-partner.pdf' },
+  { name: 'Partner promo video', href: `${R2}/hts-partner-promo.mp4` },
+]
+
+function Resources() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <Card>
+        <h2 style={h2}>Learn the products</h2>
+        <p style={{ color: C.mut, fontSize: 13, marginTop: 4 }}>Know what you're referring. Each guide covers what it is, how it works, who it's for, and how to pitch it. Share the videos with prospects too.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+          {KB.map(k => (
+            <div key={k.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 14, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.line}`, borderRadius: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: k.color }}>{k.name}</div>
+                <div style={{ fontSize: 12, color: C.mut }}>{k.tagline}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <a href={k.video} target="_blank" rel="noreferrer" style={resBtn}><Play size={14} /> Watch</a>
+                <a href={k.pdf} target="_blank" rel="noreferrer" style={{ ...resBtn, background: 'rgba(0,207,255,0.1)', borderColor: 'rgba(0,207,255,0.3)', color: C.cyan }}><Download size={14} /> Brochure</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card>
+        <h2 style={{ ...h2, fontSize: 16 }}>Recruit other partners</h2>
+        <p style={{ color: C.mut, fontSize: 13, margin: '4px 0 14px' }}>Grab these to invite others into the Partner Program.</p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {RECRUIT.map(r => (
+            <a key={r.name} href={r.href} target="_blank" rel="noreferrer" style={resBtn}><Download size={14} /> {r.name}</a>
+          ))}
+        </div>
+      </Card>
     </div>
   )
 }
@@ -235,3 +293,6 @@ const ghostBtn = { display: 'flex', alignItems: 'center', gap: 6, background: 't
 const linkBtn = { background: 'none', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', padding: 0, textDecoration: 'underline' }
 const th = { padding: '6px 8px', fontWeight: 600 }
 const td = { padding: '10px 8px' }
+const tabBtn = { background: 'transparent', border: `1px solid ${C.line}`, borderRadius: 9, padding: '8px 16px', color: C.mut, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }
+const tabBtnOn = { background: 'rgba(0,207,255,0.12)', color: C.cyan, borderColor: 'rgba(0,207,255,0.3)' }
+const resBtn = { display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.line}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12.5, fontWeight: 600 }

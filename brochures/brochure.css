@@ -111,3 +111,15 @@ h2 { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 15px; let
 
 .section { margin-top: 16px; }
 .spaced { margin-top: 14px; }
+
+/* ── Knowledge-base specifics ── */
+.kb-badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); }
+.pitch { background: rgba(0,207,255,0.06); border: 1px solid rgba(0,207,255,0.22); border-radius: 12px; padding: 14px 16px; }
+.pitch h2 { color: var(--cyan); }
+.pitch .line { font-size: 12.5px; color: var(--text); padding-left: 18px; position: relative; line-height: 1.45; margin-bottom: 6px; font-style: italic; }
+.pitch .line::before { content: '\201C'; position: absolute; left: 0; color: var(--cyan); font-weight: 700; }
+.obj { display: flex; flex-direction: column; gap: 8px; }
+.obj .q { font-size: 11.5px; font-weight: 700; color: var(--text); }
+.obj .a { font-size: 11.5px; color: var(--mut); line-height: 1.45; }
+.who li { font-size: 11.5px; }
+.lede.sm { font-size: 13px; }
