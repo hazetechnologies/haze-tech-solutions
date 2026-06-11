@@ -15,7 +15,10 @@ const LOGO = 'https://www.hazetechsolutions.com/favicon.png'
 
 // HTS hero title card — big centered headline that fills the 16:9 frame.
 const title = (headerText, bodyText, extra = {}) => ({ template: 'htsTitle', headerText, bodyText, ...extra })
-const stat = (headerText, stats) => ({ template: 'stat', headerText, stats })
+const stat = (headerText, stats, extra = {}) => ({ template: 'stat', headerText, stats, ...extra })
+// gpt-image-2 contextual photos (uploaded to R2 by gen-images.cjs).
+const IMG = (k) => `https://pub-63148690e7b846428bbe77d952ec92ed.r2.dev/hts-promo/img/${k}.png`
+const photo = (key, caption, kenBurns = 'zoomIn') => ({ type: 'image', src: IMG(key), caption, kenBurns })
 
 const SCRIPTS = {
   partner: [
@@ -45,37 +48,42 @@ const SCRIPTS = {
   // ─── Per-product explainer videos (affiliate knowledge base) ───
   'ai-automation': [
     { text: 'Most businesses lose hours every week to repetitive admin. Haze Tech Solutions automates it away.', scene: title('AI AUTOMATION', 'Work smarter, not harder.') },
+    { text: 'Imagine a business where every lead is answered, every call is picked up, and the busywork just handles itself.', scene: photo('ai-assistant', 'Free your team from robot work') },
     { text: 'We audit the busywork, map the ideal workflow, connect their tools with A I, and deploy it to run around the clock.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Audit', description: 'Find the busywork' }, { title: 'Map', description: 'Design the workflow' }, { title: 'Build', description: 'Connect tools + AI' }, { title: 'Run', description: 'Deploy 24/7' } ] } },
+    { text: 'Depending on the business, we build an A I assistant that answers customers instantly, an A I call receptionist that never misses a call, marketing automation that nurtures every lead, and a complete A I lead system.', scene: { template: 'checklist', headerText: 'What we build', items: [ { text: 'AI Assistant — instant customer answers', checked: true }, { text: 'AI Call Receptionist — never miss a call', checked: true }, { text: 'Marketing Automation — nurture every lead', checked: true }, { text: 'AI Lead System — capture & qualify 24/7', checked: true } ] } },
     { text: 'Now leads get answered at 2am, reports write themselves, and their team focuses on what actually grows the business.', scene: title('RUNS 24/7', 'Leads answered at 2am. Reports done by morning.') },
-    { text: "It's perfect for any business buried in manual work or slow to follow up.", scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'Owners buried in admin', checked: true }, { text: 'Slow lead follow-up', checked: true }, { text: 'Repetitive daily tasks', checked: true }, { text: 'Copy-pasting between apps', checked: true } ] } },
-    { text: 'As a representative example, a local food business automated its lead follow-up and saw three times faster responses and forty percent more bookings in sixty days.', scene: stat('Example outcome', [ { value: '3x', label: 'faster response' }, { value: '+40%', label: 'more bookings' }, { value: '60 days', label: 'to results' } ]) },
+    { text: "It's perfect for any business buried in manual work or slow to follow up.", scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'Owners buried in admin', checked: true }, { text: 'Slow lead follow-up', checked: true }, { text: 'Missed calls = missed revenue', checked: true }, { text: 'Repetitive daily tasks', checked: true } ] } },
+    { text: 'As a representative example, a local food business automated its lead follow-up and saw three times faster responses and forty percent more bookings in sixty days.', scene: stat('Example outcome', [ { value: '3x', label: 'faster response' }, { value: '+40%', label: 'more bookings' }, { value: '60 days', label: 'to results' } ], { backgroundImage: IMG('ai-cafe'), statStyle: 'imageOverlay' }) },
     { text: 'Custom builds start around twenty-five hundred dollars, and most go live in two to four weeks.', scene: stat('Investment & timeline', [ { value: 'from $2,500', label: 'custom build' }, { value: '2-4 weeks', label: 'to launch' } ]) },
     { text: 'Know a business like that? Refer them and earn at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
   'social-media': [
     { text: 'Posting consistently is hard. Haze Tech Solutions does it for them, and makes it convert.', scene: title('SOCIAL MEDIA MARKETING', 'Grow your audience on autopilot.') },
+    { text: 'Picture their brand showing up everywhere their customers scroll, consistent, professional, and on autopilot.', scene: photo('sm-phone', 'Show up everywhere they scroll') },
     { text: 'We set the strategy, plan the content, produce the graphics and video, then schedule, post, and engage.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Strategy', description: 'Voice, goals, platforms' }, { title: 'Plan', description: 'A converting calendar' }, { title: 'Produce', description: 'Graphics + video' }, { title: 'Grow', description: 'Post + engage' } ] } },
     { text: "It's a full content team, strategy, design, and growth, for less than the cost of one employee.", scene: title('A WHOLE CONTENT TEAM', 'For less than one hire.') },
     { text: 'Perfect for owners with no time to post, or who post and see nothing back.', scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'No time to post', checked: true }, { text: 'Random posting, no results', checked: true }, { text: 'Wants growth, no team', checked: true }, { text: 'Needs local visibility', checked: true } ] } },
-    { text: 'As a representative example, a retail boutique grew from twelve thousand to forty-seven thousand followers in ninety days, with four times the engagement.', scene: stat('Example outcome', [ { value: '12K to 47K', label: 'followers / 90 days' }, { value: '4x', label: 'engagement' } ]) },
+    { text: 'As a representative example, a retail boutique grew from twelve thousand to forty-seven thousand followers in ninety days, with four times the engagement.', scene: stat('Example outcome', [ { value: '12K to 47K', label: 'followers / 90 days' }, { value: '4x', label: 'engagement' } ], { backgroundImage: IMG('sm-boutique'), statStyle: 'imageOverlay' }) },
     { text: 'Plans run from five hundred to two thousand dollars a month, with content live in about a week.', scene: stat('Investment & timeline', [ { value: '$500-$2K', label: 'per month' }, { value: '~1 week', label: 'to first posts' } ]) },
     { text: 'Know a business that needs it? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
   'website': [
     { text: "A pretty website that doesn't generate leads is just an expense. We build sites that convert.", scene: title('WEBSITE DEVELOPMENT', 'Sites built to convert.') },
+    { text: 'A great website is a business’s hardest-working salesperson, turning visitors into leads around the clock.', scene: photo('web-laptop', 'Your hardest-working salesperson') },
     { text: 'We take their brand and goals, generate A I copy on a brand-aligned design, build and deploy, then optimize for leads.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Intake', description: 'Brand, pages, goals' }, { title: 'Generate', description: 'AI copy + design' }, { title: 'Build', description: 'Build + deploy' }, { title: 'Convert', description: 'Optimize for leads' } ] } },
     { text: "It's live in days, not months, at a fraction of what agencies charge, because A I compresses the work.", scene: title('LIVE IN DAYS', 'Not months. A fraction of the cost.') },
     { text: "Perfect for anyone with no site, an outdated one, or a site that just doesn't bring in business.", scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'No site or outdated', checked: true }, { text: 'Looks fine, no leads', checked: true }, { text: 'Quoted months elsewhere', checked: true }, { text: 'Needs to launch fast', checked: true } ] } },
-    { text: 'As a representative example, a service business launched a new site in under two weeks and was capturing leads in the very first week.', scene: stat('Example outcome', [ { value: 'under 2 wks', label: 'to launch' }, { value: 'Week 1', label: 'first leads' } ]) },
+    { text: 'As a representative example, a service business launched a new site in under two weeks and was capturing leads in the very first week.', scene: stat('Example outcome', [ { value: 'under 2 wks', label: 'to launch' }, { value: 'Week 1', label: 'first leads' } ], { backgroundImage: IMG('web-laptop'), statStyle: 'imageOverlay' }) },
     { text: 'Websites range from fifteen hundred to seventy-five hundred dollars, and most go live in days, not months.', scene: stat('Investment & timeline', [ { value: '$1.5K-$7.5K', label: 'one-time' }, { value: 'Days', label: 'not months' } ]) },
     { text: 'Know a business that needs a real website? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
   'seo': [
     { text: "If a business can't be found on Google, it's invisible. We fix that, and turn searches into leads.", scene: title('SEO & DIGITAL MARKETING', 'Get found. Stay found. Convert.') },
+    { text: 'When customers search, you want to be the first business they find, not the last.', scene: photo('seo-search', 'Be the first they find') },
     { text: 'We audit their rankings, optimize on-page and local S E O, amplify with content and paid, then track every lead.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Audit', description: 'Rankings + keywords' }, { title: 'Optimize', description: 'On-page + local' }, { title: 'Amplify', description: 'Content + paid' }, { title: 'Refine', description: 'Track the leads' } ] } },
     { text: 'Now they show up the moment a customer searches for exactly what they sell.', scene: title('SHOW UP FIRST', 'When customers are already searching.') },
     { text: 'Perfect for businesses invisible online or relying only on word of mouth.', scene: { template: 'checklist', headerText: 'Perfect for', items: [ { text: 'Invisible on Google', checked: true }, { text: 'Word-of-mouth only', checked: true }, { text: 'Not in map results', checked: true }, { text: 'Outranked by rivals', checked: true } ] } },
-    { text: 'As a representative example, a professional-services firm grew its organic traffic two hundred and ten percent and cut its bounce rate in half within ninety days.', scene: stat('Example outcome', [ { value: '+210%', label: 'organic traffic' }, { value: '-55%', label: 'bounce rate' }, { value: '90 days', label: 'timeframe' } ]) },
+    { text: 'As a representative example, a professional-services firm grew its organic traffic two hundred and ten percent and cut its bounce rate in half within ninety days.', scene: stat('Example outcome', [ { value: '+210%', label: 'organic traffic' }, { value: '-55%', label: 'bounce rate' }, { value: '90 days', label: 'timeframe' } ], { backgroundImage: IMG('seo-storefront'), statStyle: 'imageOverlay' }) },
     { text: 'S E O starts around twelve hundred dollars a month, with early wins in weeks and bigger gains compounding over time.', scene: stat('Investment & timeline', [ { value: 'from $1,200', label: 'per month' }, { value: 'Weeks', label: 'to first wins' } ]) },
     { text: 'Know a business that needs more leads? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
@@ -123,8 +131,12 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
     const segEnd = (i === SEGMENTS.length - 1) ? totalDur + 0.8 : words[lastIdx].end
     wi = lastIdx + 1
     const duration = Math.max(2.6, +(segEnd - prevEnd).toFixed(2)); prevEnd = segEnd
-    return { type: 'graphic', duration, colors: HTS, transition: TRANSITIONS[i] || 'crossfade', ...seg.scene }
+    return { type: 'graphic', duration, colors: HTS, transition: TRANSITIONS[i % TRANSITIONS.length], ...seg.scene }
   })
+  // The Remotion server shortens the video by (n-1)*0.5s of transition overlap;
+  // extend the final scene to compensate + a 1s tail so the VO is never cut off.
+  const overlap = scenes.length > 1 ? (scenes.length - 1) * 0.5 : 0
+  scenes[scenes.length - 1].duration = +(scenes[scenes.length - 1].duration + overlap + 1.0).toFixed(2)
   console.log('   durations:', scenes.map(s => s.duration).join(', '))
 
   console.log('   4/5 render…')
