@@ -13,6 +13,7 @@ const navLinks = [
   { label: 'Portfolio', href: '#portfolio' },
   { label: 'About', href: '#about' },
   { label: 'Blog', href: '/blog', isRoute: true },
+  { label: 'Affiliates', href: '/affiliate', isRoute: true },
   { label: 'Contact', href: '#contact' },
 ]
 
