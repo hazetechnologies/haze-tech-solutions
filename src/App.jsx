@@ -29,6 +29,7 @@ import SocialAuditDetail  from './pages/admin/SocialAuditDetail'
 import AdminWorkflows     from './pages/admin/AdminWorkflows'
 import AffiliatesManager   from './pages/admin/AffiliatesManager'
 import AffiliateDashboard  from './pages/affiliate/AffiliateDashboard'
+import AffiliateConfirm     from './pages/affiliate/AffiliateConfirm'
 
 import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
@@ -93,6 +94,7 @@ export default function App() {
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/cart"    element={<CartPage />} />
           <Route path="/affiliate" element={<AffiliateDashboard />} />
+          <Route path="/affiliate/confirm" element={<AffiliateConfirm />} />
 
           {/* Admin login */}
           <Route path="/admin/login" element={<AdminLogin />} />

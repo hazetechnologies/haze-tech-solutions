@@ -133,14 +133,23 @@ function AuthCard({ signIn, onAuthed }) {
     e.preventDefault(); setBusy(true); setError(null); setMsg(null)
     try {
       if (mode === 'register') {
-        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password: pw })
-        if (error) { setError(error.message); return }
+        // Our own branded, SafeLinks-safe email confirmation (not Supabase's).
+        const res = await fetch('/api/website?action=affiliate-register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password: pw }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) { setError(json.message || 'Could not create your account.'); return }
         trackEvent('affiliate_register', {})
-        if (!data.session) { setMsg('Check your email to confirm your account, then log in here.'); return }
-        await onAuthed()
+        setMsg(json.emailWarning
+          ? "Account created, but we couldn't send the confirmation email — contact info@hazetechsolutions.com."
+          : '📧 Check your inbox — we sent a link to confirm your email. Click it, then log in here.')
       } else {
         const { error } = await signIn(email.trim(), pw)
-        if (error) { setError(error.message); return }
+        if (error) {
+          setError(/confirm/i.test(error.message) ? 'Please confirm your email first — check your inbox for the link.' : error.message)
+          return
+        }
         await onAuthed()
       }
     } catch { setError('Something went wrong.') } finally { setBusy(false) }

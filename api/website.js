@@ -14,6 +14,7 @@ import { REGISTRY } from './_lib/notification-registry.js'
 import { sendEmail, wrapHtml } from './_lib/email.js'
 import { runOnce as runEmailResponder } from './_lib/email-responder.js'
 import { mintResetToken, sendResetEmail } from './_lib/portal-reset.js'
+import { mintConfirmToken, sendConfirmEmail } from './_lib/affiliate-confirm.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -52,6 +53,8 @@ export default async function handler(req, res) {
     case 'request-portal-link': return req.method === 'POST' ? requestPortalLink(req, res) : methodNotAllowed(res, 'POST')
     case 'portal-reset':        return req.method === 'POST' ? portalReset(req, res)       : methodNotAllowed(res, 'POST')
     case 'ref-validate':        return req.method === 'GET'  ? refValidate(req, res)       : methodNotAllowed(res, 'GET')
+    case 'affiliate-register':  return req.method === 'POST' ? affiliateRegister(req, res) : methodNotAllowed(res, 'POST')
+    case 'affiliate-confirm':   return req.method === 'POST' ? affiliateConfirm(req, res)  : methodNotAllowed(res, 'POST')
     case 'affiliate-signup':    return req.method === 'POST' ? affiliateSignup(req, res)   : methodNotAllowed(res, 'POST')
     case 'affiliate-me':        return req.method === 'GET'  ? affiliateMe(req, res)       : methodNotAllowed(res, 'GET')
     case 'affiliate-update-payout': return req.method === 'POST' ? affiliateUpdatePayout(req, res) : methodNotAllowed(res, 'POST')
@@ -122,6 +125,64 @@ async function refValidate(req, res) {
   } catch {
     return res.status(200).json({ valid: false })
   }
+}
+
+// POST ?action=affiliate-register — public self-signup with OUR branded email
+// confirmation (not Supabase's). Creates an unconfirmed auth user + emails a
+// SafeLinks-safe confirm link. Login is blocked until they confirm.
+async function affiliateRegister(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+  const body = req.body || {}
+  const email = String(body.email || '').trim().toLowerCase()
+  const password = String(body.password || '')
+  const name = body.name ? String(body.name).trim().slice(0, 120) : null
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_request', message: 'A valid email is required' })
+  if (password.length < 6) return res.status(400).json({ error: 'bad_request', message: 'Password must be at least 6 characters' })
+
+  const sb = createClient(url, SERVICE_ROLE_KEY)
+  const { data: created, error } = await sb.auth.admin.createUser({
+    email, password, email_confirm: false,
+    user_metadata: name ? { name } : undefined,
+  })
+  if (error) {
+    const msg = (error.message || '').toLowerCase()
+    if (error.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+      return res.status(409).json({ error: 'exists', message: 'An account with this email already exists. Try logging in, or use “Forgot password”.' })
+    }
+    return res.status(500).json({ error: 'register_failed', message: error.message })
+  }
+  const userId = created?.user?.id
+  if (!userId) return res.status(500).json({ error: 'register_failed', message: 'User creation returned no id' })
+
+  try {
+    const confirmUrl = await mintConfirmToken(sb, userId, email)
+    await sendConfirmEmail(email, name, confirmUrl)
+  } catch (e) {
+    console.error('affiliate confirm email failed:', e?.message || e)
+    // The account exists but the email failed — surface so they can retry/contact.
+    return res.status(200).json({ ok: true, pending: true, emailWarning: true })
+  }
+  return res.status(200).json({ ok: true, pending: true })
+}
+
+// POST ?action=affiliate-confirm — consume a confirmation token + confirm email.
+async function affiliateConfirm(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+  const token = String((req.body || {}).token || '').trim()
+  if (!token) return res.status(400).json({ error: 'bad_request', message: 'token required' })
+
+  const sb = createClient(url, SERVICE_ROLE_KEY)
+  const { data: row } = await sb.from('affiliate_confirm_tokens')
+    .select('token, user_id, expires_at, used_at').eq('token', token).maybeSingle()
+  if (!row || row.used_at || new Date(row.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'invalid_or_expired', message: 'This confirmation link is invalid or has expired.' })
+  }
+  const { error: updErr } = await sb.auth.admin.updateUserById(row.user_id, { email_confirm: true })
+  if (updErr) return res.status(500).json({ error: 'confirm_failed', message: updErr.message })
+  await sb.from('affiliate_confirm_tokens').update({ used_at: new Date().toISOString() }).eq('token', token)
+  return res.status(200).json({ ok: true })
 }
 
 // POST ?action=affiliate-signup — the logged-in user becomes an affiliate.
