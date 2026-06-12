@@ -1,7 +1,7 @@
 // render-kb.cjs — render the 4 KB brochures to PDF via Playwright (run on VPS).
 const path = require('path')
 const { chromium } = require('/root/browser-agent/node_modules/playwright')
-const FILES = ['kb-ai-automation', 'kb-social-media', 'kb-website', 'kb-seo', 'kb-what-is-ai-automation', 'kb-website-types']
+const FILES = ['kb-ai-automation', 'kb-social-media', 'kb-website', 'kb-seo', 'kb-what-is-ai-automation', 'kb-website-types', 'kb-bundles', 'kb-platforms', 'kb-brand-kit']
 const DIR = __dirname
 ;(async () => {
   const browser = await chromium.launch({ args: ['--no-sandbox'] })

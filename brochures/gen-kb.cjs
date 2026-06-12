@@ -102,6 +102,54 @@ const SERVICES = [
       { q: '“Will it actually bring in business?”', a: 'Every build is optimized for conversion — clear calls-to-action, fast load, mobile-first.' },
     ],
   },
+  {
+    slug: 'bundles', name: 'Bundles — Save & Scale', tagline: 'Two channels, one price.', accent: '#22C55E', img: 'rec-team',
+    what: 'The fastest growth comes from channels working together. Our bundles combine our most popular services at a lower price than buying them separately — so a business gets more growth for less, all managed by one team.',
+    steps: [
+      { t: 'Combine', d: 'Pair the channels that compound' },
+      { t: 'Save', d: 'Lower than buying separately' },
+      { t: 'Align', d: 'One team, one strategy' },
+      { t: 'Grow', d: 'Faster results, less overhead' },
+    ],
+    who: ['Businesses wanting more than one channel', 'Owners serious about real growth', 'Anyone tired of juggling vendors', 'Brands ready to scale, not dabble'],
+    pitch: ['Social + SEO — $1,800/mo, saves $400 every month.', 'Website + Social — $14,000 for a full launch year.', 'Complete — $40,000/yr, full-stack growth, fully managed.'],
+    obj: [
+      { q: '“Why bundle instead of one service?”', a: 'Channels compound — content feeds search, search feeds the site. Together they outperform any one alone.' },
+      { q: '“Is it a big commitment?”', a: 'Bundles are built to save money at scale, but we’ll right-size the starting point for the business.' },
+    ],
+  },
+  {
+    slug: 'platforms', name: 'Platforms We Manage', tagline: 'Everywhere your customers are.', accent: '#FF6B00', img: 'sm-phone',
+    what: 'We create and manage content across all the major platforms — so a business shows up consistently wherever its customers spend time, without juggling ten different apps. We pick the right platforms for their audience, not all of them.',
+    steps: [
+      { t: 'Instagram', d: 'Visual brand + Reels reach' },
+      { t: 'TikTok', d: 'Short-form viral discovery' },
+      { t: 'YouTube', d: 'Long-form + Shorts authority' },
+      { t: 'Facebook', d: 'Local reach + community' },
+    ],
+    who: ['Businesses spread thin across apps', 'Owners unsure where to post', 'Brands wanting consistent presence', 'Local businesses needing reach'],
+    pitch: ['We focus where their customers actually are — not everywhere.', 'One team produces for every channel, on brand.', 'Also LinkedIn, X, and Pinterest when they fit the business.'],
+    obj: [
+      { q: '“Do I need to be on all of them?”', a: 'No — being great on the two or three that matter beats being mediocre on all of them.' },
+      { q: '“Can you match my brand?”', a: 'Every post uses their colors, voice, and style — consistent across every platform.' },
+    ],
+  },
+  {
+    slug: 'brand-kit', name: 'Brand Identity Kits', tagline: 'A complete brand in days.', accent: '#A78BFA', img: 'sm-boutique',
+    what: 'Every great brand needs a consistent look. We generate a complete brand identity — logos, color palette, platform banners, and a voice guide — fast, so a business looks professional everywhere from day one.',
+    steps: [
+      { t: 'Discover', d: 'Vibe, colors, audience' },
+      { t: 'Generate', d: 'Logo concepts to choose' },
+      { t: 'Approve', d: 'Pick your favorite' },
+      { t: 'Deliver', d: 'Banners, palette, voice' },
+    ],
+    who: ['Brand-new businesses', 'Rebrands & refreshes', 'Inconsistent, scattered branding', 'Anyone needing to look pro fast'],
+    pitch: ['A full kit — logos, banners, colors, and voice — not just a logo.', 'Done in days via our AI design pipeline.', 'Consistent everywhere, from Instagram to the website.'],
+    obj: [
+      { q: '“Isn’t a logo enough?”', a: 'A logo alone isn’t a brand. Consistency across everything is what makes a business look real and trustworthy.' },
+      { q: '“Will it look generic?”', a: 'They choose from concepts, refined to their brand — distinctive, not cookie-cutter.' },
+    ],
+  },
 ]
 
 const page = (s) => `<!doctype html>
