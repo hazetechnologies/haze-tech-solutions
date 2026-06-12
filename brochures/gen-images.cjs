@@ -19,6 +19,9 @@ const IMAGES = [
   // Concept explainers
   { key: 'ai-concept', prompt: 'Photorealistic business person hands using a laptop with a subtle glowing blue digital AI assistant interface and floating chat bubbles above the screen, modern office, futuristic but warm, cinematic, no readable text, no logos' },
   { key: 'web-types', prompt: 'Photorealistic flat lay of a laptop, tablet and smartphone on a clean light desk, each screen showing a different modern colorful website layout, web design concept, bright airy workspace, cinematic, no readable text, no logos' },
+  { key: 'brand-kit', prompt: 'Photorealistic creative branding mood board on a clean desk: a laptop showing abstract colorful logo concepts, paint color swatches, and a minimal style guide, designer workspace, cinematic, no readable text, no real brand logos' },
+  { key: 'bundles', prompt: 'Photorealistic happy small business owner reviewing upward-trending growth charts on a laptop in a bright modern office, momentum and success, cinematic, no readable text, no logos' },
+  { key: 'platforms', prompt: 'Photorealistic hand holding a smartphone showing a vibrant grid of colorful social media content posts, soft modern workspace behind, social media concept, cinematic, no readable text, no real logos' },
 ]
 
 async function genImage(prompt) {

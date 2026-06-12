@@ -23,7 +23,7 @@ const SERVICES = [
     ],
   },
   {
-    slug: 'social-media', name: 'Social Media Marketing', tagline: 'Grow your audience on autopilot.', accent: '#FF6B00', img: 'sm-phone',
+    slug: 'social-media', name: 'Social Media Marketing', tagline: 'Grow your audience on autopilot.', accent: '#FF6B00', img: 'platforms',
     what: 'Done-for-you, daily branded content and audience growth on the platforms a business’s customers actually use. We handle strategy, creation, scheduling, and engagement — they just show up and grow.',
     steps: [
       { t: 'Strategy', d: 'Brand voice, goals, and target platforms' },
@@ -103,7 +103,7 @@ const SERVICES = [
     ],
   },
   {
-    slug: 'bundles', name: 'Bundles — Save & Scale', tagline: 'Two channels, one price.', accent: '#22C55E', img: 'rec-team',
+    slug: 'bundles', name: 'Bundles — Save & Scale', tagline: 'Two channels, one price.', accent: '#22C55E', img: 'bundles',
     what: 'The fastest growth comes from channels working together. Our bundles combine our most popular services at a lower price than buying them separately — so a business gets more growth for less, all managed by one team.',
     steps: [
       { t: 'Combine', d: 'Pair the channels that compound' },
@@ -119,7 +119,7 @@ const SERVICES = [
     ],
   },
   {
-    slug: 'platforms', name: 'Platforms We Manage', tagline: 'Everywhere your customers are.', accent: '#FF6B00', img: 'sm-phone',
+    slug: 'platforms', name: 'Platforms We Manage', tagline: 'Everywhere your customers are.', accent: '#FF6B00', img: 'platforms',
     what: 'We create and manage content across all the major platforms — so a business shows up consistently wherever its customers spend time, without juggling ten different apps. We pick the right platforms for their audience, not all of them.',
     steps: [
       { t: 'Instagram', d: 'Visual brand + Reels reach' },
@@ -135,7 +135,7 @@ const SERVICES = [
     ],
   },
   {
-    slug: 'brand-kit', name: 'Brand Identity Kits', tagline: 'A complete brand in days.', accent: '#A78BFA', img: 'sm-boutique',
+    slug: 'brand-kit', name: 'Brand Identity Kits', tagline: 'A complete brand in days.', accent: '#A78BFA', img: 'brand-kit',
     what: 'Every great brand needs a consistent look. We generate a complete brand identity — logos, color palette, platform banners, and a voice guide — fast, so a business looks professional everywhere from day one.',
     steps: [
       { t: 'Discover', d: 'Vibe, colors, audience' },
