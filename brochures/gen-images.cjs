@@ -11,6 +11,11 @@ const IMAGES = [
   { key: 'web-laptop', prompt: 'Photorealistic sleek laptop on a clean minimal desk displaying a modern business website homepage, bright airy workspace, cinematic, no readable text, no logos' },
   { key: 'seo-storefront', prompt: 'Photorealistic charming small business storefront on a sunny street, inviting local shop exterior with awning, cinematic, no text, no logos' },
   { key: 'seo-search', prompt: 'Photorealistic laptop screen showing a generic search results page and a city map with location pins, digital marketing concept on a modern desk, cinematic, no readable text, no logos' },
+  // Recruitment-video imagery
+  { key: 'rec-share', prompt: 'Photorealistic happy relaxed person smiling while looking at their smartphone in a warm modern cafe, satisfied and confident, soft natural light, cinematic, no text, no logos' },
+  { key: 'rec-handshake', prompt: 'Photorealistic two friendly business professionals shaking hands in a bright modern office, partnership and trust, warm light, cinematic, no text, no logos' },
+  { key: 'rec-owner', prompt: 'Photorealistic confident small business owner smiling with arms crossed inside their shop, proud and approachable, warm natural light, cinematic, no text, no logos' },
+  { key: 'rec-team', prompt: 'Photorealistic happy diverse small business team collaborating and smiling around a laptop in a bright modern office, energetic and positive, cinematic, no text, no logos' },
 ]
 
 async function genImage(prompt) {
@@ -27,9 +32,15 @@ async function genImage(prompt) {
 function s3() { return new S3Client({ region: 'auto', endpoint: process.env.R2_ENDPOINT, credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY } }) }
 async function uploadR2(buf, key) { await s3().send(new PutObjectCommand({ Bucket: process.env.R2_BUCKET || process.env.R2_BUCKET_NAME, Key: key, Body: buf, ContentType: 'image/png' })); return `${process.env.R2_PUBLIC_BASE.replace(/\/$/, '')}/${key}` }
 
+const PUBLIC = (process.env.R2_PUBLIC_BASE || '').replace(/\/$/, '')
+async function existsOnR2(key) {
+  try { const r = await fetch(`${PUBLIC}/hts-promo/img/${key}.png`, { method: 'HEAD' }); return r.ok } catch { return false }
+}
+
 ;(async () => {
   const map = {}
   for (const img of IMAGES) {
+    if (await existsOnR2(img.key)) { process.stderr.write(`skip ${img.key} (exists)\n`); map[img.key] = `${PUBLIC}/hts-promo/img/${img.key}.png`; continue }
     process.stderr.write(`gen ${img.key}…\n`)
     const buf = await genImage(img.prompt)
     map[img.key] = await uploadR2(buf, `hts-promo/img/${img.key}.png`)

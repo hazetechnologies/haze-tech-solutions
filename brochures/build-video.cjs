@@ -23,25 +23,28 @@ const photo = (key, caption, kenBurns = 'zoomIn') => ({ type: 'image', src: IMG(
 const SCRIPTS = {
   partner: [
     { text: 'Know business owners who need to grow?', scene: title('PARTNER PROGRAM', 'Send us leads. Get paid when they sign.') },
+    { text: 'Your network is full of business owners who need exactly what we do.', scene: photo('rec-share', 'Your network is worth real money') },
     { text: 'Haze Tech Solutions helps them with AI automation, social media marketing, websites, and S E O.', scene: { template: 'checklist', headerText: 'What we do for them', items: [ { text: 'AI Automation', checked: true }, { text: 'Social Media Marketing', checked: true }, { text: 'Website Development', checked: true }, { text: 'SEO & Digital Marketing', checked: true } ] } },
     { text: 'And now you can earn for connecting them with us.', scene: title('HAZE TECH SOLUTIONS', 'Refer businesses. Earn real commission.', { logoUrl: LOGO }) },
     { text: "It's simple. Sign up free, grab your unique referral link, and share it.", scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Get your link', description: 'Sign up free in seconds' }, { title: 'Share it', description: 'Send it to your network' }, { title: 'Get paid', description: 'When they become a client' } ] } },
-    { text: 'When someone you refer becomes a paying client, you earn ten percent of their first invoice. At least fifty dollars, with no cap.', scene: { template: 'stat', headerText: 'What you earn', stats: [ { value: '10%', label: 'of first invoice' }, { value: '$50', label: 'minimum payout' }, { value: 'No cap', label: 'on referrals' } ] } },
+    { text: 'When someone you refer becomes a paying client, you earn ten percent of their first invoice. At least fifty dollars, with no cap.', scene: stat('What you earn', [ { value: '10%', label: 'of first invoice' }, { value: '$50', label: 'minimum payout' }, { value: 'No cap', label: 'on referrals' } ], { backgroundImage: IMG('rec-handshake'), statStyle: 'imageOverlay' }) },
     { text: 'No quotas. No cost to join. Just real commission for real introductions.', scene: title('NO CATCH', 'No quotas. No cost to join.') },
     { text: 'Your network is worth something. Start earning today at haze tech solutions dot com slash affiliate.', scene: title('JOIN FREE TODAY', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
   prospect: [
     { text: 'Trying to grow a business with a small team and even less time?', scene: title('HAZE TECH SOLUTIONS', 'Enterprise-grade growth, built for small business.', { logoUrl: LOGO }) },
+    { text: "You're great at running your business. We make it grow.", scene: photo('rec-owner', 'You run it. We grow it.') },
     { text: 'AI automation that runs while you sleep. Social media that grows on autopilot. Websites built to convert. And S E O that gets you found.', scene: { template: 'checklist', headerText: 'What we do', items: [ { text: 'AI Automation', checked: true }, { text: 'Social Media Marketing', checked: true }, { text: 'Website Development', checked: true }, { text: 'SEO & Digital Marketing', checked: true } ] } },
     { text: "We're boutique and hands-on, A-I first, and obsessed with one thing. Results.", scene: title('WHY HAZE', 'Boutique. AI-first. Obsessed with results.') },
-    { text: 'Fifty plus businesses trust us, with ninety eight percent satisfaction.', scene: { template: 'stat', headerText: 'The track record', stats: [ { value: '50+', label: 'clients served' }, { value: '98%', label: 'satisfaction' }, { value: '3 yrs', label: 'experience' } ] } },
+    { text: 'Fifty plus businesses trust us, with ninety eight percent satisfaction.', scene: stat('The track record', [ { value: '50+', label: 'clients served' }, { value: '98%', label: 'satisfaction' }, { value: '3 yrs', label: 'experience' } ], { backgroundImage: IMG('rec-team'), statStyle: 'imageOverlay' }) },
     { text: 'See exactly where you are leaving growth on the table. Get your free audit today at haze tech solutions dot com.', scene: title('GET A FREE AUDIT', 'hazetechsolutions.com/free-social-audit', { logoUrl: LOGO }) },
   ],
   client: [
     { text: "You've got momentum. Let's compound it.", scene: title('FOR OUR CLIENTS', "You've got momentum. Let's compound it.", { logoUrl: LOGO }) },
+    { text: 'Thank you for trusting us with your growth. Here is how we take it further.', scene: photo('rec-team', 'Let’s take it further, together') },
     { text: 'Automate the busywork. Scale your content. Level up your site. And own your search.', scene: { template: 'checklist', headerText: "What's next", items: [ { text: 'Automate the busywork', checked: true }, { text: 'Scale your content', checked: true }, { text: 'Level up your site', checked: true }, { text: 'Own your search', checked: true } ] } },
     { text: "And here's something new. You can earn while you grow.", scene: title('NEW', 'Earn while you grow.') },
-    { text: 'Refer a business to Haze Tech and earn ten percent of their first invoice. At least fifty dollars, with no cap.', scene: { template: 'stat', headerText: 'Refer & earn', stats: [ { value: '10%', label: 'of first invoice' }, { value: '$50', label: 'minimum' }, { value: 'No cap', label: 'on referrals' } ] } },
+    { text: 'Refer a business to Haze Tech and earn ten percent of their first invoice. At least fifty dollars, with no cap.', scene: stat('Refer & earn', [ { value: '10%', label: 'of first invoice' }, { value: '$50', label: 'minimum' }, { value: 'No cap', label: 'on referrals' } ], { backgroundImage: IMG('rec-share'), statStyle: 'imageOverlay' }) },
     { text: 'Know someone who needs us? Get your referral link at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
 
