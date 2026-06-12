@@ -70,6 +70,38 @@ const SERVICES = [
       { q: '“I just run ads instead.”', a: 'Ads stop the moment you stop paying. SEO builds an asset that keeps delivering.' },
     ],
   },
+  {
+    slug: 'what-is-ai-automation', name: 'What Is AI Automation?', tagline: 'A tireless digital employee.', accent: '#00CFFF', img: 'ai-concept',
+    what: 'AI automation means using artificial intelligence to handle tasks and workflows automatically — the repetitive, time-consuming work that normally ties up a person. Think of it as a tireless digital employee that works 24/7, never forgets, and never sleeps.',
+    steps: [
+      { t: 'AI Assistant', d: 'Answers customer questions instantly' },
+      { t: 'Call Receptionist', d: 'Picks up, routes & books calls' },
+      { t: 'Lead System', d: 'Captures & follows up every lead' },
+      { t: 'Workflow Bots', d: 'Invoicing, data entry, reporting' },
+    ],
+    who: ['Restaurants — reservations & orders', 'Clinics — appointment booking', 'Real estate — instant lead follow-up', 'Trades — missed-call text-back'],
+    pitch: ['It works 24/7 — every lead and call answered, even at 2am.', 'It never misses a follow-up, so the business stops leaking revenue.', 'It scales the business without hiring more staff.'],
+    obj: [
+      { q: '“Is this just chatbots?”', a: 'No — it’s any repetitive task: calls, follow-ups, scheduling, invoicing, reporting and more.' },
+      { q: '“Will it feel robotic to my customers?”', a: 'Modern AI is natural and on-brand — most customers can’t tell, and they love the instant response.' },
+    ],
+  },
+  {
+    slug: 'website-types', name: 'Types of Websites We Build', tagline: 'The right site for the goal.', accent: '#A78BFA', img: 'web-types',
+    what: 'Not every business needs the same website. We build the right type for the goal — from a clean professional presence to a full lead-generating engine — all brand-aligned, mobile-perfect, and live in days.',
+    steps: [
+      { t: 'Service', d: 'Trades, agencies, pros — built to book' },
+      { t: 'Local', d: 'Shops & restaurants — get found locally' },
+      { t: 'Portfolio', d: 'Creatives — showcase the work' },
+      { t: 'Landing', d: 'Startups & funnels — convert signups' },
+    ],
+    who: ['Businesses with no site or an outdated one', 'Sites that look fine but get no leads', 'New businesses that need to launch fast', 'Anyone whose site isn’t their best salesperson'],
+    pitch: ['Starter — from $1,500: a clean, professional presence.', 'Growth — $3,500: a real working, lead-generating site.', 'Pro — $7,500: a content-heavy lead engine, fully custom.'],
+    obj: [
+      { q: '“How long does it take?”', a: 'Most sites go live in days, not months — AI compresses the timeline.' },
+      { q: '“Will it actually bring in business?”', a: 'Every build is optimized for conversion — clear calls-to-action, fast load, mobile-first.' },
+    ],
+  },
 ]
 
 const page = (s) => `<!doctype html>
