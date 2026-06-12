@@ -54,6 +54,7 @@ export default async function handler(req, res) {
     case 'ref-validate':        return req.method === 'GET'  ? refValidate(req, res)       : methodNotAllowed(res, 'GET')
     case 'affiliate-signup':    return req.method === 'POST' ? affiliateSignup(req, res)   : methodNotAllowed(res, 'POST')
     case 'affiliate-me':        return req.method === 'GET'  ? affiliateMe(req, res)       : methodNotAllowed(res, 'GET')
+    case 'affiliate-update-payout': return req.method === 'POST' ? affiliateUpdatePayout(req, res) : methodNotAllowed(res, 'POST')
     case 'affiliate-dashboard-data': return req.method === 'GET' ? affiliateDashboardData(req, res) : methodNotAllowed(res, 'GET')
     case 'admin-affiliates-list':    return req.method === 'GET'  ? adminAffiliatesList(req, res)   : methodNotAllowed(res, 'GET')
     case 'admin-commissions-list':   return req.method === 'GET'  ? adminCommissionsList(req, res)  : methodNotAllowed(res, 'GET')
@@ -171,9 +172,25 @@ const REF_BASE = 'https://www.hazetechsolutions.com'
 async function affiliateMe(req, res) {
   const ctx = await resolveCaller(req, res); if (!ctx) return
   const { caller, sb } = ctx
-  const { data } = await sb.from('affiliates').select('id, code, name, email, status, created_at').eq('user_id', caller.id).maybeSingle()
+  const { data } = await sb.from('affiliates').select('id, code, name, email, status, created_at, payout_method, payout_details').eq('user_id', caller.id).maybeSingle()
   if (!data) return res.status(404).json({ error: 'not_affiliate', message: 'No affiliate profile' })
   return res.status(200).json({ affiliate: { ...data, link: `${REF_BASE}/r/${data.code}` } })
+}
+
+// POST ?action=affiliate-update-payout — caller updates their own payout details.
+async function affiliateUpdatePayout(req, res) {
+  const ctx = await resolveCaller(req, res); if (!ctx) return
+  const { caller, sb } = ctx
+  const body = req.body || {}
+  const patch = {}
+  if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim().slice(0, 120)
+  if (typeof body.payout_method === 'string') patch.payout_method = body.payout_method.slice(0, 60)
+  if (body.payout_details && typeof body.payout_details === 'object') patch.payout_details = body.payout_details
+  if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'bad_request', message: 'Nothing to update' })
+  const { data, error } = await sb.from('affiliates').update(patch).eq('user_id', caller.id)
+    .select('id, name, payout_method, payout_details').single()
+  if (error) return res.status(500).json({ error: 'update_failed', message: error.message })
+  return res.status(200).json({ affiliate: data })
 }
 
 // GET ?action=affiliate-dashboard-data — IDOR-safe: affiliate resolved from token.
