@@ -227,6 +227,9 @@ const KB = [
   { name: 'Social Media Marketing', tagline: 'Grow your audience on autopilot.', color: C.orange, pdf: '/brochures/kb/hts-kb-social-media.pdf', video: `${R2}/hts-social-media-promo.mp4` },
   { name: 'Website Development', tagline: 'Sites built to convert.', color: '#A78BFA', pdf: '/brochures/kb/hts-kb-website.pdf', video: `${R2}/hts-website-promo.mp4` },
   { name: 'SEO & Digital Marketing', tagline: 'Get found. Stay found. Convert.', color: C.green, pdf: '/brochures/kb/hts-kb-seo.pdf', video: `${R2}/hts-seo-promo.mp4` },
+  { name: 'Brand Identity Kits', tagline: 'A complete brand in days.', color: '#A78BFA', pdf: '/brochures/kb/hts-kb-brand-kit.pdf', video: `${R2}/hts-brand-kit-promo.mp4` },
+  { name: 'Platforms We Manage', tagline: 'Everywhere your customers are.', color: C.orange, pdf: '/brochures/kb/hts-kb-platforms.pdf', video: `${R2}/hts-platforms-promo.mp4` },
+  { name: 'Bundles — Save & Scale', tagline: 'Two channels, one price.', color: C.green, pdf: '/brochures/kb/hts-kb-bundles.pdf', video: `${R2}/hts-bundles-promo.mp4` },
 ]
 const CONCEPTS = [
   { name: 'What Is AI Automation?', tagline: 'The concept, explained simply.', color: C.cyan, pdf: '/brochures/kb/hts-kb-what-is-ai-automation.pdf', video: `${R2}/hts-what-is-ai-automation-promo.mp4` },

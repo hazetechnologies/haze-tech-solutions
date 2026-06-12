@@ -110,6 +110,27 @@ const SCRIPTS = {
     { text: 'And because A I compresses the work, most go live in days, not months, at a fraction of agency prices.', scene: title('LIVE IN DAYS', 'Not months. A fraction of the cost.') },
     { text: 'Know a business that needs a real website? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
+  'bundles': [
+    { text: 'The fastest growth comes from channels working together. That’s what our bundles are built for.', scene: title('BUNDLES', 'Save & scale — two channels, one price.') },
+    { text: 'We combine our most popular services at a lower price than buying them separately, all managed by one team.', scene: photo('rec-team', 'More growth, for less') },
+    { text: 'Social plus S E O at eighteen hundred a month saves four hundred. Website plus social is fourteen thousand for a launch year. And complete is forty thousand a year, fully managed.', scene: stat('The bundles', [ { value: '$1,800/mo', label: 'Social + SEO' }, { value: '$14K/yr', label: 'Website + Social' }, { value: '$40K/yr', label: 'Complete' } ]) },
+    { text: 'Channels compound. Content feeds search, search feeds the site, and together they outperform any one alone.', scene: { template: 'checklist', headerText: 'Why bundle', items: [ { text: 'Lower price than buying separately', checked: true }, { text: 'One team, one strategy', checked: true }, { text: 'Channels that compound', checked: true }, { text: 'Faster results, less overhead', checked: true } ] } },
+    { text: 'Know a business ready to scale, not just dabble? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
+  ],
+  'platforms': [
+    { text: 'Your customers are scrolling right now. The question is whether your business shows up.', scene: title('PLATFORMS WE MANAGE', 'Everywhere your customers are.') },
+    { text: 'We create and manage content across all the major platforms, so a business shows up consistently without juggling ten apps.', scene: photo('sm-phone', 'Show up everywhere they scroll') },
+    { text: 'Instagram for visual reach, TikTok for viral discovery, YouTube for authority, and Facebook for local community.', scene: { template: 'checklist', headerText: 'The big four', items: [ { text: 'Instagram — visual brand + Reels', checked: true }, { text: 'TikTok — short-form discovery', checked: true }, { text: 'YouTube — long-form + Shorts', checked: true }, { text: 'Facebook — local reach', checked: true } ] } },
+    { text: 'Plus LinkedIn, X, and Pinterest when they fit. We focus where their customers actually are, not everywhere.', scene: title('THE RIGHT PLATFORMS', 'Not all of them — just the ones that matter.') },
+    { text: 'Know a business spread too thin online? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
+  ],
+  'brand-kit': [
+    { text: 'A business only gets one first impression. A consistent brand makes it count.', scene: title('BRAND IDENTITY KITS', 'A complete brand in days.') },
+    { text: 'We generate a full brand identity, logos, colors, banners, and a voice guide, so a business looks professional everywhere from day one.', scene: photo('sm-boutique', 'Look professional everywhere') },
+    { text: 'We discover their vibe, generate logo concepts, they pick a favorite, and we deliver the full kit.', scene: { template: 'process', headerText: 'How it works', steps: [ { title: 'Discover', description: 'Vibe, colors, audience' }, { title: 'Generate', description: 'Logo concepts' }, { title: 'Approve', description: 'Pick your favorite' }, { title: 'Deliver', description: 'Banners, palette, voice' } ] } },
+    { text: 'A logo alone is not a brand. It’s the consistency across everything that makes a business look real and trustworthy.', scene: { template: 'checklist', headerText: "What's inside", items: [ { text: 'Logo set — primary, icon, mono', checked: true }, { text: 'Color palette + style', checked: true }, { text: 'Platform banners', checked: true }, { text: 'Voice & tone guide', checked: true } ] } },
+    { text: 'Know a business that needs to look the part? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
+  ],
 }
 
 const TRANSITIONS = ['crossfade', 'slideLeft', 'crossfade', 'slideLeft', 'zoomIn', 'crossfade', 'slideUp']
