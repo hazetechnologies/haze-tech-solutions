@@ -24,6 +24,16 @@ async function authedFetch(path, opts = {}) {
   return { ok: res.ok, status: res.status, json: await res.json().catch(() => ({})) }
 }
 
+function useIsMobile(bp = 820) {
+  const [m, setM] = useState(typeof window !== 'undefined' && window.innerWidth < bp)
+  useEffect(() => {
+    const on = () => setM(window.innerWidth < bp)
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [bp])
+  return m
+}
+
 export default function AffiliateDashboard() {
   const { user, loading: authLoading, signIn, signOut } = useAuth()
   const [stage, setStage] = useState('loading') // loading | landing | join | portal
@@ -66,22 +76,23 @@ function Centered({ children }) { return <div style={{ display: 'flex', justifyC
 
 /* ─────────────────────────  LANDING (logged out)  ───────────────────────── */
 function Landing({ signIn, onAuthed }) {
+  const isMobile = useIsMobile()
   return (
     <FullBleed>
       <div style={{ background: `radial-gradient(circle at 82% -10%, rgba(0,207,255,0.16), transparent 45%), radial-gradient(circle at 0% 110%, rgba(255,107,0,0.12), transparent 42%)` }}>
-        <div style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 20px 60px' }}>
+        <div style={{ maxWidth: 1080, margin: '0 auto', padding: isMobile ? '22px 16px 40px' : '28px 20px 60px' }}>
           <Brandbar />
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(320px,0.85fr)', gap: 40, alignItems: 'center', marginTop: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0,1.15fr) minmax(320px,0.85fr)', gap: isMobile ? 26 : 40, alignItems: 'center', marginTop: 24 }}>
             {/* Hero copy */}
             <div>
               <span style={pill}>HAZE TECH PARTNER PROGRAM</span>
-              <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 44, lineHeight: 1.08, margin: '18px 0 14px', fontWeight: 800 }}>
+              <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: isMobile ? 30 : 44, lineHeight: 1.1, margin: '16px 0 14px', fontWeight: 800 }}>
                 Refer businesses.<br /><span style={{ color: C.cyan }}>Earn real commission.</span>
               </h1>
-              <p style={{ color: C.mut, fontSize: 16, lineHeight: 1.6, maxWidth: 520 }}>
+              <p style={{ color: C.mut, fontSize: isMobile ? 15 : 16, lineHeight: 1.6, maxWidth: 520 }}>
                 Introduce a business to Haze Tech and earn <b style={{ color: C.green }}>10% of their first invoice</b> when they become a paying client. Free to join, no quotas, no cap. Get a full partner account with a tracked link, marketing materials, and live earnings.
               </p>
-              <div style={{ display: 'flex', gap: 26, marginTop: 26, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 26, marginTop: 24, flexWrap: 'wrap' }}>
                 <HeroStat value="10%" label="of first invoice" />
                 <HeroStat value="$50" label="minimum payout" />
                 <HeroStat value="No cap" label="on referrals" />
@@ -93,7 +104,7 @@ function Landing({ signIn, onAuthed }) {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 20px 70px' }}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', padding: isMobile ? '0 16px 50px' : '0 20px 70px' }}>
         <Section title="See how it works — in 60 seconds">
           <div style={{ maxWidth: 760, margin: '0 auto' }}>
             <video
@@ -233,31 +244,33 @@ function Join({ onJoined, signOut }) {
 /* ─────────────────────────  PORTAL (affiliate)  ───────────────────────── */
 function Portal({ profile, data, onRefresh, signOut }) {
   const [tab, setTab] = useState('dashboard')
+  const isMobile = useIsMobile()
+  const pad = isMobile ? 14 : 20
   const tabs = [['dashboard', 'Dashboard', LayoutGrid], ['resources', 'Resources', BookOpen], ['payouts', 'Payouts', Wallet]]
   return (
     <FullBleed>
       {/* Portal header */}
       <div style={{ borderBottom: `1px solid ${C.line}`, background: 'rgba(11,26,46,0.6)', position: 'sticky', top: 0, zIndex: 5, backdropFilter: 'blur(8px)' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <img src={LOGO} alt="" style={{ width: 34, height: 34, borderRadius: 8 }} />
-            <div>
+        <div style={{ maxWidth: 1000, margin: '0 auto', padding: `12px ${pad}px`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+            <img src={LOGO} alt="" style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 15, fontWeight: 700 }}>Partner Portal</div>
-              <div style={{ fontSize: 12, color: C.mut }}>Hi {profile?.name || 'there'} 👋</div>
+              <div style={{ fontSize: 12, color: C.mut, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Hi {profile?.name || 'there'} 👋</div>
             </div>
           </div>
-          <button onClick={() => signOut()} style={ghostBtn}><LogOut size={14} /> Sign out</button>
+          <button onClick={() => signOut()} style={{ ...ghostBtn, flexShrink: 0 }}><LogOut size={14} /> {isMobile ? '' : 'Sign out'}</button>
         </div>
-        <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 20px', display: 'flex', gap: 4 }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto', padding: `0 ${pad}px`, display: 'flex', gap: 4, overflowX: 'auto' }}>
           {tabs.map(([k, label, Icon]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ ...navTab, ...(tab === k ? navTabOn : {}) }}>
+            <button key={k} onClick={() => setTab(k)} style={{ ...navTab, ...(tab === k ? navTabOn : {}), whiteSpace: 'nowrap' }}>
               <Icon size={15} /> {label}
             </button>
           ))}
         </div>
       </div>
 
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '26px 20px 60px' }}>
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: `26px ${pad}px 60px` }}>
         {tab === 'dashboard' && <DashboardPanel data={data} onRefresh={onRefresh} />}
         {tab === 'resources' && <ResourcesPanel />}
         {tab === 'payouts' && <PayoutsPanel profile={profile} data={data} onSaved={onRefresh} />}
