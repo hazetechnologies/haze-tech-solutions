@@ -16,6 +16,9 @@ const IMAGES = [
   { key: 'rec-handshake', prompt: 'Photorealistic two friendly business professionals shaking hands in a bright modern office, partnership and trust, warm light, cinematic, no text, no logos' },
   { key: 'rec-owner', prompt: 'Photorealistic confident small business owner smiling with arms crossed inside their shop, proud and approachable, warm natural light, cinematic, no text, no logos' },
   { key: 'rec-team', prompt: 'Photorealistic happy diverse small business team collaborating and smiling around a laptop in a bright modern office, energetic and positive, cinematic, no text, no logos' },
+  // Concept explainers
+  { key: 'ai-concept', prompt: 'Photorealistic business person hands using a laptop with a subtle glowing blue digital AI assistant interface and floating chat bubbles above the screen, modern office, futuristic but warm, cinematic, no readable text, no logos' },
+  { key: 'web-types', prompt: 'Photorealistic flat lay of a laptop, tablet and smartphone on a clean light desk, each screen showing a different modern colorful website layout, web design concept, bright airy workspace, cinematic, no readable text, no logos' },
 ]
 
 async function genImage(prompt) {

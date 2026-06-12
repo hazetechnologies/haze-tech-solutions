@@ -228,6 +228,10 @@ const KB = [
   { name: 'Website Development', tagline: 'Sites built to convert.', color: '#A78BFA', pdf: '/brochures/kb/hts-kb-website.pdf', video: `${R2}/hts-website-promo.mp4` },
   { name: 'SEO & Digital Marketing', tagline: 'Get found. Stay found. Convert.', color: C.green, pdf: '/brochures/kb/hts-kb-seo.pdf', video: `${R2}/hts-seo-promo.mp4` },
 ]
+const CONCEPTS = [
+  { name: 'What Is AI Automation?', tagline: 'The concept, explained simply.', color: C.cyan, pdf: '/brochures/kb/hts-kb-what-is-ai-automation.pdf', video: `${R2}/hts-what-is-ai-automation-promo.mp4` },
+  { name: 'Types of Websites We Build', tagline: 'The right site for the goal.', color: '#A78BFA', pdf: '/brochures/kb/hts-kb-website-types.pdf', video: `${R2}/hts-website-types-promo.mp4` },
+]
 const RECRUIT = [
   { name: 'Partner one-pager (PDF)', href: '/brochures/hts-partner.pdf' },
   { name: 'Partner promo video', href: `${R2}/hts-partner-promo.mp4` },
@@ -241,6 +245,24 @@ function Resources() {
         <p style={{ color: C.mut, fontSize: 13, marginTop: 4 }}>Know what you're referring. Each guide covers what it is, how it works, who it's for, and how to pitch it. Share the videos with prospects too.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
           {KB.map(k => (
+            <div key={k.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 14, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.line}`, borderRadius: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: k.color }}>{k.name}</div>
+                <div style={{ fontSize: 12, color: C.mut }}>{k.tagline}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <a href={k.video} target="_blank" rel="noreferrer" style={resBtn}><Play size={14} /> Watch</a>
+                <a href={k.pdf} target="_blank" rel="noreferrer" style={{ ...resBtn, background: 'rgba(0,207,255,0.1)', borderColor: 'rgba(0,207,255,0.3)', color: C.cyan }}><Download size={14} /> Brochure</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card>
+        <h2 style={h2}>Explain the basics</h2>
+        <p style={{ color: C.mut, fontSize: 13, marginTop: 4 }}>Great for prospects who are new to it — plain-language explainers you can forward directly.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+          {CONCEPTS.map(k => (
             <div key={k.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 14, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.line}`, borderRadius: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: k.color }}>{k.name}</div>

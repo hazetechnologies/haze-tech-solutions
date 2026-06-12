@@ -90,6 +90,26 @@ const SCRIPTS = {
     { text: 'S E O starts around twelve hundred dollars a month, with early wins in weeks and bigger gains compounding over time.', scene: stat('Investment & timeline', [ { value: 'from $1,200', label: 'per month' }, { value: 'Weeks', label: 'to first wins' } ]) },
     { text: 'Know a business that needs more leads? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
   ],
+
+  // ─── Concept explainers (educational, forwardable to prospects) ───
+  'what-is-ai-automation': [
+    { text: 'You keep hearing about A I automation. So what actually is it?', scene: title('AI AUTOMATION', 'What is it — and why does it matter?') },
+    { text: "Simply put, it's using artificial intelligence to handle the repetitive work that normally ties up a person.", scene: photo('ai-concept', 'A tireless digital employee') },
+    { text: 'Think of it as a tireless digital employee that works around the clock, never forgets, and never sleeps.', scene: title('THINK OF IT AS', 'A digital employee that works 24/7.') },
+    { text: 'It can be an A I assistant that answers customers instantly, a call receptionist that never misses a call, a lead system that follows up automatically, and workflow bots that handle invoicing, data, and reports.', scene: { template: 'checklist', headerText: 'What it can do', items: [ { text: 'AI Assistant — instant answers', checked: true }, { text: 'AI Call Receptionist — never miss a call', checked: true }, { text: 'Lead system — follow up automatically', checked: true }, { text: 'Workflow bots — invoicing, data, reports', checked: true } ] } },
+    { text: 'For a local business, that means every inquiry is answered and every call is captured, even at 2am.', scene: photo('ai-cafe', 'Every lead answered — even at 2am') },
+    { text: 'The result? Hours saved every week, no missed leads, lower costs, and instant service that wins customers.', scene: { template: 'checklist', headerText: 'How it helps the business', items: [ { text: 'Save hours every week', checked: true }, { text: 'Never miss a lead or call', checked: true }, { text: 'Cut costs — no extra hires', checked: true }, { text: 'Respond instantly, 24/7', checked: true } ] } },
+    { text: "Know a business that's drowning in busywork? Refer them at haze tech solutions dot com slash affiliate.", scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
+  ],
+  'website-types': [
+    { text: 'Not every business needs the same website. The key is building the right one for the goal.', scene: title('WEBSITE DEVELOPMENT', 'What kind of website do you need?') },
+    { text: 'We build the right type, from a clean professional presence to a full lead-generating engine.', scene: photo('web-types', 'The right site for the goal') },
+    { text: 'Service sites for trades and pros, local sites to get found, portfolios to showcase work, and landing pages and funnels that convert.', scene: { template: 'checklist', headerText: 'Types we build', items: [ { text: 'Service — built to book', checked: true }, { text: 'Local — get found nearby', checked: true }, { text: 'Portfolio — showcase the work', checked: true }, { text: 'Landing & funnels — convert', checked: true } ] } },
+    { text: 'Starter from fifteen hundred for a clean presence, Growth at thirty-five hundred for a lead-generating site, and Pro at seventy-five hundred for a full content engine.', scene: stat('Pick your tier', [ { value: 'from $1.5K', label: 'Starter' }, { value: '$3.5K', label: 'Growth' }, { value: '$7.5K', label: 'Pro' } ]) },
+    { text: 'Whatever the tier, every site is brand-aligned, mobile-perfect, and built to turn visitors into leads.', scene: photo('web-laptop', 'Your hardest-working salesperson') },
+    { text: 'And because A I compresses the work, most go live in days, not months, at a fraction of agency prices.', scene: title('LIVE IN DAYS', 'Not months. A fraction of the cost.') },
+    { text: 'Know a business that needs a real website? Refer them at haze tech solutions dot com slash affiliate.', scene: title('REFER & EARN', 'hazetechsolutions.com/affiliate', { logoUrl: LOGO }) },
+  ],
 }
 
 const TRANSITIONS = ['crossfade', 'slideLeft', 'crossfade', 'slideLeft', 'zoomIn', 'crossfade', 'slideUp']
