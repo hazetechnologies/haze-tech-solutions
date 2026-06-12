@@ -156,6 +156,15 @@ export default function Footer() {
                   </button>
                 </li>
               ))}
+              <li>
+                <a
+                  href="/affiliate"
+                  className="text-muted text-sm hover:text-primary transition-colors duration-200 no-underline"
+                  style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
+                >
+                  Partner Program
+                </a>
+              </li>
             </ul>
           </div>
 
