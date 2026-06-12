@@ -94,6 +94,17 @@ function Landing({ signIn, onAuthed }) {
       </div>
 
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 20px 70px' }}>
+        <Section title="See how it works — in 60 seconds">
+          <div style={{ maxWidth: 760, margin: '0 auto' }}>
+            <video
+              controls preload="metadata" playsInline poster={`${R2}/img/rec-handshake.png`}
+              style={{ width: '100%', borderRadius: 16, border: `1px solid ${C.line}`, display: 'block', background: '#000' }}
+            >
+              <source src={`${R2}/hts-partner-promo.mp4`} type="video/mp4" />
+            </video>
+          </div>
+        </Section>
+
         <Section title="How it works">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 16 }}>
             <Step n="1" icon={Link2} title="Get your link" body="Create your free account and grab your unique referral link in seconds." />
@@ -119,6 +130,13 @@ function Landing({ signIn, onAuthed }) {
             <Faq q="How are referrals tracked?" a="Your unique link tracks every visit for 30 days; you're credited when they become a paying client." />
           </div>
         </Section>
+
+        {/* Closing CTA */}
+        <div style={{ marginTop: 48, borderRadius: 18, padding: '40px 28px', textAlign: 'center', background: `linear-gradient(120deg, rgba(0,207,255,0.14), rgba(255,107,0,0.12))`, border: '1px solid rgba(0,207,255,0.3)' }}>
+          <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 26, margin: 0 }}>Ready to start earning?</h2>
+          <p style={{ color: C.mut, fontSize: 15, margin: '8px 0 20px' }}>Create your free partner account in under a minute. No cost, no quotas.</p>
+          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{ ...primaryBtn, width: 'auto', padding: '13px 28px', fontSize: 15 }}>Become a partner →</button>
+        </div>
       </div>
     </FullBleed>
   )
