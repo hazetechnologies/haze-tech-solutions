@@ -3,9 +3,11 @@
 const fs = require('fs')
 const path = require('path')
 
+const IMG = (k) => `https://pub-63148690e7b846428bbe77d952ec92ed.r2.dev/hts-promo/img/${k}.png`
+
 const SERVICES = [
   {
-    slug: 'ai-automation', name: 'AI Automation', tagline: 'Work smarter, not harder.', accent: '#00CFFF',
+    slug: 'ai-automation', name: 'AI Automation', tagline: 'Work smarter, not harder.', accent: '#00CFFF', img: 'ai-assistant',
     what: 'Custom automated workflows that quietly handle a business’s repetitive work — lead capture, follow-ups, data entry, scheduling, reporting — using AI plus the tools they already use. It runs 24/7 so their team stops doing robot work.',
     steps: [
       { t: 'Audit', d: 'We find the repetitive, time-sucking tasks' },
@@ -21,7 +23,7 @@ const SERVICES = [
     ],
   },
   {
-    slug: 'social-media', name: 'Social Media Marketing', tagline: 'Grow your audience on autopilot.', accent: '#FF6B00',
+    slug: 'social-media', name: 'Social Media Marketing', tagline: 'Grow your audience on autopilot.', accent: '#FF6B00', img: 'sm-phone',
     what: 'Done-for-you, daily branded content and audience growth on the platforms a business’s customers actually use. We handle strategy, creation, scheduling, and engagement — they just show up and grow.',
     steps: [
       { t: 'Strategy', d: 'Brand voice, goals, and target platforms' },
@@ -37,7 +39,7 @@ const SERVICES = [
     ],
   },
   {
-    slug: 'website', name: 'Website Development', tagline: 'Sites built to convert.', accent: '#A78BFA',
+    slug: 'website', name: 'Website Development', tagline: 'Sites built to convert.', accent: '#A78BFA', img: 'web-laptop',
     what: 'Fast, brand-aligned websites with AI-generated copy, designed to turn visitors into leads — deployed and live in days, not months. Built to perform, not just to look pretty.',
     steps: [
       { t: 'Intake', d: 'Brand, pages, services, and goals' },
@@ -53,7 +55,7 @@ const SERVICES = [
     ],
   },
   {
-    slug: 'seo', name: 'SEO & Digital Marketing', tagline: 'Get found. Stay found. Convert.', accent: '#22C55E',
+    slug: 'seo', name: 'SEO & Digital Marketing', tagline: 'Get found. Stay found. Convert.', accent: '#22C55E', img: 'seo-storefront',
     what: 'Search, local, and paid marketing working together to put a business in front of customers who are already looking — and turn that attention into qualified leads. One number matters: leads.',
     steps: [
       { t: 'Audit', d: 'Where they rank + keyword opportunities' },
@@ -79,9 +81,11 @@ const page = (s) => `<!doctype html>
     <div><div class="wm">HAZE <span class="t">TECH</span> SOLUTIONS</div><div class="tag">Partner Knowledge Base</div></div>
   </div>
 
-  <div class="section">
-    <span class="kb-badge">Product Guide — for Partners</span>
-    <h1 style="margin-top:12px">${s.name}<br><span class="accent" style="color:${s.accent}">${s.tagline}</span></h1>
+  <div class="hero" style="background-image:url('${IMG(s.img)}')">
+    <div class="ov">
+      <span class="kb-badge">Product Guide — for Partners</span>
+      <h1>${s.name}<span class="accent" style="color:${s.accent}">${s.tagline}</span></h1>
+    </div>
   </div>
 
   <div class="section"><h2>What it is</h2><p class="lede sm">${s.what}</p></div>
