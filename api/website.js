@@ -58,6 +58,7 @@ export default async function handler(req, res) {
     case 'affiliate-signup':    return req.method === 'POST' ? affiliateSignup(req, res)   : methodNotAllowed(res, 'POST')
     case 'affiliate-me':        return req.method === 'GET'  ? affiliateMe(req, res)       : methodNotAllowed(res, 'GET')
     case 'affiliate-update-payout': return req.method === 'POST' ? affiliateUpdatePayout(req, res) : methodNotAllowed(res, 'POST')
+    case 'affiliate-submit-lead':   return req.method === 'POST' ? affiliateSubmitLead(req, res)  : methodNotAllowed(res, 'POST')
     case 'affiliate-dashboard-data': return req.method === 'GET' ? affiliateDashboardData(req, res) : methodNotAllowed(res, 'GET')
     case 'admin-affiliates-list':    return req.method === 'GET'  ? adminAffiliatesList(req, res)   : methodNotAllowed(res, 'GET')
     case 'admin-commissions-list':   return req.method === 'GET'  ? adminCommissionsList(req, res)  : methodNotAllowed(res, 'GET')
@@ -252,6 +253,40 @@ async function affiliateUpdatePayout(req, res) {
     .select('id, name, payout_method, payout_details').single()
   if (error) return res.status(500).json({ error: 'update_failed', message: error.message })
   return res.status(200).json({ affiliate: data })
+}
+
+// POST ?action=affiliate-submit-lead — an affiliate enters a referral directly
+// from their portal. Creates a lead attributed to them (no link/click needed).
+async function affiliateSubmitLead(req, res) {
+  const ctx = await resolveCaller(req, res); if (!ctx) return
+  const { caller, sb } = ctx
+  const { data: aff } = await sb.from('affiliates').select('id, name, email, status').eq('user_id', caller.id).maybeSingle()
+  if (!aff) return res.status(404).json({ error: 'not_affiliate', message: 'No affiliate profile' })
+
+  const b = req.body || {}
+  const name = String(b.name || '').trim().slice(0, 120)
+  const email = String(b.email || '').trim().slice(0, 254)
+  if (!name || !email) return res.status(400).json({ error: 'bad_request', message: 'Contact name and email are required' })
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_request', message: 'A valid email is required' })
+
+  const row = {
+    name, email,
+    business_name: b.business_name ? String(b.business_name).trim().slice(0, 200) : null,
+    service_interest: b.service_interest ? String(b.service_interest).trim().slice(0, 100) : null,
+    message: b.message ? String(b.message).trim().slice(0, 5000) : null,
+    source: 'affiliate-referral',
+    referred_by_affiliate_id: aff.id,
+  }
+  const { data: lead, error } = await sb.from('leads').insert(row).select('id').single()
+  if (error) return res.status(500).json({ error: 'insert_failed', message: 'Could not save the referral' })
+
+  try {
+    await emitNotification(sb, 'affiliate.lead', {
+      affiliate: { name: aff.name, email: aff.email },
+      lead: { name, email, business_name: row.business_name, service_interest: row.service_interest, message: row.message },
+    })
+  } catch (e) { console.error('affiliate.lead notify failed:', e?.message || e) }
+  return res.status(200).json({ ok: true, lead: { id: lead.id } })
 }
 
 // GET ?action=affiliate-dashboard-data — IDOR-safe: affiliate resolved from token.

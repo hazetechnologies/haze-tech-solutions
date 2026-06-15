@@ -262,6 +262,26 @@ export const REGISTRY = {
     },
   ],
 
+  'affiliate.lead': [
+    {
+      audience: 'admin',
+      resolveTo: async () => adminEmail(),
+      render: (p) => {
+        const l = p.lead || {}, a = p.affiliate || {}
+        return {
+          title: `New referral from ${a.name || a.email || 'an affiliate'}: ${l.business_name || l.name || l.email}`,
+          body: `${l.name || ''}${l.email ? ` · ${l.email}` : ''}${l.service_interest ? ` · ${l.service_interest}` : ''}`,
+          link: '/admin/leads',
+          emailSubject: `New affiliate referral: ${l.business_name || l.name || l.email}`,
+          emailHtml: wrapHtml('New affiliate referral',
+            `<p><b>${esc(a.name || a.email || 'An affiliate')}</b> submitted a referral from their portal:</p>${detailTable([
+              ['Business', l.business_name], ['Contact', l.name], ['Email', l.email], ['Service', l.service_interest], ['Request', l.message],
+            ])}${button('https://www.hazetechsolutions.com/admin/leads', 'Open leads')}`),
+        }
+      },
+    },
+  ],
+
   'commission.earned': [
     {
       audience: 'client', // the affiliate

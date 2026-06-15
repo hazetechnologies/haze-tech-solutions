@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Copy, Check, DollarSign, Users, TrendingUp, LogOut, Loader2, Play, Download,
-  LayoutGrid, BookOpen, Wallet, Link2, ArrowRight, Gift, ShieldCheck, Zap,
+  LayoutGrid, BookOpen, Wallet, Link2, ArrowRight, Gift, ShieldCheck, Zap, UserPlus,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
@@ -246,7 +246,7 @@ function Portal({ profile, data, onRefresh, signOut }) {
   const [tab, setTab] = useState('dashboard')
   const isMobile = useIsMobile()
   const pad = isMobile ? 14 : 20
-  const tabs = [['dashboard', 'Dashboard', LayoutGrid], ['resources', 'Resources', BookOpen], ['payouts', 'Payouts', Wallet]]
+  const tabs = [['dashboard', 'Dashboard', LayoutGrid], ['refer', 'Refer a Lead', UserPlus], ['resources', 'Resources', BookOpen], ['payouts', 'Payouts', Wallet]]
   return (
     <FullBleed>
       {/* Portal header */}
@@ -272,6 +272,7 @@ function Portal({ profile, data, onRefresh, signOut }) {
 
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: `26px ${pad}px 60px` }}>
         {tab === 'dashboard' && <DashboardPanel data={data} onRefresh={onRefresh} />}
+        {tab === 'refer' && <ReferLeadPanel link={data?.affiliate?.link} onSubmitted={onRefresh} />}
         {tab === 'resources' && <ResourcesPanel />}
         {tab === 'payouts' && <PayoutsPanel profile={profile} data={data} onSaved={onRefresh} />}
       </div>
@@ -314,6 +315,64 @@ function DashboardPanel({ data }) {
           </table>
         )}
       </Card>
+    </div>
+  )
+}
+
+function ReferLeadPanel({ link, onSubmitted }) {
+  const SERVICES = ['AI Automation', 'Social Media Marketing', 'Website Development', 'SEO & Digital Marketing', 'Brand Identity Kit', 'Not sure / Multiple']
+  const [f, setF] = useState({ business_name: '', name: '', email: '', service_interest: '', message: '' })
+  const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
+  async function submit(e) {
+    e.preventDefault(); setBusy(true); setError(null)
+    try {
+      const r = await authedFetch('/api/website?action=affiliate-submit-lead', { method: 'POST', body: JSON.stringify(f) })
+      if (!r.ok) { setError(r.json.message || 'Could not submit.'); return }
+      setDone(true); if (onSubmitted) onSubmitted()
+    } catch { setError('Something went wrong.') } finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <Card>
+        <h2 style={h2}>Refer a lead</h2>
+        <p style={{ color: C.mut, fontSize: 13, marginTop: 4 }}>Know a business that needs us? Enter their details and what they're after — we'll reach out, and it's tracked to you for commission automatically.</p>
+        {done ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <Check size={38} color={C.green} />
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 10 }}>Referral submitted 🎉</h3>
+            <p style={{ color: C.mut, fontSize: 14, marginTop: 6 }}>It's in our pipeline and tracked to you. You'll earn 10% when they become a paying client.</p>
+            <button onClick={() => { setDone(false); setF({ business_name: '', name: '', email: '', service_interest: '', message: '' }) }} style={{ ...primaryBtn, width: 'auto', padding: '10px 18px', marginTop: 16 }}>Refer another</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16, maxWidth: 480 }}>
+            <div><label style={lbl}>Business name</label><input placeholder="Joe's Plumbing" value={f.business_name} onChange={e => setF({ ...f, business_name: e.target.value })} style={{ ...input, marginTop: 6 }} /></div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 180px' }}><label style={lbl}>Contact name *</label><input required placeholder="Joe Smith" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} style={{ ...input, marginTop: 6 }} /></div>
+              <div style={{ flex: '1 1 180px' }}><label style={lbl}>Email *</label><input required type="email" placeholder="joe@example.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} style={{ ...input, marginTop: 6 }} /></div>
+            </div>
+            <div><label style={lbl}>What do they need?</label>
+              <select value={f.service_interest} onChange={e => setF({ ...f, service_interest: e.target.value })} style={{ ...input, marginTop: 6, cursor: 'pointer' }}>
+                <option value="">Select a service…</option>
+                {SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div><label style={lbl}>Their request / notes</label><textarea rows={3} placeholder="What are they looking for?" value={f.message} onChange={e => setF({ ...f, message: e.target.value })} style={{ ...input, marginTop: 6, resize: 'vertical', fontFamily: 'inherit' }} /></div>
+            <button type="submit" disabled={busy} style={{ ...primaryBtn, width: 'auto', padding: '11px 20px' }}>{busy ? 'Submitting…' : 'Submit referral'}</button>
+          </form>
+        )}
+        {error && <p style={{ color: '#FCA5A5', fontSize: 13, marginTop: 10 }}>{error}</p>}
+      </Card>
+      {link && (
+        <Card>
+          <h2 style={{ ...h2, fontSize: 16 }}>…or just share your link</h2>
+          <p style={{ color: C.mut, fontSize: 13, margin: '4px 0 10px' }}>Send your personal landing page — anyone who signs up through it is tracked to you for 30 days.</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input readOnly value={link} style={{ ...input, flex: 1 }} onFocus={e => e.target.select()} />
+            <button onClick={() => navigator.clipboard?.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800) })} style={{ ...primaryBtn, width: 'auto', padding: '0 16px', display: 'flex', alignItems: 'center', gap: 6 }}>{copied ? <><Check size={15} /> Copied</> : <><Copy size={15} /> Copy</>}</button>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }
