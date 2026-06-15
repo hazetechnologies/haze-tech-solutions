@@ -11,6 +11,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { trackEvent, trackSignup } from '../../lib/telemetry'
+import PricingGrid from '../../components/PricingGrid'
 
 const C = { bg: '#040D1A', card: '#0B1A2E', cyan: '#00CFFF', orange: '#FF6B00', green: '#22C55E', text: '#E8F4FF', mut: '#7C93AD', line: 'rgba(255,255,255,0.08)' }
 const R2 = 'https://pub-63148690e7b846428bbe77d952ec92ed.r2.dev/hts-promo'
@@ -247,7 +248,7 @@ function Portal({ profile, data, onRefresh, signOut }) {
   const [tab, setTab] = useState('dashboard')
   const isMobile = useIsMobile()
   const pad = isMobile ? 14 : 20
-  const tabs = [['dashboard', 'Dashboard', LayoutGrid], ['refer', 'Refer a Lead', UserPlus], ['resources', 'Resources', BookOpen], ['payouts', 'Payouts', Wallet]]
+  const tabs = [['dashboard', 'Dashboard', LayoutGrid], ['refer', 'Refer a Lead', UserPlus], ['pricing', 'Pricing', DollarSign], ['resources', 'Resources', BookOpen], ['payouts', 'Payouts', Wallet]]
   return (
     <FullBleed>
       {/* Portal header */}
@@ -274,6 +275,13 @@ function Portal({ profile, data, onRefresh, signOut }) {
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: `26px ${pad}px 60px` }}>
         {tab === 'dashboard' && <DashboardPanel data={data} onRefresh={onRefresh} />}
         {tab === 'refer' && <ReferLeadPanel link={data?.affiliate?.link} onSubmitted={onRefresh} />}
+        {tab === 'pricing' && (
+          <div>
+            <h2 style={{ ...h2, marginBottom: 6 }}>Packages & pricing</h2>
+            <p style={{ color: C.mut, fontSize: 13, margin: '0 0 22px' }}>What you're referring — quote these to prospects. You earn <b style={{ color: C.green }}>10% of their first invoice</b> (min $50) when a referral becomes a paying client.</p>
+            <PricingGrid readOnly />
+          </div>
+        )}
         {tab === 'resources' && <ResourcesPanel />}
         {tab === 'payouts' && <PayoutsPanel profile={profile} data={data} onSaved={onRefresh} />}
       </div>

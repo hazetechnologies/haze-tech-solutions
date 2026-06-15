@@ -7,6 +7,7 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
 import { effectivePrice } from '../lib/pricing'
 import { trackEvent } from '../lib/telemetry'
+import { getRefCode } from '../lib/affiliateRef'
 
 // /cart — unified cart for both anonymous and authenticated users.
 //   - Loads live plan + product data from Supabase for each cart item
@@ -91,6 +92,7 @@ export default function CartPage() {
         password: form.password,
         company: form.company.trim() || null,
         phone: form.phone.trim() || null,
+        ref: getRefCode(),
       })
     }
 
