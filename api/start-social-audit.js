@@ -1,5 +1,6 @@
 // api/start-social-audit.js
 import { createClient } from '@supabase/supabase-js'
+import { sendLeadConfirmation } from './_lib/lead-confirm.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -69,6 +70,8 @@ export default async function handler(req, res) {
           console.error('lead insert error:', insertErr)
         } else if (insertedLead?.id) {
           resolvedLeadId = insertedLead.id
+          // Branded "thanks, we'll be in touch" email to the prospect. Best-effort.
+          sendLeadConfirmation(inputEmail, inputs.name).catch(e => console.error('lead confirmation email failed:', e?.message || e))
           // Fire-and-forget: nurture sequence
           fetch('https://n8n.srv934577.hstgr.cloud/webhook/lead-nurture', {
             method: 'POST',

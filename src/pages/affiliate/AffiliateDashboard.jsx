@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
-import { trackEvent } from '../../lib/telemetry'
+import { trackEvent, trackSignup } from '../../lib/telemetry'
 
 const C = { bg: '#040D1A', card: '#0B1A2E', cyan: '#00CFFF', orange: '#FF6B00', green: '#22C55E', text: '#E8F4FF', mut: '#7C93AD', line: 'rgba(255,255,255,0.08)' }
 const R2 = 'https://pub-63148690e7b846428bbe77d952ec92ed.r2.dev/hts-promo'
@@ -170,6 +170,7 @@ function AuthCard({ signIn, onAuthed }) {
         const json = await res.json().catch(() => ({}))
         if (!res.ok) { setError(json.message || 'Could not create your account.'); return }
         trackEvent('affiliate_register', {})
+        trackSignup('affiliate')
         setMsg(json.emailWarning
           ? "Account created, but we couldn't send the confirmation email — contact info@hazetechsolutions.com."
           : '📧 Check your inbox — we sent a link to confirm your email. Click it, then log in here.')

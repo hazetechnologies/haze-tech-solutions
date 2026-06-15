@@ -3,6 +3,7 @@
 // INSERT/SELECT RLS policy (which had leaked read access to all leads). Only
 // whitelisted columns are accepted, and `source` is constrained.
 import { createClient } from '@supabase/supabase-js'
+import { sendLeadConfirmation } from './_lib/lead-confirm.js'
 
 // Whitelisted string columns + max lengths (trim + cap so a public caller can't
 // stuff huge values into the table).
@@ -61,5 +62,7 @@ export default async function handler(req, res) {
     console.error('submit-lead insert error:', error.message)
     return res.status(500).json({ error: 'insert_failed', message: 'Could not save your submission' })
   }
+  // Branded "thanks, we'll be in touch" email to the prospect. Best-effort.
+  try { await sendLeadConfirmation(email, name) } catch (e) { console.error('lead confirmation email failed:', e?.message || e) }
   return res.status(200).json({ lead: { id: data.id } })
 }

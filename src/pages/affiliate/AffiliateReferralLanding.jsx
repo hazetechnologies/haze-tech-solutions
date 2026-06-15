@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Check, Zap, TrendingUp, Globe, Search, ShieldCheck, ArrowRight } from 'lucide-react'
 import { captureRef } from '../../lib/affiliateRef'
+import { trackLead } from '../../lib/telemetry'
 
 const C = { bg: '#040D1A', card: '#0B1A2E', cyan: '#00CFFF', orange: '#FF6B00', green: '#22C55E', text: '#E8F4FF', mut: '#93A8C0', line: 'rgba(255,255,255,0.08)' }
 const LOGO = 'https://www.hazetechsolutions.com/favicon.png'
@@ -45,6 +46,7 @@ export default function AffiliateReferralLanding() {
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) { setError(j.message || 'Could not submit. Please try again.'); return }
+      trackLead('affiliate-landing', { ref: code })
       setDone(true)
     } catch { setError('Something went wrong.') } finally { setBusy(false) }
   }
