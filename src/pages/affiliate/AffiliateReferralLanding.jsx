@@ -3,8 +3,8 @@
 // prospect stays attributed across the main site too) AND offers a direct
 // lead-capture form whose submission is attributed to the affiliate.
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Check, Zap, TrendingUp, Globe, Search, ShieldCheck } from 'lucide-react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Check, Zap, TrendingUp, Globe, Search, ShieldCheck, ArrowRight } from 'lucide-react'
 import { captureRef } from '../../lib/affiliateRef'
 
 const C = { bg: '#040D1A', card: '#0B1A2E', cyan: '#00CFFF', orange: '#FF6B00', green: '#22C55E', text: '#E8F4FF', mut: '#93A8C0', line: 'rgba(255,255,255,0.08)' }
@@ -19,6 +19,7 @@ function useIsMobile(bp = 820) {
 
 export default function AffiliateReferralLanding() {
   const { code } = useParams()
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
   const [refName, setRefName] = useState(null)
   const [form, setForm] = useState({ name: '', email: '', business_name: '', service_interest: '', message: '' })
@@ -74,6 +75,14 @@ export default function AffiliateReferralLanding() {
                 <Feat icon={Globe} text="Websites built to convert — live in days" />
                 <Feat icon={Search} text="SEO that gets you found and chosen" />
               </div>
+              {/* Free-audit funnels (same lead magnets as the homepage; stay attributed) */}
+              <div style={{ marginTop: 22 }}>
+                <div style={{ fontSize: 12, color: C.mut, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Start with a free audit — instant, no obligation</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button onClick={() => navigate('/audit')} style={auditBtn}><Globe size={15} /> Free Website Audit <ArrowRight size={14} /></button>
+                  <button onClick={() => navigate('/free-social-audit')} style={auditBtn}><TrendingUp size={15} /> Free Social Audit <ArrowRight size={14} /></button>
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: 24, marginTop: 24, flexWrap: 'wrap', color: C.mut, fontSize: 13 }}>
                 <span><b style={{ color: C.cyan, fontFamily: "'Orbitron',sans-serif" }}>50+</b> clients</span>
                 <span><b style={{ color: C.cyan, fontFamily: "'Orbitron',sans-serif" }}>98%</b> satisfaction</span>
@@ -91,8 +100,8 @@ export default function AffiliateReferralLanding() {
                 </div>
               ) : (
                 <>
-                  <h2 style={h2}>Get your free consultation</h2>
-                  <p style={{ color: C.mut, fontSize: 13, marginTop: 4 }}>Tell us about your business — no obligation.</p>
+                  <h2 style={h2}>Or talk to us directly</h2>
+                  <p style={{ color: C.mut, fontSize: 13, marginTop: 4 }}>Prefer a conversation? Tell us about your business — no obligation.</p>
                   <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 16 }}>
                     <input required placeholder="Your name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={input} />
                     <input required type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} style={input} />
@@ -123,3 +132,4 @@ const h2 = { fontFamily: "'Orbitron', sans-serif", fontSize: 18, margin: 0 }
 const pill = { display: 'inline-block', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: C.orange, background: 'rgba(255,107,0,0.1)', border: '1px solid rgba(255,107,0,0.3)', borderRadius: 999, padding: '6px 14px' }
 const input = { background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, borderRadius: 9, padding: '11px 14px', color: C.text, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', width: '100%' }
 const primaryBtn = { background: `linear-gradient(135deg, ${C.cyan}, #0099CC)`, border: 'none', borderRadius: 9, padding: '12px 16px', color: '#020817', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }
+const auditBtn = { display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(0,207,255,0.08)', border: '1px solid rgba(0,207,255,0.35)', borderRadius: 10, padding: '11px 15px', color: C.cyan, fontWeight: 700, fontSize: 13.5, fontFamily: 'inherit', cursor: 'pointer' }
