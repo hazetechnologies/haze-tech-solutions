@@ -53,7 +53,7 @@ import SentryFallback from './components/SentryFallback'
 import useTelemetryIdentity from './hooks/useTelemetryIdentity'
 import useGaPageviews from './hooks/useGaPageviews'
 import useAffiliateRef from './hooks/useAffiliateRef'
-import RefRedirect from './pages/RefRedirect'
+import AffiliateReferralLanding from './pages/affiliate/AffiliateReferralLanding'
 
 function TelemetryIdentityMount() {
   useTelemetryIdentity()
@@ -83,7 +83,7 @@ export default function App() {
           <Routes>
           {/* Public */}
           <Route path="/"       element={<MainSite />} />
-          <Route path="/r/:code" element={<RefRedirect />} />
+          <Route path="/r/:code" element={<AffiliateReferralLanding />} />
           <Route path="/audit"  element={<AuditPage />} />
           <Route path="/audit/:id" element={<AuditResults />} />
           <Route path="/free-social-audit" element={<FreeSocialAudit />} />
