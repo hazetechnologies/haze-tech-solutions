@@ -4,6 +4,7 @@ import { X, AlertCircle, ArrowRight, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { trackEvent } from '../lib/telemetry'
 import { effectivePrice } from '../lib/pricing'
+import { getRefCode } from '../lib/affiliateRef'
 
 // Quick-form modal triggered from /pricing.
 // 1. POSTs name + email + password + plan to /api/website?action=public-checkout.
@@ -55,6 +56,7 @@ export default function PurchaseModal({ product, plan, onClose }) {
           password: form.password,
           company: form.company.trim() || null,
           phone: form.phone.trim() || null,
+          ref: getRefCode(),
         }),
       })
 

@@ -7,6 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Check, Zap, TrendingUp, Globe, Search, ShieldCheck, ArrowRight } from 'lucide-react'
 import { captureRef } from '../../lib/affiliateRef'
 import { trackLead } from '../../lib/telemetry'
+import PricingGrid from '../../components/PricingGrid'
 
 const C = { bg: '#040D1A', card: '#0B1A2E', cyan: '#00CFFF', orange: '#FF6B00', green: '#22C55E', text: '#E8F4FF', mut: '#93A8C0', line: 'rgba(255,255,255,0.08)' }
 const LOGO = 'https://www.hazetechsolutions.com/favicon.png'
@@ -121,6 +122,14 @@ export default function AffiliateReferralLanding() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Packages & pricing — same secure checkout as the homepage; any purchase
+          is attributed to this affiliate via the 30-day ref cookie. */}
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '6px 16px 56px' : '14px 20px 72px' }}>
+        <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: isMobile ? 24 : 30, margin: '0 0 8px' }}>Packages &amp; pricing</h2>
+        <p style={{ color: C.mut, fontSize: 15, margin: '0 0 28px', maxWidth: 640 }}>Pick exactly what you need and check out securely — one-time builds, monthly services, and bundles.</p>
+        <PricingGrid />
       </div>
     </div>
   )

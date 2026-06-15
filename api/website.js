@@ -1266,7 +1266,7 @@ async function publicCheckout(req, res) {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
 
-  const { subscription_plan_id, name, email, password, company, phone } = req.body || {}
+  const { subscription_plan_id, name, email, password, company, phone, ref } = req.body || {}
   if (!subscription_plan_id || !name || !email || !password) {
     return res.status(400).json({ error: 'bad_request', message: 'subscription_plan_id, name, email, and password are required' })
   }
@@ -1308,6 +1308,15 @@ async function publicCheckout(req, res) {
     return res.status(400).json({ error: 'auth_create_failed', message: authErr.message })
   }
 
+  // Affiliate attribution: a referred prospect buying directly. Resolve the ref
+  // code so the commission is awarded on first payment (via the Stripe webhook).
+  let refAffiliateId = null
+  const refRaw = String(ref || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16)
+  if (refRaw) {
+    const { data: aff } = await adminClient.from('affiliates').select('id').ilike('code', refRaw).eq('status', 'active').maybeSingle()
+    refAffiliateId = aff?.id || null
+  }
+
   // Insert clients row (denormalized product/terms for back-compat with legacy reads).
   // Plan-level price (set per-plan in /admin/products) wins over the legacy
   // product.base_price × discount fallback.
@@ -1333,6 +1342,7 @@ async function publicCheckout(req, res) {
       product: productName,
       price: computedPrice,
       subscription_terms: plan.billing_cycle,
+      referred_by_affiliate_id: refAffiliateId,
     })
     .select('id, name, email, stripe_customer_id')
     .single()
@@ -1536,7 +1546,7 @@ async function publicCartCheckout(req, res) {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
 
-  const { items, name, email, password, company, phone } = req.body || {}
+  const { items, name, email, password, company, phone, ref } = req.body || {}
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'bad_request', message: 'name, email, and password are required' })
   }
@@ -1545,6 +1555,14 @@ async function publicCartCheckout(req, res) {
   }
 
   const adminClient = createClient(url, SERVICE_ROLE_KEY)
+
+  // Affiliate attribution for a referred direct purchase.
+  let refAffiliateId = null
+  const refRaw = String(ref || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16)
+  if (refRaw) {
+    const { data: aff } = await adminClient.from('affiliates').select('id').ilike('code', refRaw).eq('status', 'active').maybeSingle()
+    refAffiliateId = aff?.id || null
+  }
 
   const cartResult = await loadAndValidateCart(adminClient, items)
   if (cartResult.error) {
@@ -1592,6 +1610,7 @@ async function publicCartCheckout(req, res) {
       product: primary.products?.name ?? null,
       price: computedPrice,
       subscription_terms: primary.billing_cycle,
+      referred_by_affiliate_id: refAffiliateId,
     })
     .select('id, name, email, stripe_customer_id')
     .single()
