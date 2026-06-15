@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, Link } from 'react-router-dom'
 import { Send, AlertCircle, ArrowLeft, Sparkles, Zap, ShieldCheck } from 'lucide-react'
-import { identifyLead, trackEvent } from '../lib/telemetry'
+import { identifyLead, trackEvent, trackLead } from '../lib/telemetry'
 import { getRefCode } from '../lib/affiliateRef'
 
 const INITIAL_FORM = {
@@ -45,6 +45,7 @@ export default function FreeSocialAudit() {
 
     identifyLead({ email: form.email, name: form.name, source: 'free-social-audit' })
     trackEvent('lead_submitted', { source: 'free-social-audit' })
+    trackLead('social-audit')
 
     const platforms = {}
     if (form.ig_self.trim()) {

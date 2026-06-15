@@ -6,7 +6,7 @@ import {
   ArrowLeft, Search, CheckCircle, XCircle, AlertTriangle,
   Zap, Smartphone, Shield, TrendingUp, ExternalLink, RotateCcw, Check,
 } from 'lucide-react'
-import { identifyLead, trackEvent } from '../lib/telemetry'
+import { identifyLead, trackEvent, trackLead } from '../lib/telemetry'
 import { getRefCode } from '../lib/affiliateRef'
 
 const SERVICE_ID = 'service_4uzwhit'
@@ -123,6 +123,7 @@ export default function AuditPage() {
 
     identifyLead({ email: lead.email, name: lead.name, source: 'website-audit' })
     trackEvent('lead_submitted', { source: 'website-audit', url })
+    trackLead('website-audit', { url })
     trackEvent('website_audit_started', { url })
 
     /* Capture lead via EmailJS */

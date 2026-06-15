@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
-import { identifyLead, trackEvent } from '../lib/telemetry'
+import { identifyLead, trackEvent, trackLead } from '../lib/telemetry'
 import { getRefCode } from '../lib/affiliateRef'
 
 // EmailJS credentials
@@ -39,6 +39,7 @@ export default function Contact() {
 
     identifyLead({ email: form.email, name: form.name, source: 'contact' })
     trackEvent('lead_submitted', { source: 'contact', service: form.service })
+    trackLead('contact', { service: form.service })
 
     // If EmailJS env vars aren't configured, log gracefully and show success UI
     if (!SERVICE_ID || !TEMPLATE_ID || !PUBLIC_KEY) {

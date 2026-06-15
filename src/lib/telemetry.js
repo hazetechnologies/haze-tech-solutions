@@ -13,6 +13,17 @@ export function trackCta(ctaId, location, extra = {}) {
   gaEvent('cta_clicked', { cta_id: ctaId, location, ...extra })
 }
 
+// GA4 recommended conversion events. `generate_lead` and `sign_up` are names
+// GA4 recognizes out of the box — mark them as Key Events in GA4 Admin → Events
+// to count them as conversions. Fired to both PostHog and GA.
+export function trackLead(source, extra = {}) {
+  trackEvent('generate_lead', { lead_source: source, ...extra })
+}
+
+export function trackSignup(method, extra = {}) {
+  trackEvent('sign_up', { method, ...extra })
+}
+
 export function identifyUser({ id, email, ...traits }) {
   if (!id) return
   posthog.identify(id, { email, ...traits })
