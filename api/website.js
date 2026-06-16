@@ -15,6 +15,8 @@ import { sendEmail, wrapHtml } from './_lib/email.js'
 import { runOnce as runEmailResponder } from './_lib/email-responder.js'
 import { mintResetToken, sendResetEmail } from './_lib/portal-reset.js'
 import { mintConfirmToken, sendConfirmEmail } from './_lib/affiliate-confirm.js'
+import { validateBrandKitInputs } from './_lib/brand-kit-inputs.js'
+import { evaluateBrandKitLimit } from './_lib/brand-kit-limit.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -43,6 +45,7 @@ export default async function handler(req, res) {
     case 'public-cart-checkout':return req.method === 'POST' ? publicCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-cart-checkout':return req.method === 'POST' ? portalCartCheckout(req, res): methodNotAllowed(res, 'POST')
     case 'portal-social':       return req.method === 'POST' ? portalSocial(req, res)     : methodNotAllowed(res, 'POST')
+    case 'start-brand-kit-self': return req.method === 'POST' ? startBrandKitSelf(req, res) : methodNotAllowed(res, 'POST')
     case 'workflow-preview':    return req.method === 'GET'  ? workflowPreview(req, res)  : methodNotAllowed(res, 'GET')
     case 'send-test-email':     return req.method === 'POST' ? sendTestEmail(req, res)    : methodNotAllowed(res, 'POST')
     case 'cron-notify-status':  return req.method === 'GET'  ? cronNotifyStatus(req, res) : methodNotAllowed(res, 'GET')
@@ -1183,6 +1186,111 @@ async function portalSocial(req, res) {
   res.status(upstream.status)
   res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json')
   return res.send(text)
+}
+
+// POST ?action=start-brand-kit-self — client-facing self-serve brand kit trigger.
+// Auth = logged-in portal client; client_id is resolved server-side. Gated to
+// social clients (clients.hsp_user_id) and capped by a per-billing-cycle
+// generation limit. Body: { inputs }. Mirrors the admin api/start-brand-kit.js.
+async function startBrandKitSelf(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+
+  // 1. Authenticate the portal client.
+  const authHeader = req.headers.authorization || ''
+  const m = /^Bearer\s+(.+)$/.exec(authHeader)
+  if (!m) return res.status(401).json({ error: 'unauthorized' })
+  const userClient = createClient(url, anonKey)
+  const { data: { user: caller }, error: authErr } = await userClient.auth.getUser(m[1].trim())
+  if (authErr || !caller) return res.status(401).json({ error: 'unauthorized' })
+
+  // 2. Resolve THIS caller's client row + social-activation gate.
+  const admin = createClient(url, SERVICE_ROLE_KEY)
+  const { data: client } = await admin
+    .from('clients').select('id, company, name, hsp_user_id').eq('user_id', caller.id).maybeSingle()
+  if (!client) return res.status(403).json({ error: 'forbidden', message: 'no client for this user' })
+  if (!client.hsp_user_id) return res.status(409).json({ error: 'not_activated', message: 'Social media is not set up for your account yet.' })
+
+  // 3. Load this client's kits (newest first) for dedupe + limit.
+  const { data: kits } = await admin
+    .from('brand_kits').select('id, status, created_at').eq('client_id', client.id)
+    .order('created_at', { ascending: false })
+
+  // 4. Dedupe: block while a kit is in flight.
+  const IN_FLIGHT = ['pending', 'generating', 'awaiting_logo_approval']
+  if ((kits || []).some((k) => IN_FLIGHT.includes(k.status))) {
+    return res.status(409).json({ error: 'in_progress', message: 'A brand kit is already being generated.' })
+  }
+
+  // 5. Per-cycle limit.
+  const limitRaw = await getSetting('brand_kit_cycle_limit', null)
+  const parsed = parseInt(limitRaw, 10)
+  const limit = Number.isFinite(parsed) ? parsed : 2
+  const { periodStart, resetsAt } = await resolveBillingPeriod(admin, client.id)
+  const { allowed, used } = evaluateBrandKitLimit({ kits: kits || [], limit, periodStart })
+  if (!allowed) {
+    return res.status(409).json({
+      error: 'limit_reached',
+      message: `You've used all ${limit} brand-kit generations for this cycle${resetsAt ? `. Resets on ${new Date(resetsAt).toLocaleDateString()}` : ''}.`,
+      used, limit, resets_at: resetsAt,
+    })
+  }
+
+  // 6. Validate inputs (self-serve is always cold_start).
+  const inputs = { ...(req.body?.inputs || {}), path: 'cold_start' }
+  const v = validateBrandKitInputs(inputs)
+  if (!v.ok) return res.status(400).json({ error: 'invalid_inputs', message: v.error })
+
+  // 7. Insert the kit + fire the edge function (same contract as the admin trigger).
+  const { data: row, error: insErr } = await admin
+    .from('brand_kits')
+    .insert({ client_id: client.id, source_audit_id: null, inputs, status: 'pending', progress_message: 'Queued…' })
+    .select('id').single()
+  if (insErr) return res.status(500).json({ error: 'db_error', message: insErr.message })
+
+  try {
+    const edgeUrl = `${process.env.SUPABASE_EDGE_FUNCTION_URL}/generate-brand-kit`
+    const edgeRes = await fetch(edgeUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kit_id: row.id }),
+    })
+    if (!edgeRes.ok) console.error('start-brand-kit-self edge invoke non-ok:', edgeRes.status, await edgeRes.text())
+  } catch (err) {
+    console.error('start-brand-kit-self edge invoke failed:', err)
+  }
+  return res.status(200).json({ kit_id: row.id })
+}
+
+// Resolve the client's current billing-period window from their active
+// subscription. subscriptions links to plans via stripe_price_id (there is no
+// subscription_plan_id column). Falls back to a rolling 30-day window when there
+// is no active subscription with a period end.
+async function resolveBillingPeriod(admin, clientId) {
+  const { data: subs } = await admin
+    .from('subscriptions')
+    .select('current_period_end, status, stripe_price_id')
+    .eq('client_id', clientId)
+    .in('status', ['active', 'trialing'])
+    .order('current_period_end', { ascending: false })
+    .limit(1)
+  const sub = subs?.[0]
+  if (sub?.current_period_end) {
+    const end = new Date(sub.current_period_end)
+    let months = 1
+    if (sub.stripe_price_id) {
+      const { data: plan } = await admin
+        .from('subscription_plans').select('billing_cycle').eq('stripe_price_id', sub.stripe_price_id).maybeSingle()
+      if (plan?.billing_cycle === 'annual') months = 12
+    }
+    const start = new Date(end)
+    start.setMonth(start.getMonth() - months)
+    return { periodStart: start, resetsAt: end.toISOString() }
+  }
+  const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const resetsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  return { periodStart: start, resetsAt }
 }
 
 // ─── Stripe ──────────────────────────────────────────────────────────────

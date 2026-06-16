@@ -50,27 +50,28 @@ interface BannerLayout {
   taglineSize: number
   ctaSize: number
   withCopy: boolean                                      // false for tiny/circle assets
+  withCta: boolean                                       // CTA button only on the YouTube cover
 }
 
 // Layouts in FINAL pixel coordinates (compositing happens after resize).
 function layoutFor(assetId: ImageAssetId, W: number, H: number): BannerLayout {
   switch (assetId) {
     case 'banner_yt': // 2560×1440, content must stay in the centered 1546×423 TV-safe strip
-      return { mode: 'horizontal', box: { x: 560, y: 540, w: 1440, h: 360 }, logoH: 360, taglineSize: 74, ctaSize: 52, withCopy: true }
+      return { mode: 'horizontal', box: { x: 560, y: 540, w: 1440, h: 360 }, logoH: 360, taglineSize: 74, ctaSize: 52, withCopy: true, withCta: true }
     case 'banner_x': // 1500×500, avoid bottom-left profile-pic overlap
-      return { mode: 'horizontal', box: { x: 440, y: 110, w: 1010, h: 280 }, logoH: 250, taglineSize: 52, ctaSize: 38, withCopy: true }
+      return { mode: 'horizontal', box: { x: 440, y: 110, w: 1010, h: 280 }, logoH: 250, taglineSize: 52, ctaSize: 38, withCopy: true, withCta: false }
     case 'banner_linkedin_cover': // 1128×191, very short
-      return { mode: 'horizontal', box: { x: 60, y: 24, w: 1010, h: 143 }, logoH: 135, taglineSize: 34, ctaSize: 26, withCopy: true }
+      return { mode: 'horizontal', box: { x: 60, y: 24, w: 1010, h: 143 }, logoH: 135, taglineSize: 34, ctaSize: 26, withCopy: true, withCta: false }
     case 'banner_fb': // 820×312
-      return { mode: 'horizontal', box: { x: 50, y: 60, w: 720, h: 192 }, logoH: 175, taglineSize: 40, ctaSize: 30, withCopy: true }
+      return { mode: 'horizontal', box: { x: 50, y: 60, w: 720, h: 192 }, logoH: 175, taglineSize: 40, ctaSize: 30, withCopy: true, withCta: false }
     case 'banner_ig': // 1080×1920 vertical story
-      return { mode: 'vertical', box: { x: 110, y: 340, w: 860, h: 940 }, logoH: 480, taglineSize: 76, ctaSize: 54, withCopy: true }
+      return { mode: 'vertical', box: { x: 110, y: 340, w: 860, h: 940 }, logoH: 480, taglineSize: 76, ctaSize: 54, withCopy: true, withCta: false }
     case 'banner_tiktok': // 200×200 — too small for copy
-      return { mode: 'logo-only', box: { x: 20, y: 20, w: 160, h: 160 }, logoH: 150, taglineSize: 0, ctaSize: 0, withCopy: false }
+      return { mode: 'logo-only', box: { x: 20, y: 20, w: 160, h: 160 }, logoH: 150, taglineSize: 0, ctaSize: 0, withCopy: false, withCta: false }
     case 'profile_picture': // 1024×1024, circle-cropped
-      return { mode: 'logo-only', box: { x: 162, y: 162, w: 700, h: 700 }, logoH: 620, taglineSize: 0, ctaSize: 0, withCopy: false }
+      return { mode: 'logo-only', box: { x: 162, y: 162, w: 700, h: 700 }, logoH: 620, taglineSize: 0, ctaSize: 0, withCopy: false, withCta: false }
     default:
-      return { mode: 'horizontal', box: { x: Math.round(W * 0.1), y: Math.round(H * 0.3), w: Math.round(W * 0.8), h: Math.round(H * 0.4) }, logoH: Math.round(H * 0.3), taglineSize: 44, ctaSize: 32, withCopy: true }
+      return { mode: 'horizontal', box: { x: Math.round(W * 0.1), y: Math.round(H * 0.3), w: Math.round(W * 0.8), h: Math.round(H * 0.4) }, logoH: Math.round(H * 0.3), taglineSize: 44, ctaSize: 32, withCopy: true, withCta: false }
   }
 }
 
@@ -140,20 +141,30 @@ function resizeToHeight(img: Image, targetH: number): Image {
   return img
 }
 
-// Build a stadium-shaped CTA pill with the label centered inside it.
-async function makeCtaPill(font: Uint8Array, label: string, fontSize: number, fillHex: string, textHex: string): Promise<Image> {
-  const text = await Image.renderText(font, fontSize, label, hexToColor(textHex, 255))
+// Build a stadium-shaped OUTLINE (ghost) CTA: accent border + accent label, no
+// fill, so the scenery shows through. Drawn by stamping a filled accent stadium
+// then knocking out the interior with a slightly smaller transparent stadium.
+async function makeCtaPill(font: Uint8Array, label: string, fontSize: number, accentHex: string, _unusedTextHex: string): Promise<Image> {
+  const text = await Image.renderText(font, fontSize, label, hexToColor(accentHex, 255))
   const padX = Math.round(fontSize * 0.9)
   const padY = Math.round(fontSize * 0.55)
   const pillW = text.width + padX * 2
   const pillH = text.height + padY * 2
   const r = Math.floor(pillH / 2)
+  const border = Math.max(2, Math.round(fontSize * 0.08))
   const pill = new Image(pillW, pillH)
-  const fill = hexToColor(fillHex, 255)
-  // center rectangle + rounded ends
-  pill.drawBox(r + 1, 1, Math.max(1, pillW - 2 * r), pillH, fill)
-  pill.drawCircle(r, Math.floor(pillH / 2), r, fill)
-  pill.drawCircle(pillW - r, Math.floor(pillH / 2), r, fill)
+  const accent = hexToColor(accentHex, 255)
+  const clear = 0x00000000
+  // Outer stadium in accent.
+  pill.drawBox(r + 1, 1, Math.max(1, pillW - 2 * r), pillH, accent)
+  pill.drawCircle(r, Math.floor(pillH / 2), r, accent)
+  pill.drawCircle(pillW - r, Math.floor(pillH / 2), r, accent)
+  // Knock out the interior to leave only a ring of width `border`.
+  const ir = Math.max(1, r - border)
+  pill.drawBox(r + 1, 1 + border, Math.max(1, pillW - 2 * r), Math.max(1, pillH - 2 * border), clear)
+  pill.drawCircle(r, Math.floor(pillH / 2), ir, clear)
+  pill.drawCircle(pillW - r, Math.floor(pillH / 2), ir, clear)
+  // Center the accent label inside the ring.
   pill.composite(text, Math.round((pillW - text.width) / 2), Math.round((pillH - text.height) / 2))
   return pill
 }
@@ -204,7 +215,7 @@ export async function composeBanner(args: ComposeArgs): Promise<Uint8Array> {
   const taglineH = taglineImgs.reduce((s, im) => s + im.height, 0) + Math.max(0, taglineImgs.length - 1) * lineGap
   const taglineW = taglineImgs.reduce((m, im) => Math.max(m, im.width), 0)
 
-  const pill = layout.withCopy && cta ? await makeCtaPill(font, cta, layout.ctaSize, accentHex, lightHex) : null
+  const pill = layout.withCta && cta ? await makeCtaPill(font, cta, layout.ctaSize, accentHex, lightHex) : null
   const ctaGap = Math.round(layout.taglineSize * 0.5)
 
   if (layout.mode === 'horizontal') {
