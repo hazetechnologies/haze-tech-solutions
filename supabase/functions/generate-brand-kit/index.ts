@@ -23,6 +23,7 @@ import { uploadImage } from '../_shared/r2-upload.ts'
 import { resizeToFinalDims } from './post-process.ts'
 import { composeBanner } from './compose-banner.ts'
 import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
+import { unwrapKieEnvelope, summarizeBannerErrors } from './kie.ts'
 
 // DB-first: the admin's openai_api_key (admin_settings) is the single source of
 // truth and wins over the edge secret. Resolved per run in processBrandKit so a
@@ -195,11 +196,13 @@ async function processBrandKit(
           ? 'Generating banners…'
           : `Resuming banners (${alreadyDone.size}/${REFERENCE_ASSET_IDS.length} already done)…`,
       })
+      const bannerErrors: string[] = []
       await generateBanners(
         inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url,
         { tagline: existingAssets.tagline, cta: existingAssets.cta },
         makePersistBanner(),
         alreadyDone,
+        bannerErrors,
       )
       // Re-read final state since per-banner writes mutated the row.
       const { data: finalRow } = await supabase
@@ -225,11 +228,13 @@ async function processBrandKit(
         await chainSelfInvoke(kit_id)
       } else {
         // No progress at all this invocation — finalize as failed instead of
-        // looping forever.
+        // looping forever. Surface the underlying reason (e.g. KIE credits) if
+        // we captured one.
+        const reason = summarizeBannerErrors(bannerErrors)
         await update({
           status: 'failed',
           progress_message: null,
-          error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry`,
+          error: `${missing.join(', ')} did not generate${reason ? ` — ${reason}` : ''} — re-fire phase='banners' to retry`,
         })
       }
       return
@@ -300,11 +305,13 @@ async function processBrandKit(
       // When we skip the gate via existing_logo_url, mark logo_primary approved so the schema is consistent.
       ...(skippedLogoGen ? { approved_logo_asset_id: 'logo_primary' } : {}),
     })
+    const bannerErrors: string[] = []
     await generateBanners(
       inputs, textAssets.color_palette, client_id, kit_id, logos.logo_primary.public_url,
       { tagline: textAssets.tagline, cta: textAssets.cta },
       makePersistBanner(),
       new Set<string>(),  // fresh run, nothing to skip
+      bannerErrors,
     )
     // Re-read final state since per-banner writes mutated the row.
     const { data: finalRow } = await supabase
@@ -328,10 +335,11 @@ async function processBrandKit(
       })
       chainSelfInvoke(kit_id)
     } else {
+      const reason = summarizeBannerErrors(bannerErrors)
       await update({
         status: 'failed',
         progress_message: null,
-        error: `${missing.join(', ')} did not generate — re-fire phase='banners' to retry`,
+        error: `${missing.join(', ')} did not generate${reason ? ` — ${reason}` : ''} — re-fire phase='banners' to retry`,
       })
     }
   } catch (err) {
@@ -517,6 +525,10 @@ async function generateBanners(
   persistBanner: (assetId: ImageAssetId, ref: ImageAssetRef) => Promise<void>,
   // assetIds we already have results for — skip work entirely.
   skip: Set<string>,
+  // Collector for per-banner failure messages so the caller can surface the
+  // real reason (e.g. KIE credits) in brand_kits.error instead of a generic
+  // "did not generate" string. Mutated in place.
+  bannerErrors: string[] = [],
 ): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
@@ -579,7 +591,10 @@ async function generateBanners(
     } catch (err) {
       // Log per-banner failure but don't bubble up — partial success is
       // better than total failure. Re-firing phase='banners' will retry.
-      console.error(`banner ${assetId} failed:`, err instanceof Error ? err.message : err)
+      // Record the reason so the caller can surface it in brand_kits.error.
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`banner ${assetId} failed:`, msg)
+      bannerErrors.push(msg)
     }
   }
   for (let i = 0; i < todo.length; i += BATCH_SIZE) {
@@ -618,13 +633,13 @@ async function createKieTask(
       },
     }),
   })
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '')
-    throw new Error(`KIE createTask ${res.status} on ${assetId}: ${txt.slice(0, 300)}`)
-  }
-  const json = await res.json() as { data?: { taskId?: string } }
-  const taskId = json.data?.taskId
-  if (!taskId) throw new Error(`KIE createTask: no taskId returned for ${assetId}`)
+  // KIE returns HTTP 200 even for business errors (e.g. insufficient credits is
+  // code 402 inside a 200 body), so unwrapKieEnvelope inspects the in-body code
+  // and surfaces KIE's own message instead of a misleading "no taskId" error.
+  const json = await res.json().catch(() => null)
+  const data = unwrapKieEnvelope<{ taskId?: string }>(res.status, json, `createTask on ${assetId}`)
+  const taskId = data.taskId
+  if (!taskId) throw new Error(`KIE createTask on ${assetId}: success but no taskId returned`)
   return taskId
 }
 
@@ -636,7 +651,14 @@ async function pollKieTask(taskId: string, assetId: string): Promise<string> {
       headers: { 'Authorization': `Bearer ${KIE_API_KEY}` },
     })
     if (!res.ok) continue
-    const json = await res.json() as { data?: { state?: string; resultJson?: string; resultUrl?: string; failMsg?: string } }
+    const json = await res.json().catch(() => null) as
+      ({ code?: number; msg?: string; data?: { state?: string; resultJson?: string; resultUrl?: string; failMsg?: string } } | null)
+    if (!json) continue
+    // A non-200 in-body code is a hard business error (e.g. credits ran out
+    // mid-run) — abort polling and surface KIE's reason instead of timing out.
+    if (json.code != null && json.code !== 200) {
+      throw new Error(`KIE recordInfo for ${assetId} failed (code ${json.code}): ${json.msg?.trim() || 'unknown'}`)
+    }
     const d = json.data
     if (!d) continue
     if (d.state === 'fail') throw new Error(`KIE task failed for ${assetId}: ${d.failMsg ?? 'unknown'}`)
