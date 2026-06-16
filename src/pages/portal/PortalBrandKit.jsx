@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import { Sparkles, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import PortalBrandKitIntakeForm from './PortalBrandKitIntakeForm'
 
 const LOGO_OPTIONS = [
   { key: 'logo_primary',    label: 'Primary',    sub: 'Full color' },
@@ -15,6 +16,7 @@ export default function PortalBrandKit() {
   const [loading, setLoading] = useState(true)
   const [approving, setApproving] = useState(null) // logo_key currently being submitted
   const [error, setError] = useState(null)
+  const [regenerating, setRegenerating] = useState(false)
   const pollTimer = useRef(null)
 
   const loadKit = useCallback(async () => {
@@ -58,7 +60,14 @@ export default function PortalBrandKit() {
 
   if (loading) return <p style={{ color: '#94A3B8' }}>Loading…</p>
 
+  if (regenerating) {
+    return <PortalBrandKitIntakeForm onStarted={() => { setRegenerating(false); setLoading(true); loadKit() }} />
+  }
+
   if (!kit) {
+    if (client?.hsp_user_id) {
+      return <PortalBrandKitIntakeForm onStarted={() => { setLoading(true); loadKit() }} />
+    }
     return (
       <div style={cardStyle}>
         <h2 style={h2}>Brand Kit</h2>
@@ -77,6 +86,12 @@ export default function PortalBrandKit() {
           <AlertCircle size={15} />
           <span>{kit.error || 'Generation failed. Please contact support.'}</span>
         </div>
+        {client?.hsp_user_id && (
+          <button onClick={() => setRegenerating(true)} style={{
+            marginTop: 14, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(0,212,255,0.3)',
+            color: '#00D4FF', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}>↻ Try again</button>
+        )}
       </div>
     )
   }
@@ -153,6 +168,11 @@ export default function PortalBrandKit() {
       <p style={{ color: '#94A3B8', fontSize: 13, marginTop: 0, marginBottom: 22 }}>
         All your social media assets and brand guide in one place. Right-click any image to save.
       </p>
+      <button onClick={() => setRegenerating(true)} style={{
+        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(0,212,255,0.3)',
+        color: '#00D4FF', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600,
+        cursor: 'pointer', marginBottom: 18,
+      }}>↻ Start over / regenerate</button>
 
       {a.voice_tone && (
         <section style={{ marginBottom: 22 }}>
