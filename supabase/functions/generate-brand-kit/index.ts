@@ -703,6 +703,8 @@ async function generateImageWithRetry(
           prompt,
           size,
           n: 1,
+          background: 'transparent',
+          output_format: 'png',
         }),
       })
       const latencyMs = Date.now() - start

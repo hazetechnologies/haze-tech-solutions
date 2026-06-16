@@ -164,12 +164,12 @@ export function buildImagePrompt(
   switch (assetId) {
     case 'logo_primary': {
       const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
-      return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, white background, scalable. CRITICAL color rule: the wordmark text "${inputs.business_name}" MUST be rendered in the PRIMARY brand color ${primaryHex} — NOT black, NOT the dark UI color, NOT navy. The icon/monogram can use the primary color or the accent color. The "dark" color in the palette is for UI body text only and must NEVER appear in this logo. ${baseStyle}`
+      return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. CRITICAL color rule: the wordmark text "${inputs.business_name}" MUST be rendered in the PRIMARY brand color ${primaryHex} — NOT black, NOT the dark UI color, NOT navy. The icon/monogram can use the primary color or the accent color. The "dark" color in the palette is for UI body text only and must NEVER appear in this logo. ${baseStyle}`
     }
     case 'logo_icon':
-      return `Icon-only version of the "${inputs.business_name}" brand mark. Square format, no text, abstract or symbolic icon, white background, scalable. ${baseStyle}`
+      return `Icon-only version of the "${inputs.business_name}" brand mark. Square format, no text, abstract or symbolic icon, on a fully transparent background (no background fill), scalable. ${baseStyle}`
     case 'logo_monochrome':
-      return `Monochrome (single-color) version of the "${inputs.business_name}" logo. Pure black on white background. ${baseStyle}`
+      return `Monochrome (single-color) version of the "${inputs.business_name}" logo. Pure single-color mark on a fully transparent background (no background fill). ${baseStyle}`
     case 'profile_picture':
       return `Square background scene for "${inputs.business_name}" social profile. Cinematic, brand colors, calm uncluttered center. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_ig':
