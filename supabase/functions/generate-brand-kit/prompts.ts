@@ -162,6 +162,18 @@ export function buildImagePrompt(
   const sceneryOnly = ` IMPORTANT: Generate ONLY a photographic background scene — absolutely NO text, NO words, NO letters, NO logos, NO badges, NO watermarks, and NO solid color panels or boxes anywhere. Keep the composition clean and softly lit with a calm, relatively uncluttered area near the center where branding will be overlaid later. Cinematic, premium, high-resolution photography.`
 
   switch (assetId) {
+    case 'logo_option_1': {
+      const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
+      return `Logo design OPTION 1 of 3 DISTINCT concepts for "${inputs.business_name}" — a clean modern HORIZONTAL lockup: a simple brand icon/monogram to the LEFT of the wordmark "${inputs.business_name}". This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. The wordmark text "${inputs.business_name}" MUST be rendered in the PRIMARY brand color ${primaryHex} — NOT black, navy, or a dark UI color. ${baseStyle}`
+    }
+    case 'logo_option_2': {
+      const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
+      return `Logo design OPTION 2 of 3 DISTINCT concepts for "${inputs.business_name}" — clearly DIFFERENT from option 1: a STACKED lockup with a distinctive symbolic icon ABOVE the centered wordmark "${inputs.business_name}". Use a different icon idea and a different typographic treatment. This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. The wordmark text "${inputs.business_name}" MUST be in the PRIMARY brand color ${primaryHex} — NOT black, navy, or a dark UI color. ${baseStyle}`
+    }
+    case 'logo_option_3': {
+      const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
+      return `Logo design OPTION 3 of 3 DISTINCT concepts for "${inputs.business_name}" — a THIRD distinct direction: an emblem/badge or lettermark-monogram style that STILL includes the full wordmark "${inputs.business_name}". Visibly different icon idea and composition from options 1 and 2. This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. The wordmark text "${inputs.business_name}" MUST be in the PRIMARY brand color ${primaryHex} — NOT black, navy, or a dark UI color. ${baseStyle}`
+    }
     case 'logo_primary': {
       const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
       return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. CRITICAL color rule: the wordmark text "${inputs.business_name}" MUST be rendered in the PRIMARY brand color ${primaryHex} — NOT black, NOT the dark UI color, NOT navy. The icon/monogram can use the primary color or the accent color. The "dark" color in the palette is for UI body text only and must NEVER appear in this logo. ${baseStyle}`

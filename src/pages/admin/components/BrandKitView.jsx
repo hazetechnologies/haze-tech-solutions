@@ -49,7 +49,7 @@ export default function BrandKitView({ kit, onRegenerate }) {
       {/* Visual identity */}
       <Section title="Visual identity">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-          {Object.entries(a.images || {}).map(([assetId, img]) => {
+          {Object.entries(a.images || {}).filter(([assetId]) => !assetId.startsWith('logo_option_')).map(([assetId, img]) => {
             const label = IMAGE_LABELS[assetId]?.label ?? assetId
             const dims = IMAGE_LABELS[assetId]?.dims ?? ''
             return (

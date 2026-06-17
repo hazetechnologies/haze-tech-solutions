@@ -74,7 +74,12 @@ const IMAGE_RETRY_DELAYS_MS = [15_000, 30_000, 60_000]
 
 // Logos are generated first via OpenAI direct (fast, consistent quality).
 // Banners + profile pic use KIE AI img2img with logo_primary as reference.
-const LOGO_ASSET_IDS: ImageAssetId[] = ['logo_primary', 'logo_icon', 'logo_monochrome']
+//
+// Step 1 generates 3 DISTINCT full-logo designs to choose from (the approval
+// gate). On approval the chosen option is copied to logo_primary, then the
+// derived marks (icon-only + monochrome) are generated alongside the banners.
+const LOGO_OPTION_IDS: ImageAssetId[] = ['logo_option_1', 'logo_option_2', 'logo_option_3']
+const DERIVED_LOGO_IDS: ImageAssetId[] = ['logo_icon', 'logo_monochrome']
 const REFERENCE_ASSET_IDS: ImageAssetId[] = [
   'profile_picture', 'banner_ig', 'banner_fb', 'banner_yt',
   'banner_x', 'banner_tiktok', 'banner_linkedin_cover',
@@ -196,11 +201,14 @@ async function processBrandKit(
           ? 'Generating banners…'
           : `Resuming banners (${alreadyDone.size}/${REFERENCE_ASSET_IDS.length} already done)…`,
       })
+      const persist = makePersistBanner()
+      // Derive icon + monochrome from the brand alongside the banners (resume-safe).
+      await ensureDerivedLogos(inputs, existingAssets.color_palette ?? [], client_id, kit_id, existingImages, persist)
       const bannerErrors: string[] = []
       await generateBanners(
         inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url,
         { tagline: existingAssets.tagline, cta: existingAssets.cta },
-        makePersistBanner(),
+        persist,
         alreadyDone,
         bannerErrors,
       )
@@ -241,8 +249,8 @@ async function processBrandKit(
     }
 
     if (phase === 'logos_only') {
-      // Regenerate just the 3 logos using the existing palette/text on the row.
-      // Used when we want to retry a logo prompt (e.g. wordmark color fix)
+      // Regenerate just the 3 logo OPTIONS using the existing palette/text on the
+      // row. Used when we want to retry the logo prompts (e.g. wordmark color fix)
       // without burning Claude tokens on text or KIE calls on banners.
       const palette = existingAssets.color_palette ?? []
       if (palette.length === 0) {
@@ -250,7 +258,7 @@ async function processBrandKit(
         return
       }
       await update({ status: 'generating', progress_message: 'Regenerating logos…' })
-      const logos = await generateLogos(inputs, palette, client_id, kit_id)
+      const logos = await generateLogos(inputs, palette, client_id, kit_id, undefined, LOGO_OPTION_IDS)
       const existingImages = (existingAssets.images || {}) as Partial<Record<ImageAssetId, ImageAssetRef>>
       // Merge the new logo refs over whatever was there (banners survive).
       const mergedImages = { ...existingImages, ...logos } as Record<ImageAssetId, ImageAssetRef>
@@ -275,41 +283,50 @@ async function processBrandKit(
       assets: { ...textAssets },
     })
 
-    // If the admin supplied an existing logo URL, skip the 3-logo generation
-    // and the client-approval gate entirely. The same URL becomes all three
-    // variants (primary/icon/monochrome) — the admin can swap variants later.
-    let logos: Record<'logo_primary' | 'logo_icon' | 'logo_monochrome', ImageAssetRef>
+    // If the admin supplied an existing logo URL, skip option generation and the
+    // approval gate entirely — that URL becomes logo_primary directly. Otherwise
+    // generate 3 DISTINCT full-logo designs for the client to choose from.
+    let images: Partial<Record<ImageAssetId, ImageAssetRef>>
     let skippedLogoGen = false
     if (inputs.existing_logo_url) {
       const ref: ImageAssetRef = { r2_key: '', public_url: inputs.existing_logo_url }
-      logos = { logo_primary: ref, logo_icon: ref, logo_monochrome: ref }
+      images = { logo_primary: ref }
       skippedLogoGen = true
     } else {
-      logos = await generateLogos(inputs, textAssets.color_palette, client_id, kit_id, existing_logos)
+      images = await generateLogos(inputs, textAssets.color_palette, client_id, kit_id, existing_logos, LOGO_OPTION_IDS)
     }
 
     if (phase === 'logos_then_pause' && !skippedLogoGen) {
-      // Pause for client approval. Banners will be triggered by api/website?action=approve-logo.
+      // Pause for the client to pick one of the 3 designs. Banners (and the
+      // derived icon/monochrome) are triggered by api/website?action=approve-logo.
       await update({
         status: 'awaiting_logo_approval',
-        progress_message: 'Logos ready — awaiting client approval',
-        assets: { ...textAssets, images: logos as any },
+        progress_message: 'Logo options ready — awaiting selection',
+        assets: { ...textAssets, images: images as any },
       })
       return
     }
 
-    // phase === 'all' OR an existing logo was supplied — keep going through banners.
+    // phase === 'all' OR an existing logo was supplied — no gate, so pick a
+    // primary now and run straight through derived logos + banners. For 'all'
+    // (internal scripts) auto-pick the first design.
+    const primaryRef = skippedLogoGen ? images.logo_primary! : images.logo_option_1!
+    if (!skippedLogoGen) images.logo_primary = primaryRef
     await update({
       progress_message: skippedLogoGen ? 'Using supplied logo. Generating banners…' : 'Logos done. Generating banners…',
-      assets: { ...textAssets, images: logos as any },
-      // When we skip the gate via existing_logo_url, mark logo_primary approved so the schema is consistent.
-      ...(skippedLogoGen ? { approved_logo_asset_id: 'logo_primary' } : {}),
+      assets: { ...textAssets, images: images as any },
+      approved_logo_asset_id: 'logo_primary',
     })
+    const persistAll = makePersistBanner()
+    // Derive icon + monochrome from the brand (skip when a logo URL was supplied).
+    if (!skippedLogoGen) {
+      await ensureDerivedLogos(inputs, textAssets.color_palette, client_id, kit_id, images, persistAll)
+    }
     const bannerErrors: string[] = []
     await generateBanners(
-      inputs, textAssets.color_palette, client_id, kit_id, logos.logo_primary.public_url,
+      inputs, textAssets.color_palette, client_id, kit_id, primaryRef.public_url,
       { tagline: textAssets.tagline, cta: textAssets.cta },
-      makePersistBanner(),
+      persistAll,
       new Set<string>(),  // fresh run, nothing to skip
       bannerErrors,
     )
@@ -485,18 +502,19 @@ async function generateLogos(
   palette: ColorPaletteEntry[],
   clientId: string,
   kitId: string,
-  existingLogos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
-): Promise<Record<'logo_primary' | 'logo_icon' | 'logo_monochrome', ImageAssetRef>> {
+  existingLogos: Partial<Record<ImageAssetId, ImageAssetRef>> | undefined,
+  assetIds: ImageAssetId[],
+): Promise<Partial<Record<ImageAssetId, ImageAssetRef>>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
 
   const allProvided = existingLogos
-    && LOGO_ASSET_IDS.every((id) => existingLogos[id]?.public_url)
+    && assetIds.every((id) => existingLogos[id]?.public_url)
   if (allProvided) {
-    for (const id of LOGO_ASSET_IDS) out[id] = existingLogos![id]!
+    for (const id of assetIds) out[id] = existingLogos![id]!
   } else {
     const logoResults = await Promise.all(
-      LOGO_ASSET_IDS.map(async (assetId) => {
+      assetIds.map(async (assetId) => {
         const spec = SIZES[assetId]
         const prompt = buildImagePrompt(assetId, inputs, palette)
         const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
@@ -508,7 +526,34 @@ async function generateLogos(
     for (const [assetId, uploaded] of logoResults) out[assetId] = uploaded
   }
 
-  return out as Record<'logo_primary' | 'logo_icon' | 'logo_monochrome', ImageAssetRef>
+  return out
+}
+
+// Generate the derived marks (icon-only + single-color) that accompany the
+// chosen logo, once a design has been picked. Resume-safe: only generates the
+// ones missing from the row, and persists each via the supplied writer.
+async function ensureDerivedLogos(
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  clientId: string,
+  kitId: string,
+  existingImages: Partial<Record<ImageAssetId, ImageAssetRef>>,
+  persist: (assetId: ImageAssetId, ref: ImageAssetRef) => Promise<void>,
+): Promise<void> {
+  const missing = DERIVED_LOGO_IDS.filter((id) => !existingImages[id]?.public_url)
+  if (missing.length === 0) return
+  // Fail SOFT: the icon/monochrome are cosmetic relative to the banners. If
+  // generation throws (e.g. OpenAI 429), don't fail the whole kit — log and let
+  // the banners proceed. A later phase='banners' re-fire retries the missing ones.
+  try {
+    const derived = await generateLogos(inputs, palette, clientId, kitId, undefined, missing)
+    for (const id of missing) {
+      const ref = derived[id]
+      if (ref?.public_url) await persist(id, ref)
+    }
+  } catch (err) {
+    console.error('ensureDerivedLogos failed (continuing with banners):', err instanceof Error ? err.message : err)
+  }
 }
 
 async function generateBanners(

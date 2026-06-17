@@ -5,9 +5,9 @@ import { Sparkles, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import PortalBrandKitIntakeForm from './PortalBrandKitIntakeForm'
 
 const LOGO_OPTIONS = [
-  { key: 'logo_primary',    label: 'Primary',    sub: 'Full color' },
-  { key: 'logo_icon',       label: 'Icon',       sub: 'Compact / square' },
-  { key: 'logo_monochrome', label: 'Monochrome', sub: 'Single color' },
+  { key: 'logo_option_1', label: 'Option 1', sub: 'Design A' },
+  { key: 'logo_option_2', label: 'Option 2', sub: 'Design B' },
+  { key: 'logo_option_3', label: 'Option 3', sub: 'Design C' },
 ]
 
 export default function PortalBrandKit() {
@@ -115,7 +115,7 @@ export default function PortalBrandKit() {
       <div style={cardStyle}>
         <h2 style={h2}>Pick your logo</h2>
         <p style={{ color: '#94A3B8', fontSize: 13, marginTop: 0, marginBottom: 18 }}>
-          Three logo variants are ready. Approve the one you'd like as your brand's primary mark — we'll generate matching banners + profile pictures based on it.
+          Three logo designs are ready. Pick your favorite — we'll then generate a matching icon, profile picture, and banners based on it.
         </p>
 
         {error && (
@@ -224,7 +224,7 @@ export default function PortalBrandKit() {
         <section>
           <h3 style={h3}>Assets</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            {Object.entries(images).map(([key, ref]) => (
+            {Object.entries(images).filter(([key]) => !key.startsWith('logo_option_')).map(([key, ref]) => (
               <a key={key} href={ref.public_url} target="_blank" rel="noopener noreferrer" style={assetTile}>
                 <div style={{ aspectRatio: '1 / 1', background: '#0F172A', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <img src={ref.public_url} alt={key} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />

@@ -14,6 +14,9 @@ export interface SizeSpec {
 }
 
 export const SIZES: Record<ImageAssetId, SizeSpec> = {
+  logo_option_1:   { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
+  logo_option_2:   { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
+  logo_option_3:   { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
   logo_primary:    { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
   logo_icon:       { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
   logo_monochrome: { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
