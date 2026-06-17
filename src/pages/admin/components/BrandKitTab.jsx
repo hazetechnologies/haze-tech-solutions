@@ -130,7 +130,7 @@ export default function BrandKitTab({ client }) {
       if (!res.ok) throw new Error(data.message || data.error || `Server error (${res.status})`)
       trackEvent('brand_kit_admin_approved_logo', { kit_id: latestKit.id, logo_key: logoKey, client_id: client.id })
       // Optimistically move into 'generating' so the existing poll picks up banner phase
-      setLatestKit(prev => ({ ...prev, status: 'generating', progress_message: 'Logo approved — generating banners…', approved_logo_asset_id: logoKey }))
+      setLatestKit(prev => ({ ...prev, status: 'generating', progress_message: 'Logo approved — generating banners…', approved_logo_asset_id: 'logo_primary' }))
     } catch (err) {
       setApproveErr(err.message || 'Failed to approve logo')
     } finally {
@@ -193,7 +193,7 @@ export default function BrandKitTab({ client }) {
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-          {['logo_primary', 'logo_icon', 'logo_monochrome'].map((key) => {
+          {['logo_option_1', 'logo_option_2', 'logo_option_3'].map((key) => {
             const ref = images[key]
             const busy = approving === key
             const otherBusy = approving !== null && approving !== key

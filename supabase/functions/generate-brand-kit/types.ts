@@ -49,6 +49,11 @@ export interface ImageAssetRef {
 }
 
 export type ImageAssetId =
+  // 3 distinct full-logo designs the client picks from (the approval gate).
+  | 'logo_option_1'
+  | 'logo_option_2'
+  | 'logo_option_3'
+  // The chosen design (copied from the picked option on approval) + derived marks.
   | 'logo_primary'
   | 'logo_icon'
   | 'logo_monochrome'

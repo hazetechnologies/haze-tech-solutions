@@ -21,7 +21,7 @@ import { evaluateBrandKitLimit } from './_lib/brand-kit-limit.js'
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const VALID_TEMPLATES = ['service-business','local-business','creative-portfolio','saas-landing','travel-agency']
-const APPROVABLE_LOGO_KEYS = ['logo_primary', 'logo_icon', 'logo_monochrome']
+const APPROVABLE_LOGO_KEYS = ['logo_option_1', 'logo_option_2', 'logo_option_3']
 
 export default async function handler(req, res) {
   const action = (req.query?.action || '').toString()
@@ -892,11 +892,18 @@ async function approveLogo(req, res) {
     return res.status(409).json({ error: 'logo_missing', message: `Logo asset ${approved_logo_key} is not present in this kit` })
   }
 
-  // Mark approval and flip status
+  // Copy the chosen design into logo_primary (the canonical logo used as the
+  // banner reference + by downstream consumers), then flip status. Derived marks
+  // (icon + monochrome) are generated in the banners phase.
+  const mergedAssets = {
+    ...(kit.assets || {}),
+    images: { ...((kit.assets || {}).images || {}), logo_primary: approvedRef },
+  }
   const { error: updErr } = await adminClient
     .from('brand_kits')
     .update({
-      approved_logo_asset_id: approved_logo_key,
+      approved_logo_asset_id: 'logo_primary',
+      assets: mergedAssets,
       status: 'generating',
       progress_message: 'Logo approved — generating banners…',
       error: null,
