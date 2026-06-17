@@ -699,7 +699,11 @@ async function generateImageWithRetry(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-image-2',
+          // gpt-image-1 (NOT gpt-image-2) — only gpt-image-1 supports
+          // background:'transparent'. gpt-image-2 returns HTTP 400
+          // "Transparent background is not supported for this model." Logos must
+          // be transparent so they drop cleanly onto banners + client branding.
+          model: 'gpt-image-1',
           prompt,
           size,
           n: 1,
@@ -722,7 +726,7 @@ async function generateImageWithRetry(
             event: '$ai_generation',
             distinct_id: kitId,
             properties: {
-              $ai_model: 'gpt-image-2',
+              $ai_model: 'gpt-image-1',
               $ai_provider: 'openai',
               $ai_latency: latencyMs,
               $ai_http_status: res.status,
@@ -740,11 +744,11 @@ async function generateImageWithRetry(
       }
       if (!res.ok) {
         const errText = await res.text().catch(() => '')
-        throw new Error(`gpt-image-2 ${res.status} on ${assetId}: ${errText.slice(0, 300)}`)
+        throw new Error(`gpt-image-1 ${res.status} on ${assetId}: ${errText.slice(0, 300)}`)
       }
       const json = await res.json() as { data?: Array<{ b64_json?: string; url?: string }> }
       const item = json.data?.[0]
-      if (!item) throw new Error(`gpt-image-2 returned no image for ${assetId}`)
+      if (!item) throw new Error(`gpt-image-1 returned no image for ${assetId}`)
       if (item.b64_json) {
         return Uint8Array.from(atob(item.b64_json), c => c.charCodeAt(0))
       }
@@ -753,7 +757,7 @@ async function generateImageWithRetry(
         if (!dl.ok) throw new Error(`failed to download generated image for ${assetId}: ${dl.status}`)
         return new Uint8Array(await dl.arrayBuffer())
       }
-      throw new Error(`gpt-image-2 returned no b64_json or url for ${assetId}`)
+      throw new Error(`gpt-image-1 returned no b64_json or url for ${assetId}`)
     } catch (err) {
       lastErr = err
       if (attempt < IMAGE_RETRY_DELAYS_MS.length) {
