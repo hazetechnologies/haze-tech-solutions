@@ -169,7 +169,7 @@ export function buildImagePrompt(
     case 'logo_icon':
       return `Icon-only version of the "${inputs.business_name}" brand mark. Square format, no text, abstract or symbolic icon, on a fully transparent background (no background fill), scalable. ${baseStyle}`
     case 'logo_monochrome':
-      return `Monochrome (single-color) version of the "${inputs.business_name}" logo. Pure single-color mark on a fully transparent background (no background fill). ${baseStyle}`
+      return `Monochrome (single-color) version of the FULL primary logo for "${inputs.business_name}". This is NOT an icon-only mark — it MUST include the complete wordmark text "${inputs.business_name}" together with the brand icon, in the same lockup and composition as the primary logo. Render the entire logo (icon + wordmark) in ONE single solid color, pure black #000000, with no gradients and no second color, on a fully transparent background (no background fill), scalable. ${baseStyle}`
     case 'profile_picture':
       return `Square background scene for "${inputs.business_name}" social profile. Cinematic, brand colors, calm uncluttered center. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_ig':
