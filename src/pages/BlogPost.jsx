@@ -93,6 +93,7 @@ export default function BlogPost() {
       >
         {/* Meta */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#8BA8C4' }}>
+          {post.author && <span>By {post.author}</span>}
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
             <Calendar size={13} />
             {new Date(post.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -102,6 +103,10 @@ export default function BlogPost() {
             {readTime} min read
           </span>
         </div>
+
+        {post.category && (
+          <span style={{ display: 'inline-block', padding: '3px 12px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700, color: '#00D4FF', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.25)', marginBottom: '1rem' }}>{post.category}</span>
+        )}
 
         <h1 style={{ fontFamily: 'Orbitron, sans-serif', fontSize: 'clamp(1.5rem, 4vw, 2.25rem)', fontWeight: 900, margin: '0 0 2rem', lineHeight: 1.2 }}>
           {post.title}

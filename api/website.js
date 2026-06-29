@@ -17,6 +17,9 @@ import { mintResetToken, sendResetEmail } from './_lib/portal-reset.js'
 import { mintConfirmToken, sendConfirmEmail } from './_lib/affiliate-confirm.js'
 import { validateBrandKitInputs } from './_lib/brand-kit-inputs.js'
 import { evaluateBrandKitLimit } from './_lib/brand-kit-limit.js'
+import { trackedClaude, extractText } from './_lib/tracked-claude.js'
+import { buildBlogPrompt, parseBlogGeneration } from './_lib/blog-generate.js'
+import { r2Configured, buildBlogImageKey, uploadBuffer } from './_lib/r2.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -33,6 +36,8 @@ export default async function handler(req, res) {
     case 'status':              return req.method === 'GET'  ? status(req, res)           : methodNotAllowed(res, 'GET')
     case 'public-config':       return req.method === 'GET'  ? publicConfig(req, res)     : methodNotAllowed(res, 'GET')
     case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
+    case 'blog-generate':       return req.method === 'POST' ? blogGenerate(req, res)       : methodNotAllowed(res, 'POST')
+    case 'blog-generate-cover': return req.method === 'POST' ? blogGenerateCover(req, res)  : methodNotAllowed(res, 'POST')
     case 'download-asset':      return req.method === 'GET'  ? downloadAsset(req, res)    : methodNotAllowed(res, 'GET')
     case 'hsp-proxy':           return req.method === 'POST' ? hspProxy(req, res)         : methodNotAllowed(res, 'POST')
     case 'activate-social':     return req.method === 'POST' ? activateSocial(req, res)   : methodNotAllowed(res, 'POST')
@@ -928,6 +933,69 @@ async function approveLogo(req, res) {
   }
 
   return res.status(200).json({ kit_id, approved_logo_key })
+}
+
+// POST ?action=blog-generate — admin-gated. Generates a blog article with Claude.
+// Body: { topic, keywords?, tone?, length?, category? } → { title, excerpt, content }.
+async function blogGenerate(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { topic, keywords, tone, length, category } = req.body || {}
+  if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'bad_request', message: 'topic is required' })
+  const apiKey = await getSetting('anthropic_api_key', 'ANTHROPIC_API_KEY')
+  if (!apiKey) return res.status(400).json({ error: 'ai_not_configured', message: 'Anthropic API key is not configured' })
+  const { system, user } = buildBlogPrompt({ topic: String(topic).trim(), keywords, tone, length, category })
+  const { data, status } = await trackedClaude({
+    apiKey,
+    model: 'claude-sonnet-4-6',
+    system,
+    messages: [{ role: 'user', content: user }],
+    params: { max_tokens: 8000 },
+    eventProperties: { surface: 'blog-generate' },
+  })
+  if (status !== 200) return res.status(502).json({ error: 'ai_failed', message: data?.error || 'AI generation failed' })
+  try {
+    return res.status(200).json(parseBlogGeneration(extractText(data)))
+  } catch (err) {
+    return res.status(502).json({ error: 'ai_failed', message: err.message })
+  }
+}
+
+// POST ?action=blog-generate-cover — admin-gated. Generates a cover image with
+// OpenAI gpt-image-2 and stores it in R2. Body: { title, category? } → { url }.
+async function blogGenerateCover(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const { title, category } = req.body || {}
+  if (!title || !String(title).trim()) return res.status(400).json({ error: 'bad_request', message: 'title is required' })
+  if (!r2Configured()) return res.status(500).json({ error: 'storage_not_configured', message: 'R2 storage is not configured' })
+  const apiKey = await getSetting('openai_api_key', 'OPENAI_API_KEY')
+  if (!apiKey) return res.status(400).json({ error: 'ai_not_configured', message: 'OpenAI API key is not configured' })
+  const prompt = `A clean, modern, professional blog hero illustration for an article titled "${String(title).trim()}"${category ? ` in the ${category} category` : ''}. Tech / digital-agency aesthetic, abstract and on-brand, vibrant but tasteful. ABSOLUTELY NO text, words, letters, numbers, or logos anywhere in the image.`
+  let imgRes
+  try {
+    imgRes = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-image-2', prompt, size: '1536x1024', n: 1 }),
+    })
+  } catch {
+    return res.status(502).json({ error: 'image_failed', message: 'Image service unreachable' })
+  }
+  if (!imgRes.ok) {
+    const t = await imgRes.text().catch(() => '')
+    return res.status(502).json({ error: 'image_failed', message: `Image generation failed (${imgRes.status}): ${t.slice(0, 200)}` })
+  }
+  const json = await imgRes.json().catch(() => null)
+  const b64 = json?.data?.[0]?.b64_json
+  if (!b64) return res.status(502).json({ error: 'image_failed', message: 'No image returned by the model' })
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const url = await uploadBuffer({ key: buildBlogImageKey(String(title).trim(), ts), body: Buffer.from(b64, 'base64'), contentType: 'image/png' })
+    return res.status(200).json({ url })
+  } catch (err) {
+    return res.status(500).json({ error: 'storage_failed', message: err.message })
+  }
 }
 
 // GET ?action=download-asset&kit_id=…&asset_id=… — proxies a brand-kit asset
