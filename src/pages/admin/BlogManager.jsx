@@ -8,7 +8,9 @@ import {
   Plus, Edit2, Trash2, ArrowLeft, CheckCircle,
   AlertCircle, FileText, RefreshCw, X, Bold, Italic,
   List, ListOrdered, Quote, Link as LinkIcon,
+  Sparkles, Image as ImageIcon, CheckSquare, Square,
 } from 'lucide-react'
+import { BLOG_CATEGORIES } from '../../lib/blogCategories'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +36,8 @@ const EMPTY_POST = {
   cover_image_url: '',
   content: '',
   published: false,
+  category: '',
+  author: 'Haze Tech Solutions',
 }
 
 // ─── Tiptap Toolbar ───────────────────────────────────────────────────────────
@@ -180,6 +184,14 @@ function PostEditor({ post, onBack, onSaved }) {
   const [error, setError]   = useState(null)
   const [slugEdited, setSlugEdited] = useState(isEdit)
 
+  const [genCover, setGenCover] = useState(false)
+  const [genCoverErr, setGenCoverErr] = useState(null)
+
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiErr, setAiErr]   = useState(null)
+  const [ai, setAi]         = useState({ topic: '', keywords: '', tone: 'Professional', length: 'medium' })
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -202,6 +214,50 @@ function PostEditor({ post, onBack, onSaved }) {
     })
   }
 
+  async function generateCover() {
+    if (!form.title.trim()) { setGenCoverErr('Add a title first.'); return }
+    setGenCover(true); setGenCoverErr(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=blog-generate-cover', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: form.title.trim(), category: form.category || '' }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.message || json.error || `Error ${res.status}`)
+      set('cover_image_url', json.url)
+    } catch (err) {
+      setGenCoverErr(err.message)
+    } finally {
+      setGenCover(false)
+    }
+  }
+
+  async function runAiGenerate() {
+    if (!ai.topic.trim()) { setAiErr('Topic is required.'); return }
+    setAiBusy(true); setAiErr(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=blog-generate', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...ai, category: form.category || '' }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.message || json.error || `Error ${res.status}`)
+      set('title', json.title)
+      set('excerpt', json.excerpt || '')
+      setForm(prev => ({ ...prev, content: json.content }))
+      editor?.commands.setContent(json.content)
+      setAiOpen(false)
+    } catch (err) {
+      setAiErr(err.message)
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
@@ -218,6 +274,8 @@ function PostEditor({ post, onBack, onSaved }) {
         cover_image_url: form.cover_image_url.trim(),
         content:         form.content || '',
         published:       Boolean(form.published),
+        category:        form.category || null,
+        author:          (form.author || '').trim() || 'Haze Tech Solutions',
       }
 
       let result
@@ -260,6 +318,9 @@ function PostEditor({ post, onBack, onSaved }) {
           Back to List
         </button>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button type="button" onClick={() => { setAiErr(null); setAiOpen(true) }} style={styles.aiBtn}>
+            <Sparkles size={15} /> Generate with AI
+          </button>
           <label style={styles.publishToggleRow}>
             <span style={{ fontSize: '13px', color: '#64748B', fontWeight: 500 }}>Published</span>
             <button
@@ -316,12 +377,13 @@ function PostEditor({ post, onBack, onSaved }) {
           </div>
           <div style={{ ...styles.metaField, flex: 2 }}>
             <label style={styles.metaLabel}>Cover Image URL</label>
-            <input
-              value={form.cover_image_url}
-              onChange={e => set('cover_image_url', e.target.value)}
-              placeholder="https://..."
-              style={styles.metaInput}
-            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input value={form.cover_image_url} onChange={e => set('cover_image_url', e.target.value)} placeholder="https://..." style={{ ...styles.metaInput, flex: 1 }} />
+              <button type="button" onClick={generateCover} disabled={genCover} style={styles.aiSmallBtn}>
+                <ImageIcon size={13} /> {genCover ? 'Generating…' : 'Generate'}
+              </button>
+            </div>
+            {genCoverErr && <p style={{ color: '#FCA5A5', fontSize: '11px', margin: '4px 0 0' }}>{genCoverErr}</p>}
           </div>
         </div>
 
@@ -337,6 +399,21 @@ function PostEditor({ post, onBack, onSaved }) {
           />
         </div>
 
+        {/* Category + Author */}
+        <div style={styles.metaRow}>
+          <div style={styles.metaField}>
+            <label style={styles.metaLabel}>Category</label>
+            <select value={form.category || ''} onChange={e => set('category', e.target.value)} style={styles.metaInput}>
+              <option value="">— Select category —</option>
+              {BLOG_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={styles.metaField}>
+            <label style={styles.metaLabel}>Author</label>
+            <input value={form.author || ''} onChange={e => set('author', e.target.value)} placeholder="Haze Tech Solutions" style={styles.metaInput} />
+          </div>
+        </div>
+
         {/* Rich text editor */}
         <div style={styles.editorCard}>
           <Toolbar editor={editor} />
@@ -345,6 +422,50 @@ function PostEditor({ post, onBack, onSaved }) {
           </div>
         </div>
       </form>
+
+      {aiOpen && (
+        <div style={styles.overlay} onClick={e => { if (e.target === e.currentTarget) setAiOpen(false) }}>
+          <div style={styles.confirmModal}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '12px', fontWeight: 700, color: '#F1F5F9', letterSpacing: '0.06em', textTransform: 'uppercase', margin: 0 }}>Generate Article with AI</h3>
+              <button onClick={() => setAiOpen(false)} style={styles.closeBtn}><X size={16} /></button>
+            </div>
+            {aiErr && <div style={styles.errorBanner}><AlertCircle size={14} /><span>{aiErr}</span></div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={styles.metaField}>
+                <label style={styles.metaLabel}>Topic *</label>
+                <input value={ai.topic} onChange={e => setAi(p => ({ ...p, topic: e.target.value }))} placeholder="e.g. How small businesses can use AI chatbots" style={styles.metaInput} />
+              </div>
+              <div style={styles.metaField}>
+                <label style={styles.metaLabel}>Keywords (optional)</label>
+                <input value={ai.keywords} onChange={e => setAi(p => ({ ...p, keywords: e.target.value }))} placeholder="comma, separated, keywords" style={styles.metaInput} />
+              </div>
+              <div style={styles.metaRow}>
+                <div style={styles.metaField}>
+                  <label style={styles.metaLabel}>Tone</label>
+                  <select value={ai.tone} onChange={e => setAi(p => ({ ...p, tone: e.target.value }))} style={styles.metaInput}>
+                    {['Professional', 'Casual', 'Educational', 'Inspirational'].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={styles.metaField}>
+                  <label style={styles.metaLabel}>Length</label>
+                  <select value={ai.length} onChange={e => setAi(p => ({ ...p, length: e.target.value }))} style={styles.metaInput}>
+                    <option value="short">Short (~500 words)</option>
+                    <option value="medium">Medium (~1000 words)</option>
+                    <option value="long">Long (~1800 words)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button onClick={() => setAiOpen(false)} style={styles.cancelBtn}>Cancel</button>
+              <button onClick={runAiGenerate} disabled={aiBusy} style={styles.saveBtn}>
+                {aiBusy ? 'Generating…' : <><Sparkles size={14} /> Generate</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -360,6 +481,31 @@ export default function BlogManager() {
   const [editPost, setEditPost] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  function toggleSelect(id) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  function toggleSelectAll() {
+    setSelected(prev => prev.size === posts.length ? new Set() : new Set(posts.map(p => p.id)))
+  }
+  async function bulkDelete() {
+    if (selected.size === 0) return
+    if (!window.confirm(`Delete ${selected.size} selected post(s)? This cannot be undone.`)) return
+    setBulkDeleting(true)
+    try {
+      const ids = [...selected]
+      const { error: err } = await supabase.from('blog_posts').delete().in('id', ids)
+      if (err) throw err
+      setPosts(prev => prev.filter(p => !selected.has(p.id)))
+      setSelected(new Set())
+    } catch (err) {
+      alert('Bulk delete failed: ' + (err.message || 'Unknown error'))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   const fetchPosts = useCallback(async () => {
     setError(null)
@@ -466,6 +612,11 @@ export default function BlogManager() {
             <RefreshCw size={14} style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} />
             Refresh
           </button>
+          {selected.size > 0 && (
+            <button onClick={bulkDelete} disabled={bulkDeleting} style={styles.deleteBtn}>
+              <Trash2 size={14} /> {bulkDeleting ? 'Deleting…' : `Delete ${selected.size}`}
+            </button>
+          )}
           <button
             onClick={() => openEditor(null)}
             style={styles.primaryBtn}
@@ -491,6 +642,11 @@ export default function BlogManager() {
           <table style={styles.table}>
             <thead>
               <tr>
+                <th style={{ ...styles.th, width: '40px' }}>
+                  <button type="button" onClick={toggleSelectAll} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0 }}>
+                    {selected.size === posts.length && posts.length > 0 ? <CheckSquare size={15} /> : <Square size={15} />}
+                  </button>
+                </th>
                 {['Title', 'Slug', 'Status', 'Date', 'Actions'].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
@@ -500,7 +656,7 @@ export default function BlogManager() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {[200, 160, 60, 80, 80].map((w, j) => (
+                    {[20, 200, 160, 60, 80, 80].map((w, j) => (
                       <td key={j} style={styles.td}>
                         <div style={{ height: '13px', width: w + 'px', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', animation: 'pulse 1.5s ease-in-out infinite' }} />
                       </td>
@@ -509,7 +665,7 @@ export default function BlogManager() {
                 ))
               ) : !error && posts.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '60px', textAlign: 'center' }}>
+                  <td colSpan={6} style={{ padding: '60px', textAlign: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                       <div style={{ width: '64px', height: '64px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <FileText size={28} color="#334155" />
@@ -527,6 +683,11 @@ export default function BlogManager() {
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.03)' }}
                     onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)' }}
                   >
+                    <td style={styles.td}>
+                      <button type="button" onClick={() => toggleSelect(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: selected.has(post.id) ? '#00D4FF' : '#475569', padding: 0 }}>
+                        {selected.has(post.id) ? <CheckSquare size={15} /> : <Square size={15} />}
+                      </button>
+                    </td>
                     <td style={{ ...styles.td, fontWeight: 600, color: '#F1F5F9', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {post.title || 'Untitled'}
                     </td>
@@ -777,6 +938,18 @@ const styles = {
     fontWeight: 600,
     fontFamily: "'Plus Jakarta Sans', sans-serif",
     cursor: 'pointer',
+  },
+  aiBtn: {
+    display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 16px',
+    background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(0,212,255,0.18))',
+    border: '1px solid rgba(139,92,246,0.4)', borderRadius: '9px', color: '#C4B5FD',
+    fontSize: '13px', fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer',
+  },
+  aiSmallBtn: {
+    display: 'flex', alignItems: 'center', gap: '6px', padding: '0 12px',
+    background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.35)',
+    borderRadius: '9px', color: '#C4B5FD', fontSize: '12px', fontWeight: 600,
+    fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer', whiteSpace: 'nowrap',
   },
   // editor view
   editorWrap: {
