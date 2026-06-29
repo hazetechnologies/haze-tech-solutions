@@ -3,15 +3,17 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { ArrowLeft, Calendar, ArrowRight } from 'lucide-react'
+import { BLOG_CATEGORIES } from '../lib/blogCategories'
 
 export default function BlogPage() {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activeCat, setActiveCat] = useState('All')
 
   useEffect(() => {
     supabase
       .from('blog_posts')
-      .select('id, title, slug, excerpt, cover_image_url, created_at')
+      .select('id, title, slug, excerpt, cover_image_url, created_at, category, author')
       .eq('published', true)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
@@ -19,6 +21,8 @@ export default function BlogPage() {
         setLoading(false)
       })
   }, [])
+
+  const visiblePosts = activeCat === 'All' ? posts : posts.filter(p => p.category === activeCat)
 
   return (
     <div style={{ background: '#040D1A', minHeight: '100vh', fontFamily: "'Plus Jakarta Sans', sans-serif", color: '#E8F4FF' }}>
@@ -66,8 +70,19 @@ export default function BlogPage() {
             <p style={{ color: '#8BA8C4', fontSize: '1rem' }}>No posts yet. Check back soon!</p>
           </div>
         ) : (
+          <>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '1.5rem' }}>
+          {['All', ...BLOG_CATEGORIES].map(cat => (
+            <button key={cat} onClick={() => setActiveCat(cat)} style={{
+              padding: '6px 14px', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+              background: activeCat === cat ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.04)',
+              border: activeCat === cat ? '1px solid rgba(0,212,255,0.4)' : '1px solid rgba(255,255,255,0.1)',
+              color: activeCat === cat ? '#00D4FF' : '#8BA8C4',
+            }}>{cat}</button>
+          ))}
+        </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-            {posts.map((post, i) => (
+            {visiblePosts.map((post, i) => (
               <motion.div
                 key={post.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -96,6 +111,9 @@ export default function BlogPage() {
                         <Calendar size={12} />
                         {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
+                      {post.category && (
+                        <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, color: '#00D4FF', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.25)', marginBottom: '0.5rem' }}>{post.category}</span>
+                      )}
                       <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.5rem', lineHeight: 1.3 }}>{post.title}</h2>
                       {post.excerpt && <p style={{ fontSize: '0.85rem', color: '#8BA8C4', margin: '0 0 1rem', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.excerpt}</p>}
                       <span style={{ fontSize: '0.8rem', color: '#00CFFF', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
@@ -107,6 +125,7 @@ export default function BlogPage() {
               </motion.div>
             ))}
           </div>
+          </>
         )}
       </div>
     </div>
