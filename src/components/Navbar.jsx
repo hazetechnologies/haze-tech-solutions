@@ -84,13 +84,17 @@ export default function Navbar() {
           {navLinks.map((link) => (
             <li key={link.label}>
               {link.isRoute ? (
-                <button
-                  onClick={() => { trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar'); navigate(link.href) }}
-                  className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
+                // Real <a href> (not a button): a JS-only onClick is invisible to
+                // crawlers, which left /blog undiscoverable by Googlebot. The
+                // onClick still does client-side SPA navigation.
+                <a
+                  href={link.href}
+                  onClick={(e) => { e.preventDefault(); trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar'); navigate(link.href) }}
+                  className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0 no-underline"
                   style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >
                   {link.label}
-                </button>
+                </a>
               ) : (
                 <button
                   onClick={() => { trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar'); handleNavClick(link.href) }}
@@ -163,13 +167,14 @@ export default function Navbar() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.06 }}
                 >
-                  <button
-                    onClick={() => { trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar-mobile'); link.isRoute ? navigate(link.href) : handleNavClick(link.href); setMenuOpen(false) }}
-                    className="w-full text-left py-3 px-2 text-text-main font-medium border-b border-white/5 last:border-0 bg-transparent cursor-pointer hover:text-primary transition-colors"
+                  <a
+                    href={link.isRoute ? link.href : undefined}
+                    onClick={(e) => { if (link.isRoute) e.preventDefault(); trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar-mobile'); link.isRoute ? navigate(link.href) : handleNavClick(link.href); setMenuOpen(false) }}
+                    className="block w-full text-left py-3 px-2 text-text-main font-medium border-b border-white/5 last:border-0 bg-transparent cursor-pointer hover:text-primary transition-colors no-underline"
                     style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                   >
                     {link.label}
-                  </button>
+                  </a>
                 </motion.li>
               ))}
               <motion.li
