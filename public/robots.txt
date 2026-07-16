@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /portal
+
+Sitemap: https://www.hazetechsolutions.com/sitemap.xml
+Sitemap: https://hazeseo.com/api/sitemap/23e99fde386ea0a102e40201adfaa05edb16741317dee0b8
