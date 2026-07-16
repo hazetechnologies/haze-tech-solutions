@@ -4,6 +4,7 @@ import Services from './components/Services'
 import Portfolio from './components/Portfolio'
 import About from './components/About'
 import Contact from './components/Contact'
+import LatestBlog from './components/LatestBlog'
 import Footer from './components/Footer'
 import ChatWidget from './components/ChatWidget'
 
@@ -17,6 +18,7 @@ export default function MainSite() {
         <Portfolio />
         <About />
         <Contact />
+        <LatestBlog />
       </main>
       <Footer />
       <ChatWidget />
