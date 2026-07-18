@@ -46,6 +46,17 @@ export default function BrandKitView({ kit, onRegenerate }) {
         </button>
       </div>
 
+      {(kit?.inputs?.style_preset || a?.art_direction?.style_summary) && (
+        <div style={{ background: 'rgba(0,212,255,0.05)', border: '1px solid rgba(0,212,255,0.15)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#00D4FF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+            Design style: {kit?.inputs?.style_preset || 'auto'}
+          </div>
+          {a?.art_direction?.style_summary && (
+            <div style={{ fontSize: 12, color: '#CBD5E1', lineHeight: 1.5 }}>{a.art_direction.style_summary}</div>
+          )}
+        </div>
+      )}
+
       {/* Visual identity */}
       <Section title="Visual identity">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>

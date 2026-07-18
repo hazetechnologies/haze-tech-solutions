@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useClient } from '../../lib/PortalProtectedRoute'
 import { AlertCircle, Sparkles } from 'lucide-react'
+import { STYLE_PRESET_OPTIONS } from '../../lib/brandStylePresets'
 
 const VIBE_OPTIONS = [
   'minimalist', 'warm', 'premium', 'playful', 'bold', 'organic',
@@ -16,6 +17,7 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
     business_description: '', industry: '', audience: '',
     vibe: [], color_preference: '', inspirations: '',
     voice_tone_preference: '', existing_logo_url: '',
+    style_preset: 'auto',
     brand_colors: { primary: '', secondary: '', accent: '' },
   })
   const [submitting, setSubmitting] = useState(false)
@@ -47,6 +49,7 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
       const { brand_colors: _bc, ...clean } = form
       const inputs = {
         ...clean,
+        style_preset: form.style_preset || 'auto',
         existing_logo_url: form.existing_logo_url.trim() || undefined,
         voice_tone_preference: form.voice_tone_preference.trim() || undefined,
         ...(validBrandColors.length > 0 ? { brand_colors: validBrandColors } : {}),
@@ -97,6 +100,11 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
               }}>{v}</button>
             ))}
           </div>
+        </Field>
+        <Field label="Design style">
+          <select value={form.style_preset || 'auto'} onChange={(e) => setField('style_preset', e.target.value)} style={inputStyle}>
+            {STYLE_PRESET_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </Field>
         <Field label="Color preference (description)">
           <input value={form.color_preference} onChange={(e) => setField('color_preference', e.target.value)} style={inputStyle} placeholder="e.g. Earthy with one bold accent" />

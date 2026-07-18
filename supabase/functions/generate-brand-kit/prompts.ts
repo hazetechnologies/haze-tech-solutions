@@ -17,6 +17,70 @@ function clientContext(inputs: BrandKitInputs): string {
   return parts.filter(Boolean).join('\n')
 }
 
+export const STYLE_PRESETS: Record<string, string> = {
+  auto: '',
+  minimalist: 'Minimalist and clean: generous negative space, a restrained 2-3 color use, simple geometric forms, thin-to-medium sans-serif type, no clutter or ornamentation. Apple / Stripe restraint.',
+  editorial: 'Bold and editorial: large confident typography, strong contrast, deliberate color blocking, magazine-style asymmetric composition, striking focal points.',
+  luxury: 'Premium and luxury: elegant and understated, refined type (a tasteful serif or high-contrast sans), monochrome or metallic/gold accents, cinematic lighting, lots of breathing room, quietly expensive.',
+  gradient_3d: 'Modern gradient / 3D: vibrant multi-stop gradients, glassy or subtly 3D elements, soft glow and depth, energetic and contemporary — the trendy premium-SaaS/tech look.',
+}
+
+export function resolveStylePreset(preset?: string): string {
+  const g = preset ? STYLE_PRESETS[preset] : undefined
+  return g && g.trim()
+    ? g
+    : 'Infer the most fitting visual style from the brand itself — its vibe, industry, audience, and inspirations.'
+}
+
+export interface ArtDirection {
+  style_summary: string
+  logo_style: string
+  typography: string
+  banner_imagery_style: string
+  composition: string
+}
+
+export const EMPTY_ART_DIRECTION: ArtDirection = {
+  style_summary: '', logo_style: '', typography: '', banner_imagery_style: '', composition: '',
+}
+
+// Tolerant parse of the art-director's JSON. Never throws — a bad response
+// degrades to all-empty (prompts then behave exactly as before this feature).
+export function parseArtDirection(text: string): ArtDirection {
+  const out: ArtDirection = { ...EMPTY_ART_DIRECTION }
+  if (!text || typeof text !== 'string') return out
+  const s = text.indexOf('{'), e = text.lastIndexOf('}')
+  if (s === -1 || e === -1 || e <= s) return out
+  let obj: Record<string, unknown>
+  try { obj = JSON.parse(text.slice(s, e + 1)) } catch { return out }
+  for (const k of Object.keys(out) as (keyof ArtDirection)[]) {
+    if (typeof obj[k] === 'string') out[k] = (obj[k] as string).trim()
+  }
+  return out
+}
+
+export function buildArtDirectorPrompt(
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+): { system: string; user: string } {
+  const paletteText = palette.map((c) => `${c.name}: ${c.hex}`).join(', ')
+  const styleGuidance = resolveStylePreset(inputs.style_preset)
+  const system = 'You are an award-winning brand art director. Given a brand brief, produce a concrete, opinionated visual art-direction a designer and an image model can follow to make a cohesive, premium-looking logo and social banners. Output ONLY a single JSON object — no prose, no code fences — with exactly these keys: "style_summary", "logo_style", "typography", "banner_imagery_style", "composition". Each value is a concise, specific, visual directive (1-2 sentences), never generic filler.'
+  const user = [
+    `Brand: ${inputs.business_name}`,
+    inputs.business_description ? `What it does: ${inputs.business_description}` : '',
+    `Industry: ${inputs.industry}`,
+    `Audience: ${inputs.audience}`,
+    `Vibe: ${inputs.vibe.join(', ')}`,
+    inputs.inspirations ? `Inspirations: ${inputs.inspirations}` : '',
+    inputs.color_preference ? `Color preference: ${inputs.color_preference}` : '',
+    `Palette: ${paletteText}`,
+    `Design style to honor: ${styleGuidance}`,
+    'Return the JSON object only.',
+  ].filter(Boolean).join('\n')
+  return { system, user }
+}
+
 // ── gpt-4o-mini single-call prompt: bios + hashtags + handles + platform_priority ──
 
 export const STRUCTURED_SCHEMA = {
@@ -143,6 +207,7 @@ export function buildImagePrompt(
   assetId: string,
   inputs: BrandKitInputs,
   palette: ColorPaletteEntry[],
+  art?: ArtDirection | null,
 ): string {
   const paletteText = palette.map(c => `${c.name}: ${c.hex}`).join(', ')
   const baseStyle = `Brand: ${inputs.business_name}. Vibe: ${inputs.vibe.join(', ')}. Color palette: ${paletteText}. Style references: ${inputs.inspirations}.`
@@ -153,41 +218,50 @@ export function buildImagePrompt(
     ? ` Scene/backdrop: ${inputs.imagery_direction.trim()}`
     : ''
 
+  const hasLogoArt = !!art && !!(art.style_summary || art.logo_style || art.typography)
+  const logoArt = hasLogoArt
+    ? ` Style direction — overall: ${art!.style_summary}; logo form: ${art!.logo_style}; typography: ${art!.typography}.`
+    : ''
+  const hasBannerArt = !!art && !!(art.banner_imagery_style || art.composition)
+  const bannerArt = hasBannerArt
+    ? ` Style direction — imagery: ${art!.banner_imagery_style}; composition: ${art!.composition}.`
+    : ''
+
   // Banners are now SCENERY ONLY — the logo, tagline, and CTA are composited
   // deterministically afterward by compose-banner.ts at exact safe-area
   // coordinates. Asking gpt-image-2 to place them was unreliable (cropped
   // logos, invented opaque panels covering the scenery). So every banner
   // prompt forbids text/logos/panels and just asks for a clean photographic
   // backdrop with a calm, uncluttered focal zone for the overlay to sit on.
-  const sceneryOnly = ` IMPORTANT: Generate ONLY a photographic background scene — absolutely NO text, NO words, NO letters, NO logos, NO badges, NO watermarks, and NO solid color panels or boxes anywhere. Keep the composition clean and softly lit with a calm, relatively uncluttered area near the center where branding will be overlaid later. Cinematic, premium, high-resolution photography.`
+  const sceneryOnly = ` IMPORTANT: Generate ONLY a photographic background scene — absolutely NO text, NO words, NO letters, NO logos, NO badges, NO watermarks, and NO solid color panels or boxes anywhere. Keep the composition clean and softly lit with a calm, relatively uncluttered area near the center where branding will be overlaid later. Cinematic, premium, high-resolution photography.` + bannerArt
 
   switch (assetId) {
     case 'logo_option_1': {
       const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
       const accentHex = palette.find((c) => c.name === 'accent')?.hex || primaryHex
       const secondaryHex = palette.find((c) => c.name === 'secondary')?.hex || accentHex
-      return `Logo design OPTION 1 of 3 DISTINCT concepts for "${inputs.business_name}" — a clean modern HORIZONTAL lockup: a simple brand icon/monogram to the LEFT of the wordmark "${inputs.business_name}". This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. USE THE FULL BRAND PALETTE — this must be a multi-color logo, NOT a single color: render the wordmark "${inputs.business_name}" in the PRIMARY color ${primaryHex}, and make the icon/monogram prominently use the ACCENT color ${accentHex} (the secondary color ${secondaryHex} may be a supporting tone). Never use black, navy, or a dark UI color. ${baseStyle}`
+      return `Logo design OPTION 1 of 3 DISTINCT concepts for "${inputs.business_name}" — a clean modern HORIZONTAL lockup: a simple brand icon/monogram to the LEFT of the wordmark "${inputs.business_name}". This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. USE THE FULL BRAND PALETTE — this must be a multi-color logo, NOT a single color: render the wordmark "${inputs.business_name}" in the PRIMARY color ${primaryHex}, and make the icon/monogram prominently use the ACCENT color ${accentHex} (the secondary color ${secondaryHex} may be a supporting tone). Never use black, navy, or a dark UI color. ${baseStyle}${logoArt}`
     }
     case 'logo_option_2': {
       const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
       const accentHex = palette.find((c) => c.name === 'accent')?.hex || primaryHex
       const secondaryHex = palette.find((c) => c.name === 'secondary')?.hex || accentHex
-      return `Logo design OPTION 2 of 3 DISTINCT concepts for "${inputs.business_name}" — clearly DIFFERENT from option 1: a STACKED lockup with a distinctive symbolic icon ABOVE the centered wordmark "${inputs.business_name}". Use a different icon idea and a different typographic treatment. This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. USE THE FULL BRAND PALETTE — this must be a multi-color logo, NOT a single color: render the wordmark in the PRIMARY color ${primaryHex}, and build the icon around the ACCENT color ${accentHex} (with ${secondaryHex} as an optional supporting tone). Never use black, navy, or a dark UI color. ${baseStyle}`
+      return `Logo design OPTION 2 of 3 DISTINCT concepts for "${inputs.business_name}" — clearly DIFFERENT from option 1: a STACKED lockup with a distinctive symbolic icon ABOVE the centered wordmark "${inputs.business_name}". Use a different icon idea and a different typographic treatment. This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. USE THE FULL BRAND PALETTE — this must be a multi-color logo, NOT a single color: render the wordmark in the PRIMARY color ${primaryHex}, and build the icon around the ACCENT color ${accentHex} (with ${secondaryHex} as an optional supporting tone). Never use black, navy, or a dark UI color. ${baseStyle}${logoArt}`
     }
     case 'logo_option_3': {
       const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
       const accentHex = palette.find((c) => c.name === 'accent')?.hex || primaryHex
       const secondaryHex = palette.find((c) => c.name === 'secondary')?.hex || accentHex
-      return `Logo design OPTION 3 of 3 DISTINCT concepts for "${inputs.business_name}" — a THIRD distinct direction: an emblem/badge or lettermark-monogram style that STILL includes the full wordmark "${inputs.business_name}". Visibly different icon idea and composition from options 1 and 2. This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. USE THE FULL BRAND PALETTE — this must be a multi-color logo, NOT a single color: render the wordmark in the PRIMARY color ${primaryHex}, and use the ACCENT color ${accentHex} for the icon/emblem detail (the secondary color ${secondaryHex} may support it). Never use black, navy, or a dark UI color. ${baseStyle}`
+      return `Logo design OPTION 3 of 3 DISTINCT concepts for "${inputs.business_name}" — a THIRD distinct direction: an emblem/badge or lettermark-monogram style that STILL includes the full wordmark "${inputs.business_name}". Visibly different icon idea and composition from options 1 and 2. This is a COMPLETE logo (icon + wordmark), NOT an icon-only mark. ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. USE THE FULL BRAND PALETTE — this must be a multi-color logo, NOT a single color: render the wordmark in the PRIMARY color ${primaryHex}, and use the ACCENT color ${accentHex} for the icon/emblem detail (the secondary color ${secondaryHex} may support it). Never use black, navy, or a dark UI color. ${baseStyle}${logoArt}`
     }
     case 'logo_primary': {
       const primaryHex = palette.find((c) => c.name === 'primary')?.hex || '#000000'
-      return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. CRITICAL color rule: the wordmark text "${inputs.business_name}" MUST be rendered in the PRIMARY brand color ${primaryHex} — NOT black, NOT the dark UI color, NOT navy. The icon/monogram can use the primary color or the accent color. The "dark" color in the palette is for UI body text only and must NEVER appear in this logo. ${baseStyle}`
+      return `Primary brand logo for "${inputs.business_name}". Clean modern logo design, ${inputs.vibe[0]} aesthetic, on a fully transparent background (no background fill), scalable. CRITICAL color rule: the wordmark text "${inputs.business_name}" MUST be rendered in the PRIMARY brand color ${primaryHex} — NOT black, NOT the dark UI color, NOT navy. The icon/monogram can use the primary color or the accent color. The "dark" color in the palette is for UI body text only and must NEVER appear in this logo. ${baseStyle}${logoArt}`
     }
     case 'logo_icon':
-      return `Icon-only version of the "${inputs.business_name}" brand mark. Square format, no text, abstract or symbolic icon, on a fully transparent background (no background fill), scalable. ${baseStyle}`
+      return `Icon-only version of the "${inputs.business_name}" brand mark. Square format, no text, abstract or symbolic icon, on a fully transparent background (no background fill), scalable. ${baseStyle}${logoArt}`
     case 'logo_monochrome':
-      return `Monochrome (single-color) version of the FULL primary logo for "${inputs.business_name}". This is NOT an icon-only mark — it MUST include the complete wordmark text "${inputs.business_name}" together with the brand icon, in the same lockup and composition as the primary logo. Render the entire logo (icon + wordmark) in ONE single solid color, pure black #000000, with no gradients and no second color, on a fully transparent background (no background fill), scalable. ${baseStyle}`
+      return `Monochrome (single-color) version of the FULL primary logo for "${inputs.business_name}". This is NOT an icon-only mark — it MUST include the complete wordmark text "${inputs.business_name}" together with the brand icon, in the same lockup and composition as the primary logo. Render the entire logo (icon + wordmark) in ONE single solid color, pure black #000000, with no gradients and no second color, on a fully transparent background (no background fill), scalable. ${baseStyle}${logoArt}`
     case 'profile_picture':
       return `Square background scene for "${inputs.business_name}" social profile. Cinematic, brand colors, calm uncluttered center. ${baseStyle}${sceneSuffix}${sceneryOnly}`
     case 'banner_ig':

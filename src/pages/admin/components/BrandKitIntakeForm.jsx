@@ -1,6 +1,7 @@
 // src/pages/admin/components/BrandKitIntakeForm.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { STYLE_PRESET_OPTIONS } from '../../../lib/brandStylePresets'
 
 const VIBE_OPTIONS = [
   'minimalist', 'warm', 'premium', 'playful', 'bold', 'organic',
@@ -77,6 +78,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
         voice_tone_preference: previousInputs.voice_tone_preference || '',
         goal: previousInputs.goal || '',
         challenge: previousInputs.challenge || '',
+        style_preset: previousInputs.style_preset || 'auto',
         brand_colors: prevColorsByRole,
         existing_logo_url: previousInputs.existing_logo_url || '',
         imagery_direction: previousInputs.imagery_direction || '',
@@ -95,6 +97,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
       voice_tone_preference: '',
       goal: auditInputs.goal || '',
       challenge: auditInputs.challenge || '',
+      style_preset: 'auto',
       // Explicit hex picks; empty when the admin wants the AI to design a palette.
       brand_colors: { primary: '', secondary: '', accent: '' },
       // Optional URL to an existing logo — skips the 3-logo generation entirely.
@@ -179,6 +182,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
       const inputs = {
         path: isPath1 ? 'audit_prefill' : 'cold_start',
         ...formClean,
+        style_preset: form.style_preset || 'auto',
         existing_logo_url: form.existing_logo_url.trim() || undefined,
         imagery_direction: form.imagery_direction.trim() || undefined,
         tagline_override: form.tagline_override.trim() || undefined,
@@ -263,6 +267,12 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
               }}>{v}</button>
           ))}
         </div>
+      </Field>
+
+      <Field label="Design style">
+        <select value={form.style_preset || 'auto'} onChange={e => setField('style_preset', e.target.value)} style={inputStyle}>
+          {STYLE_PRESET_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       </Field>
 
       <Field label="Color preference (description)">
