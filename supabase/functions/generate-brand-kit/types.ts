@@ -29,6 +29,11 @@ export interface BrandKitInputs {
   // rendered ON banners. When unset, the structured generator picks them.
   tagline_override?: string
   cta_override?: string
+
+  // Optional named visual style preset that guides the art-director prompt
+  // (see prompts.ts STYLE_PRESETS). Unset or 'auto' infers style from the
+  // rest of the brand brief instead.
+  style_preset?: string
 }
 
 export interface ColorPaletteEntry {
