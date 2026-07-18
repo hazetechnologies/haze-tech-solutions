@@ -10,7 +10,11 @@ import {
   buildContentPillarsPrompt,
   buildColorPalettePrompt,
   buildImagePrompt,
+  buildArtDirectorPrompt,
+  parseArtDirection,
+  EMPTY_ART_DIRECTION,
 } from './prompts.ts'
+import type { ArtDirection } from './prompts.ts'
 import type {
   BrandKitInputs,
   BrandKitAssets,
@@ -202,8 +206,9 @@ async function processBrandKit(
           : `Resuming banners (${alreadyDone.size}/${REFERENCE_ASSET_IDS.length} already done)…`,
       })
       const persist = makePersistBanner()
+      const artDirection = (existingAssets.art_direction ?? null) as ArtDirection | null
       // Derive icon + monochrome from the brand alongside the banners (resume-safe).
-      await ensureDerivedLogos(inputs, existingAssets.color_palette ?? [], client_id, kit_id, existingImages, persist)
+      await ensureDerivedLogos(inputs, existingAssets.color_palette ?? [], client_id, kit_id, existingImages, persist, artDirection)
       const bannerErrors: string[] = []
       await generateBanners(
         inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url,
@@ -211,6 +216,7 @@ async function processBrandKit(
         persist,
         alreadyDone,
         bannerErrors,
+        artDirection,
       )
       // Re-read final state since per-banner writes mutated the row.
       const { data: finalRow } = await supabase
@@ -258,7 +264,8 @@ async function processBrandKit(
         return
       }
       await update({ status: 'generating', progress_message: 'Regenerating logos…' })
-      const logos = await generateLogos(inputs, palette, client_id, kit_id, undefined, LOGO_OPTION_IDS)
+      const artDirection = (existingAssets.art_direction ?? null) as ArtDirection | null
+      const logos = await generateLogos(inputs, palette, client_id, kit_id, undefined, LOGO_OPTION_IDS, artDirection)
       const existingImages = (existingAssets.images || {}) as Partial<Record<ImageAssetId, ImageAssetRef>>
       // Merge the new logo refs over whatever was there (banners survive).
       const mergedImages = { ...existingImages, ...logos } as Record<ImageAssetId, ImageAssetRef>
@@ -293,7 +300,7 @@ async function processBrandKit(
       images = { logo_primary: ref }
       skippedLogoGen = true
     } else {
-      images = await generateLogos(inputs, textAssets.color_palette, client_id, kit_id, existing_logos, LOGO_OPTION_IDS)
+      images = await generateLogos(inputs, textAssets.color_palette, client_id, kit_id, existing_logos, LOGO_OPTION_IDS, textAssets.art_direction ?? null)
     }
 
     if (phase === 'logos_then_pause' && !skippedLogoGen) {
@@ -320,7 +327,7 @@ async function processBrandKit(
     const persistAll = makePersistBanner()
     // Derive icon + monochrome from the brand (skip when a logo URL was supplied).
     if (!skippedLogoGen) {
-      await ensureDerivedLogos(inputs, textAssets.color_palette, client_id, kit_id, images, persistAll)
+      await ensureDerivedLogos(inputs, textAssets.color_palette, client_id, kit_id, images, persistAll, textAssets.art_direction ?? null)
     }
     const bannerErrors: string[] = []
     await generateBanners(
@@ -329,6 +336,7 @@ async function processBrandKit(
       persistAll,
       new Set<string>(),  // fresh run, nothing to skip
       bannerErrors,
+      textAssets.art_direction ?? null,
     )
     // Re-read final state since per-banner writes mutated the row.
     const { data: finalRow } = await supabase
@@ -404,6 +412,8 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
   const tagline = (inputs.tagline_override?.trim()) || structured.tagline || ''
   const cta = (inputs.cta_override?.trim()) || structured.cta || ''
 
+  const art_direction = await callArtDirector(inputs, palette, kit_id, evtProps)
+
   return {
     bios: normalizeBios(structured.bios),
     hashtags: structured.hashtags,
@@ -412,6 +422,7 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
     voice_tone: voiceTone,
     content_pillars: pillarsResp,
     color_palette: palette,
+    art_direction,
     tagline,
     cta,
   }
@@ -478,6 +489,30 @@ async function callOpusPillars(inputs: BrandKitInputs, kitId: string, evtProps: 
   return parsed.pillars
 }
 
+async function callArtDirector(
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  kitId: string,
+  evtProps: Record<string, unknown>,
+): Promise<ArtDirection> {
+  const { system, user } = buildArtDirectorPrompt(inputs, palette)
+  const { data, status } = await trackedClaude({
+    apiKey: ANTHROPIC_KEY,
+    model: OPUS_MODEL,
+    system,
+    messages: [{ role: 'user', content: user }],
+    params: { max_tokens: 1200 },
+    distinctId: kitId,
+    eventProperties: evtProps,
+  })
+  // Fail SOFT: art direction is an enhancement — never fail the kit for it.
+  if (status !== 200) {
+    console.error('art-director call failed:', status, JSON.stringify(data).slice(0, 200))
+    return { ...EMPTY_ART_DIRECTION }
+  }
+  return parseArtDirection(extractText(data))
+}
+
 async function callOpusPalette(inputs: BrandKitInputs, kitId: string, evtProps: Record<string, unknown>): Promise<ColorPaletteEntry[]> {
   // If the admin supplied explicit brand colors, use them verbatim instead of
   // calling the LLM. We fill in 'dark' and 'light' with sensible defaults so
@@ -525,6 +560,7 @@ async function generateLogos(
   kitId: string,
   existingLogos: Partial<Record<ImageAssetId, ImageAssetRef>> | undefined,
   assetIds: ImageAssetId[],
+  artDirection: ArtDirection | null = null,
 ): Promise<Partial<Record<ImageAssetId, ImageAssetRef>>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
@@ -537,7 +573,7 @@ async function generateLogos(
     const logoResults = await Promise.all(
       assetIds.map(async (assetId) => {
         const spec = SIZES[assetId]
-        const prompt = buildImagePrompt(assetId, inputs, palette)
+        const prompt = buildImagePrompt(assetId, inputs, palette, artDirection)
         const generated = await generateImageWithRetry(prompt, spec.generationSize, kitId, assetId)
         const resized = await resizeToFinalDims(generated, spec)
         const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
@@ -560,6 +596,7 @@ async function ensureDerivedLogos(
   kitId: string,
   existingImages: Partial<Record<ImageAssetId, ImageAssetRef>>,
   persist: (assetId: ImageAssetId, ref: ImageAssetRef) => Promise<void>,
+  artDirection: ArtDirection | null = null,
 ): Promise<void> {
   const missing = DERIVED_LOGO_IDS.filter((id) => !existingImages[id]?.public_url)
   if (missing.length === 0) return
@@ -567,7 +604,7 @@ async function ensureDerivedLogos(
   // generation throws (e.g. OpenAI 429), don't fail the whole kit — log and let
   // the banners proceed. A later phase='banners' re-fire retries the missing ones.
   try {
-    const derived = await generateLogos(inputs, palette, clientId, kitId, undefined, missing)
+    const derived = await generateLogos(inputs, palette, clientId, kitId, undefined, missing, artDirection)
     for (const id of missing) {
       const ref = derived[id]
       if (ref?.public_url) await persist(id, ref)
@@ -595,6 +632,7 @@ async function generateBanners(
   // real reason (e.g. KIE credits) in brand_kits.error instead of a generic
   // "did not generate" string. Mutated in place.
   bannerErrors: string[] = [],
+  artDirection: ArtDirection | null = null,
 ): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
@@ -633,7 +671,7 @@ async function generateBanners(
   const runOne = async (assetId: ImageAssetId) => {
     try {
       const spec = SIZES[assetId]
-      const prompt = buildImagePrompt(assetId, inputs, palette)
+      const prompt = buildImagePrompt(assetId, inputs, palette, artDirection)
       const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
 
       const taskId = await createKieTask(prompt, aspectRatio, approvedLogoUrl, kitId, assetId)

@@ -33,7 +33,7 @@ export interface BrandKitInputs {
   // Optional named visual style preset that guides the art-director prompt
   // (see prompts.ts STYLE_PRESETS). Unset or 'auto' infers style from the
   // rest of the brand brief instead.
-  style_preset?: string
+  style_preset?: 'auto' | 'minimalist' | 'editorial' | 'luxury' | 'gradient_3d'
 }
 
 export interface ColorPaletteEntry {
@@ -78,6 +78,13 @@ export interface BrandKitAssets {
   handles?: string[]                        // Path 3 only
   platform_priority?: string                // Path 3 only
   color_palette: ColorPaletteEntry[]
+  art_direction?: {
+    style_summary: string
+    logo_style: string
+    typography: string
+    banner_imagery_style: string
+    composition: string
+  }
   // Rendered ON banners; also surfaced in BrandKitView with copy buttons so
   // admins can reuse them as marketing copy.
   tagline?: string
