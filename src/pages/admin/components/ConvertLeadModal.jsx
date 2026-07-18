@@ -19,6 +19,11 @@ const labelStyle = {
   letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 5,
 }
 
+// Native <option>s inherit the select's near-white text but the open list
+// renders on the OS-default light background → invisible. Force a dark bg +
+// light text so the product/plan names are readable.
+const optionStyle = { background: '#0F172A', color: '#F1F5F9' }
+
 export default function ConvertLeadModal({ lead, onClose, onConverted }) {
   // sub-state: 'form' | 'collision' | 'success'
   const [view, setView] = useState('form')
@@ -280,18 +285,18 @@ export default function ConvertLeadModal({ lead, onClose, onConverted }) {
               <div>
                 <label style={labelStyle}>Product</label>
                 <select style={inputStyle} value={form.product_id} onChange={e => setField('product_id', e.target.value)} disabled={catalogLoading}>
-                  <option value="">— None —</option>
+                  <option style={optionStyle} value="">— None —</option>
                   {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (${Number(p.base_price).toFixed(0)})</option>
+                    <option style={optionStyle} key={p.id} value={p.id}>{p.name} (${Number(p.base_price).toFixed(0)})</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label style={labelStyle}>Plan</label>
                 <select style={inputStyle} value={form.subscription_plan_id} onChange={e => setField('subscription_plan_id', e.target.value)} disabled={catalogLoading}>
-                  <option value="">— None —</option>
+                  <option style={optionStyle} value="">— None —</option>
                   {visiblePlans.map(p => (
-                    <option key={p.id} value={p.id}>
+                    <option style={optionStyle} key={p.id} value={p.id}>
                       {p.name}{Number(p.discount_percent) > 0 ? ` (-${p.discount_percent}%)` : ''}
                     </option>
                   ))}
