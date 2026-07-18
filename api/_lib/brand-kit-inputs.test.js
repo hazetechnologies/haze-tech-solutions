@@ -46,3 +46,15 @@ Deno.test('rejects non-http logo url and enforces length caps', () => {
   assertEquals(validateBrandKitInputs({ ...base, cta_override: 'x'.repeat(25) }).ok, false)
   assertEquals(validateBrandKitInputs({ ...base, imagery_direction: 'x'.repeat(501) }).ok, false)
 })
+
+Deno.test('accepts a valid style_preset', () => {
+  assertEquals(validateBrandKitInputs({ ...base, style_preset: 'luxury' }).ok, true)
+})
+Deno.test('accepts absent style_preset', () => {
+  assertEquals(validateBrandKitInputs(base).ok, true)
+})
+Deno.test('rejects an invalid style_preset', () => {
+  const r = validateBrandKitInputs({ ...base, style_preset: 'neon' })
+  assertEquals(r.ok, false)
+  assertEquals(r.error.includes('style_preset'), true)
+})

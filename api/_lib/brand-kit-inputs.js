@@ -50,5 +50,11 @@ export function validateBrandKitInputs(inputs) {
     if (typeof inputs.cta_override !== 'string') return { ok: false, error: 'cta_override must be a string' }
     if (inputs.cta_override.length > 24) return { ok: false, error: 'cta_override must be 24 characters or fewer' }
   }
+  if (inputs.style_preset !== undefined) {
+    const allowed = ['auto', 'minimalist', 'editorial', 'luxury', 'gradient_3d']
+    if (!allowed.includes(inputs.style_preset)) {
+      return { ok: false, error: `style_preset must be one of ${allowed.join(', ')}` }
+    }
+  }
   return { ok: true }
 }
