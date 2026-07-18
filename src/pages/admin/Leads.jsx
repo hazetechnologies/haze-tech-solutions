@@ -462,16 +462,18 @@ export default function Leads() {
       <AuditScoresModal lead={selectedAudit} onClose={() => setSelectedAudit(null)} />
       <AutomationReportModal lead={selectedReport} onClose={() => setSelectedReport(null)} />
       {editingLead && <EditLeadModal lead={editingLead} onClose={() => setEditingLead(null)} onSaved={handleEdited} />}
-      <ConvertLeadModal
-        lead={convertingLead}
-        onClose={() => setConvertingLead(null)}
-        onConverted={(client_id) => {
-          if (convertingLead) {
-            handleUpdate(convertingLead.id, 'converted_to_client_id', client_id)
-            handleUpdate(convertingLead.id, 'status', 'closed')
-          }
-        }}
-      />
+      {convertingLead && (
+        <ConvertLeadModal
+          lead={convertingLead}
+          onClose={() => setConvertingLead(null)}
+          onConverted={(client_id) => {
+            if (convertingLead) {
+              handleUpdate(convertingLead.id, 'converted_to_client_id', client_id)
+              handleUpdate(convertingLead.id, 'status', 'closed')
+            }
+          }}
+        />
+      )}
 
       {/* ── Header ── */}
       <div style={styles.topRow}>
