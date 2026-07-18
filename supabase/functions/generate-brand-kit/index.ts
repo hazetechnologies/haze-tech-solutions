@@ -369,6 +369,27 @@ async function processBrandKit(
 
 // ── Text generation (parallel) ──
 
+// Guarantee all six platform bios exist. The structured schema requires them,
+// but it isn't run in OpenAI strict mode, so gpt-4o-mini occasionally drops one
+// (youtube in particular). Backfill any missing/empty bio from the richest
+// available "about" text so nothing renders blank in the kit.
+function normalizeBios(
+  bios: Partial<Record<'instagram' | 'tiktok' | 'youtube' | 'x' | 'facebook' | 'linkedin', string>> | undefined,
+): Record<'instagram' | 'tiktok' | 'youtube' | 'x' | 'facebook' | 'linkedin', string> {
+  const b = { ...(bios || {}) } as Record<string, string>
+  const t = (s?: string) => (s || '').trim()
+  const longFallback = t(b.linkedin) || t(b.facebook) || t(b.instagram) || t(b.x) || t(b.tiktok) || ''
+  const shortFallback = t(b.instagram) || t(b.x) || t(b.tiktok) || t(b.facebook) || longFallback
+  const ensure = (k: string, fb: string) => { if (!t(b[k])) b[k] = fb }
+  ensure('youtube', longFallback)
+  ensure('linkedin', longFallback)
+  ensure('facebook', shortFallback)
+  ensure('instagram', shortFallback)
+  ensure('tiktok', shortFallback)
+  ensure('x', shortFallback)
+  return b as Record<'instagram' | 'tiktok' | 'youtube' | 'x' | 'facebook' | 'linkedin', string>
+}
+
 async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
   const evtProps = { surface: 'brand-kit', kit_id }
 
@@ -384,7 +405,7 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
   const cta = (inputs.cta_override?.trim()) || structured.cta || ''
 
   return {
-    bios: structured.bios,
+    bios: normalizeBios(structured.bios),
     hashtags: structured.hashtags,
     handles: inputs.path === 'cold_start' ? structured.handles : undefined,
     platform_priority: inputs.path === 'cold_start' ? structured.platform_priority : undefined,
