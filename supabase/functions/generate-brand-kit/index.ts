@@ -495,22 +495,27 @@ async function callArtDirector(
   kitId: string,
   evtProps: Record<string, unknown>,
 ): Promise<ArtDirection> {
-  const { system, user } = buildArtDirectorPrompt(inputs, palette)
-  const { data, status } = await trackedClaude({
-    apiKey: ANTHROPIC_KEY,
-    model: OPUS_MODEL,
-    system,
-    messages: [{ role: 'user', content: user }],
-    params: { max_tokens: 1200 },
-    distinctId: kitId,
-    eventProperties: evtProps,
-  })
-  // Fail SOFT: art direction is an enhancement — never fail the kit for it.
-  if (status !== 200) {
-    console.error('art-director call failed:', status, JSON.stringify(data).slice(0, 200))
+  try {
+    const { system, user } = buildArtDirectorPrompt(inputs, palette)
+    const { data, status } = await trackedClaude({
+      apiKey: ANTHROPIC_KEY,
+      model: OPUS_MODEL,
+      system,
+      messages: [{ role: 'user', content: user }],
+      params: { max_tokens: 1200 },
+      distinctId: kitId,
+      eventProperties: evtProps,
+    })
+    // Fail SOFT: art direction is an enhancement — never fail the kit for it.
+    if (status !== 200) {
+      console.error('art-director call failed:', status, JSON.stringify(data).slice(0, 200))
+      return { ...EMPTY_ART_DIRECTION }
+    }
+    return parseArtDirection(extractText(data))
+  } catch (err) {
+    console.error('art-director call threw (continuing without art direction):', err instanceof Error ? err.message : err)
     return { ...EMPTY_ART_DIRECTION }
   }
-  return parseArtDirection(extractText(data))
 }
 
 async function callOpusPalette(inputs: BrandKitInputs, kitId: string, evtProps: Record<string, unknown>): Promise<ColorPaletteEntry[]> {
