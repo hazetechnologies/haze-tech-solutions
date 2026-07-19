@@ -22,10 +22,36 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoUploadErr, setLogoUploadErr] = useState(null)
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }))
   const toggleVibe = (v) => setField('vibe', form.vibe.includes(v) ? form.vibe.filter((x) => x !== v) : [...form.vibe, v])
   const setColor = (role, hex) => setForm((p) => ({ ...p, brand_colors: { ...p.brand_colors, [role]: hex } }))
+
+  async function handleLogoFile(file) {
+    if (!file) return
+    if (file.size > 3 * 1024 * 1024) { setLogoUploadErr('File must be 3 MB or smaller.'); return }
+    setLogoUploading(true); setLogoUploadErr(null)
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file)
+      })
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=upload-asset', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type, data: dataUrl }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.message || json.error || `Error ${res.status}`)
+      setField('existing_logo_url', json.url)
+    } catch (e) {
+      setLogoUploadErr(e.message)
+    } finally {
+      setLogoUploading(false)
+    }
+  }
 
   const validBrandColors = ['primary', 'secondary', 'accent']
     .map((name) => ({ name, hex: form.brand_colors[name] }))
@@ -128,7 +154,19 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
           <input value={form.voice_tone_preference} onChange={(e) => setField('voice_tone_preference', e.target.value)} style={inputStyle} placeholder="e.g. Knowledgeable but unpretentious" />
         </Field>
         <Field label="Already have a logo? (optional)">
-          <input value={form.existing_logo_url} onChange={(e) => setField('existing_logo_url', e.target.value)} style={inputStyle} placeholder="https://... (public URL to PNG/SVG/JPG)" />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              style={{ ...inputStyle, flex: 1 }}
+              value={form.existing_logo_url}
+              onChange={(e) => setField('existing_logo_url', e.target.value)}
+              placeholder="https://... or upload →"
+            />
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: 8, color: '#00D4FF', fontSize: 12, fontWeight: 600, cursor: logoUploading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+              {logoUploading ? 'Uploading…' : 'Upload'}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{ display: 'none' }} disabled={logoUploading} onChange={(e) => handleLogoFile(e.target.files?.[0])} />
+            </label>
+          </div>
+          {logoUploadErr && <p style={{ color: '#FCA5A5', fontSize: '11px', margin: '4px 0 0' }}>{logoUploadErr}</p>}
           <p style={hint}>When provided, we skip logo generation and design banners around it.</p>
         </Field>
         <button type="submit" disabled={submitting} style={{
