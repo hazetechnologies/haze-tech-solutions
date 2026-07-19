@@ -19,7 +19,7 @@ import { validateBrandKitInputs } from './_lib/brand-kit-inputs.js'
 import { evaluateBrandKitLimit } from './_lib/brand-kit-limit.js'
 import { trackedClaude, extractText } from './_lib/tracked-claude.js'
 import { buildBlogPrompt, parseBlogGeneration } from './_lib/blog-generate.js'
-import { r2Configured, buildBlogImageKey, uploadBuffer } from './_lib/r2.js'
+import { r2Configured, buildBlogImageKey, uploadBuffer, slugifyForKey } from './_lib/r2.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -38,6 +38,7 @@ export default async function handler(req, res) {
     case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
     case 'blog-generate':       return req.method === 'POST' ? blogGenerate(req, res)       : methodNotAllowed(res, 'POST')
     case 'blog-generate-cover': return req.method === 'POST' ? blogGenerateCover(req, res)  : methodNotAllowed(res, 'POST')
+    case 'upload-asset':        return req.method === 'POST' ? uploadAsset(req, res)        : methodNotAllowed(res, 'POST')
     case 'download-asset':      return req.method === 'GET'  ? downloadAsset(req, res)    : methodNotAllowed(res, 'GET')
     case 'hsp-proxy':           return req.method === 'POST' ? hspProxy(req, res)         : methodNotAllowed(res, 'POST')
     case 'activate-social':     return req.method === 'POST' ? activateSocial(req, res)   : methodNotAllowed(res, 'POST')
@@ -958,6 +959,42 @@ async function blogGenerate(req, res) {
     return res.status(200).json(parseBlogGeneration(extractText(data)))
   } catch (err) {
     return res.status(502).json({ error: 'ai_failed', message: err.message })
+  }
+}
+
+// POST ?action=upload-asset — any logged-in user (admin or portal client) uploads
+// an image file (base64) to R2; returns its public URL. Used by the brand-kit
+// intake forms to accept a logo from the user's computer.
+// Body: { filename, contentType, data } where data is base64 (may be a data: URL).
+async function uploadAsset(req, res) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  const authHeader = req.headers.authorization || ''
+  const m = /^Bearer\s+(.+)$/.exec(authHeader)
+  if (!m) return res.status(401).json({ error: 'unauthorized' })
+  const userClient = createClient(url, anonKey)
+  const { data: { user }, error: authErr } = await userClient.auth.getUser(m[1].trim())
+  if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
+
+  if (!r2Configured()) return res.status(500).json({ error: 'storage_not_configured', message: 'File storage is not configured' })
+
+  const { filename, contentType, data } = req.body || {}
+  if (!data || typeof data !== 'string') return res.status(400).json({ error: 'bad_request', message: 'data (base64) is required' })
+  const CT_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/gif': 'gif' }
+  const ext = CT_EXT[contentType]
+  if (!ext) return res.status(400).json({ error: 'bad_request', message: 'Only PNG, JPG, WebP, GIF, or SVG images are allowed' })
+  const b64 = data.includes(',') ? data.slice(data.indexOf(',') + 1) : data
+  let buf
+  try { buf = Buffer.from(b64, 'base64') } catch { return res.status(400).json({ error: 'bad_request', message: 'invalid file data' }) }
+  if (buf.length === 0) return res.status(400).json({ error: 'bad_request', message: 'empty file' })
+  if (buf.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'too_large', message: 'File must be 5 MB or smaller' })
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const key = `brand-uploads/${ts}-${slugifyForKey(filename || 'logo')}.${ext}`
+    const publicUrl = await uploadBuffer({ key, body: buf, contentType })
+    return res.status(200).json({ url: publicUrl })
+  } catch (err) {
+    return res.status(500).json({ error: 'storage_failed', message: err.message })
   }
 }
 
