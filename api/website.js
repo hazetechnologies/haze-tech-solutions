@@ -980,14 +980,14 @@ async function uploadAsset(req, res) {
 
   const { filename, contentType, data } = req.body || {}
   if (!data || typeof data !== 'string') return res.status(400).json({ error: 'bad_request', message: 'data (base64) is required' })
-  const CT_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/gif': 'gif' }
+  const CT_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }
   const ext = CT_EXT[contentType]
-  if (!ext) return res.status(400).json({ error: 'bad_request', message: 'Only PNG, JPG, WebP, GIF, or SVG images are allowed' })
+  if (!ext) return res.status(400).json({ error: 'bad_request', message: 'Only PNG, JPG, WebP, or GIF images are allowed' })
   const b64 = data.includes(',') ? data.slice(data.indexOf(',') + 1) : data
   let buf
   try { buf = Buffer.from(b64, 'base64') } catch { return res.status(400).json({ error: 'bad_request', message: 'invalid file data' }) }
   if (buf.length === 0) return res.status(400).json({ error: 'bad_request', message: 'empty file' })
-  if (buf.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'too_large', message: 'File must be 5 MB or smaller' })
+  if (buf.length > 3 * 1024 * 1024) return res.status(413).json({ error: 'too_large', message: 'File must be 3 MB or smaller' })
   try {
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
     const key = `brand-uploads/${ts}-${slugifyForKey(filename || 'logo')}.${ext}`
