@@ -31,7 +31,7 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
 
   async function handleLogoFile(file) {
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { setLogoUploadErr('File must be 5 MB or smaller.'); return }
+    if (file.size > 3 * 1024 * 1024) { setLogoUploadErr('File must be 3 MB or smaller.'); return }
     setLogoUploading(true); setLogoUploadErr(null)
     try {
       const dataUrl = await new Promise((resolve, reject) => {
@@ -163,7 +163,7 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
             />
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: 8, color: '#00D4FF', fontSize: 12, fontWeight: 600, cursor: logoUploading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
               {logoUploading ? 'Uploading…' : 'Upload'}
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" style={{ display: 'none' }} disabled={logoUploading} onChange={(e) => handleLogoFile(e.target.files?.[0])} />
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{ display: 'none' }} disabled={logoUploading} onChange={(e) => handleLogoFile(e.target.files?.[0])} />
             </label>
           </div>
           {logoUploadErr && <p style={{ color: '#FCA5A5', fontSize: '11px', margin: '4px 0 0' }}>{logoUploadErr}</p>}
