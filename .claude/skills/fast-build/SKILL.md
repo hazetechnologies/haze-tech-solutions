@@ -72,9 +72,10 @@ Notes for moving quickly:
 
 - After a code change, verify with `npm run lint` and `npm run build`
   rather than manually reasoning about breakage.
-- There is **no test runner** configured — don't waste time hunting for
-  `npm test`. Verification here means lint + build (+ running the app when
-  a change is visual).
+- There is **no `npm test`** script and no CI test job. The `*.test.js`
+  files in `api/_lib/` are **Deno** tests — run with `deno test api/_lib/`
+  only if Deno is present. Don't hunt for `npm test`; default verification
+  here is lint + build (+ running the app when a change is visual).
 - Supabase schema lives in the root `supabase-*.sql` files and the
   `supabase/` directory. Env vars are documented in `.env.example` — read
   it before touching anything that needs config.
