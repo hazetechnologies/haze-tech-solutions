@@ -30,11 +30,18 @@ serverless functions. No separate backend server — the `api/` directory
 | Lint | `npm run lint` |
 | Preview built app | `npm run preview` |
 
-**Verify a change with `npm run lint && npm run build`.** There is no
-`npm test` script and no CI test job. The `*.test.js` files under
-`api/_lib/` are written for **Deno** (`Deno.test(...)`) — run them with
-`deno test api/_lib/` if Deno is available; otherwise they don't execute
-in this project's normal flow. Don't assume `npm test` exists.
+**Verify a change with `npm run build`** — it is the reliable gate and
+currently passes clean (one chunk-size warning is expected). **`npm run
+lint` has a large pre-existing baseline of errors** (~210 on a fresh
+checkout, e.g. unused `Icon` imports, `process` undefined in
+`vite.config.js`). Do **not** read a red lint run as "I broke something":
+the bar is *don't add new lint errors in files you touched*, not a clean
+tree. Fixing the whole backlog is out of scope unless asked.
+
+There is no `npm test` script and no CI test job. The `*.test.js` files
+under `api/_lib/` are written for **Deno** (`Deno.test(...)`) — run them
+with `deno test api/_lib/` if Deno is available; otherwise they don't
+execute in this project's normal flow. Don't assume `npm test` exists.
 
 ## Layout
 

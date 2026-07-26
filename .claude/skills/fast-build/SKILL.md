@@ -70,12 +70,15 @@ This is a **Vite + React 19 + Supabase** project. Scripts from `package.json`:
 
 Notes for moving quickly:
 
-- After a code change, verify with `npm run lint` and `npm run build`
-  rather than manually reasoning about breakage.
+- After a code change, verify with `npm run build` — it's the reliable
+  gate and passes clean today (a chunk-size warning is expected).
+- **`npm run lint` has a large pre-existing error baseline** (~210 errors
+  on a fresh checkout). A red lint run does *not* mean you broke something.
+  The bar is: don't add *new* lint errors in files you touched. Don't burn
+  time fixing the backlog unless asked.
 - There is **no `npm test`** script and no CI test job. The `*.test.js`
   files in `api/_lib/` are **Deno** tests — run with `deno test api/_lib/`
-  only if Deno is present. Don't hunt for `npm test`; default verification
-  here is lint + build (+ running the app when a change is visual).
+  only if Deno is present. Don't hunt for `npm test`.
 - Supabase schema lives in the root `supabase-*.sql` files and the
   `supabase/` directory. Env vars are documented in `.env.example` — read
   it before touching anything that needs config.
