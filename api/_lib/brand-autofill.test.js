@@ -45,3 +45,25 @@ Deno.test('parseBrandAutofill tolerates fences/prose, garbage → all-empty, nev
   assertEquals(parseBrandAutofill('no json here'), EMPTY_AUTOFILL)
   assertEquals(parseBrandAutofill(''), EMPTY_AUTOFILL)
 })
+Deno.test('isSafePublicUrl rejects trailing-dot internal hosts', () => {
+  assertEquals(isSafePublicUrl('http://localhost.'), false)
+  assertEquals(isSafePublicUrl('http://box.internal.'), false)
+  assertEquals(isSafePublicUrl('http://printer.local.'), false)
+})
+Deno.test('isSafePublicUrl IPv6: reject internal, allow public', () => {
+  assertEquals(isSafePublicUrl('http://[::1]'), false)
+  assertEquals(isSafePublicUrl('http://[::ffff:127.0.0.1]'), false)
+  assertEquals(isSafePublicUrl('http://[fc00::1]'), false)
+  assertEquals(isSafePublicUrl('http://[fe80::1]'), false)
+  assertEquals(isSafePublicUrl('http://[2001:4860:4860::8888]'), true)
+})
+Deno.test('htmlToText decodes numeric + hex entities', () => {
+  const t = htmlToText('<p>It&#8217;s a caf&#233; &#x2014; nice.</p>')
+  assertEquals(t.includes('It’s'), true)
+  assertEquals(t.includes('café'), true)
+  assertEquals(t.includes('—'), true)
+})
+Deno.test('htmlToText reads meta description in reversed attr order', () => {
+  const t = htmlToText('<html><head><meta content="Great desc here" property="og:description"></head><body>x</body></html>')
+  assertEquals(t.includes('Great desc here'), true)
+})

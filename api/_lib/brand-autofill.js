@@ -15,6 +15,7 @@ export function isSafePublicUrl(url) {
   try { u = new URL(url) } catch { return false }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
   let h = u.hostname.toLowerCase()
+  h = h.replace(/\.$/, '')
   // URL.hostname keeps brackets around IPv6 literals, e.g. "[::1]" — unwrap
   // before matching, otherwise loopback/link-local IPv6 hosts slip through.
   const isIpv6 = h.startsWith('[') && h.endsWith(']')
@@ -52,6 +53,7 @@ export function htmlToText(html, cap = 15000) {
   const title = titleMatch ? titleMatch[1] : ''
   // Capture meta description / og:description.
   const descMatch = s.match(/<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]*content=["']([^"']*)["']/i)
+    || s.match(/<meta[^>]+content=["']([^"']*)["'][^>]*(?:name|property)=["'](?:description|og:description)["']/i)
   const desc = descMatch ? descMatch[1] : ''
   s = s.replace(/<script[\s\S]*?<\/script>/gi, ' ')
        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -60,7 +62,9 @@ export function htmlToText(html, cap = 15000) {
        .replace(/<[^>]+>/g, ' ')
   s = [title, desc, s].join(' ')
   for (const [k, v] of Object.entries(ENTITIES)) s = s.split(k).join(v)
-  s = s.replace(/&#\d+;/g, ' ').replace(/\s+/g, ' ').trim()
+  s = s.replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(Number(n)) } catch { return ' ' } })
+  s = s.replace(/&#x([0-9a-fA-F]+);/g, (_, n) => { try { return String.fromCodePoint(parseInt(n, 16)) } catch { return ' ' } })
+  s = s.replace(/\s+/g, ' ').trim()
   return s.slice(0, cap)
 }
 
