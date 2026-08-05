@@ -19,6 +19,7 @@ import { validateBrandKitInputs } from './_lib/brand-kit-inputs.js'
 import { evaluateBrandKitLimit } from './_lib/brand-kit-limit.js'
 import { trackedClaude, extractText } from './_lib/tracked-claude.js'
 import { buildBlogPrompt, parseBlogGeneration } from './_lib/blog-generate.js'
+import { isSafePublicUrl, htmlToText, buildAutofillPrompt, parseBrandAutofill } from './_lib/brand-autofill.js'
 import { r2Configured, buildBlogImageKey, uploadBuffer, slugifyForKey } from './_lib/r2.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
     case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
     case 'blog-generate':       return req.method === 'POST' ? blogGenerate(req, res)       : methodNotAllowed(res, 'POST')
     case 'blog-generate-cover': return req.method === 'POST' ? blogGenerateCover(req, res)  : methodNotAllowed(res, 'POST')
+    case 'brand-autofill':      return req.method === 'POST' ? brandAutofill(req, res)      : methodNotAllowed(res, 'POST')
     case 'upload-asset':        return req.method === 'POST' ? uploadAsset(req, res)        : methodNotAllowed(res, 'POST')
     case 'download-asset':      return req.method === 'GET'  ? downloadAsset(req, res)    : methodNotAllowed(res, 'GET')
     case 'hsp-proxy':           return req.method === 'POST' ? hspProxy(req, res)         : methodNotAllowed(res, 'POST')
@@ -960,6 +962,72 @@ async function blogGenerate(req, res) {
   } catch (err) {
     return res.status(502).json({ error: 'ai_failed', message: err.message })
   }
+}
+
+// POST ?action=brand-autofill — admin-gated. Scrapes a website + reads the logo
+// (Claude vision) to pre-fill the brand-kit intake fields.
+// Body: { website_url?, logo_url? } → { business_description, industry, audience,
+// color_preference, brand_colors{primary,secondary,accent}, imagery_direction,
+// tagline_override, cta_override }.
+async function brandAutofill(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  const website_url = String(req.body?.website_url || '').trim()
+  const logo_url = String(req.body?.logo_url || '').trim()
+  if (!website_url && !logo_url) return res.status(400).json({ error: 'bad_request', message: 'Provide a website URL or a logo.' })
+
+  // Best-effort scrape (fail-soft). SSRF-guarded, time-bounded, size-capped.
+  let siteText = ''
+  if (website_url && isSafePublicUrl(website_url)) {
+    try {
+      let current = website_url
+      let resp = null
+      for (let hop = 0; hop < 4; hop++) {
+        if (!isSafePublicUrl(current)) break  // never fetch an internal address, even via redirect
+        const r = await fetch(current, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HazeTechBot/1.0)' },
+          signal: AbortSignal.timeout(8000),
+          redirect: 'manual',
+        })
+        if (r.status >= 300 && r.status < 400) {
+          const loc = r.headers.get('location')
+          if (!loc) break
+          current = new URL(loc, current).toString()  // resolve relative redirects; re-validated next loop
+          continue
+        }
+        resp = r
+        break
+      }
+      if (resp && resp.ok) {
+        const ct = resp.headers.get('content-type') || ''
+        if (/html|text/i.test(ct)) {
+          const buf = await resp.arrayBuffer()
+          // Cap raw body at 2 MB before decoding to avoid pathological pages.
+          const html = new TextDecoder('utf-8').decode(buf.slice(0, 2 * 1024 * 1024))
+          siteText = htmlToText(html)
+        }
+      }
+    } catch { /* fail-soft — proceed with the logo */ }
+  }
+  if (!siteText && !logo_url) return res.status(400).json({ error: 'nothing_to_read', message: 'Could not read that website; upload a logo or use a valid public URL.' })
+
+  const apiKey = await getSetting('anthropic_api_key', 'ANTHROPIC_API_KEY')
+  if (!apiKey) return res.status(400).json({ error: 'ai_not_configured', message: 'Anthropic API key is not configured' })
+
+  const { system, user } = buildAutofillPrompt({ siteText, hasLogo: !!logo_url })
+  const content = [{ type: 'text', text: user }]
+  if (logo_url) content.push({ type: 'image', source: { type: 'url', url: logo_url } })
+
+  const { data, status } = await trackedClaude({
+    apiKey,
+    model: 'claude-sonnet-4-6',
+    system,
+    messages: [{ role: 'user', content }],
+    params: { max_tokens: 1500 },
+    eventProperties: { surface: 'brand-autofill' },
+  })
+  if (status !== 200) return res.status(502).json({ error: 'ai_failed', message: data?.error || 'AI autofill failed' })
+  return res.status(200).json(parseBrandAutofill(extractText(data)))
 }
 
 // POST ?action=upload-asset — any logged-in user (admin or portal client) uploads
