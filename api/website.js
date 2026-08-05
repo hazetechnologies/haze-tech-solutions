@@ -980,17 +980,32 @@ async function brandAutofill(req, res) {
   let siteText = ''
   if (website_url && isSafePublicUrl(website_url)) {
     try {
-      const r = await fetch(website_url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HazeTechBot/1.0)' },
-        signal: AbortSignal.timeout(8000),
-        redirect: 'follow',
-      })
-      const ct = r.headers.get('content-type') || ''
-      if (r.ok && /html|text/i.test(ct)) {
-        const buf = await r.arrayBuffer()
-        // Cap raw body at 2 MB before decoding to avoid pathological pages.
-        const html = new TextDecoder('utf-8').decode(buf.slice(0, 2 * 1024 * 1024))
-        siteText = htmlToText(html)
+      let current = website_url
+      let resp = null
+      for (let hop = 0; hop < 4; hop++) {
+        if (!isSafePublicUrl(current)) break  // never fetch an internal address, even via redirect
+        const r = await fetch(current, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HazeTechBot/1.0)' },
+          signal: AbortSignal.timeout(8000),
+          redirect: 'manual',
+        })
+        if (r.status >= 300 && r.status < 400) {
+          const loc = r.headers.get('location')
+          if (!loc) break
+          current = new URL(loc, current).toString()  // resolve relative redirects; re-validated next loop
+          continue
+        }
+        resp = r
+        break
+      }
+      if (resp && resp.ok) {
+        const ct = resp.headers.get('content-type') || ''
+        if (/html|text/i.test(ct)) {
+          const buf = await resp.arrayBuffer()
+          // Cap raw body at 2 MB before decoding to avoid pathological pages.
+          const html = new TextDecoder('utf-8').decode(buf.slice(0, 2 * 1024 * 1024))
+          siteText = htmlToText(html)
+        }
       }
     } catch { /* fail-soft — proceed with the logo */ }
   }
