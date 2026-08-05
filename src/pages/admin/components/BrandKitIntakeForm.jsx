@@ -81,6 +81,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
         style_preset: previousInputs.style_preset || 'auto',
         brand_colors: prevColorsByRole,
         existing_logo_url: previousInputs.existing_logo_url || '',
+        website_url: previousInputs.website_url || '',
         imagery_direction: previousInputs.imagery_direction || '',
         tagline_override: previousInputs.tagline_override || '',
         cta_override: previousInputs.cta_override || '',
@@ -102,6 +103,9 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
       brand_colors: { primary: '', secondary: '', accent: '' },
       // Optional URL to an existing logo — skips the 3-logo generation entirely.
       existing_logo_url: '',
+      // Scrape-only: source URL for the autofill button below. Not sent as
+      // part of the kit-generation payload in handleSubmit.
+      website_url: '',
       // Optional scene/backdrop direction injected only into banner + profile-picture
       // image prompts (logos stay clean).
       imagery_direction: '',
@@ -128,6 +132,8 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
   const [error, setError] = useState(null)
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoUploadErr, setLogoUploadErr] = useState(null)
+  const [autofilling, setAutofilling] = useState(false)
+  const [autofillErr, setAutofillErr] = useState(null)
 
   // Autosave every form change. Cheap — small JSON, no debounce needed.
   useEffect(() => {
@@ -168,6 +174,35 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
     }
   }
 
+  async function handleAutofill() {
+    const site = (form.website_url || '').trim()
+    const logo = (form.existing_logo_url || '').trim()
+    if (!site && !logo) { setAutofillErr('Enter a website URL or upload a logo first.'); return }
+    setAutofilling(true); setAutofillErr(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/website?action=brand-autofill', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ website_url: site || undefined, logo_url: logo || undefined }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.message || json.error || `Error ${res.status}`)
+      // Fill only fields the AI returned (non-empty); leave others as-is.
+      for (const k of ['business_description', 'industry', 'audience', 'color_preference', 'imagery_direction', 'tagline_override', 'cta_override']) {
+        if (json[k] && String(json[k]).trim()) setField(k, String(json[k]).trim())
+      }
+      const bc = json.brand_colors || {}
+      for (const role of ['primary', 'secondary', 'accent']) {
+        if (bc[role] && /^#[0-9a-fA-F]{6}$/.test(bc[role])) setColor(role, bc[role])
+      }
+    } catch (e) {
+      setAutofillErr(e.message)
+    } finally {
+      setAutofilling(false)
+    }
+  }
+
   // Extract valid #RRGGBB hex picks; ignore partial input while typing.
   const validBrandColors = ['primary', 'secondary', 'accent']
     .map(name => ({ name, hex: form.brand_colors[name] }))
@@ -203,8 +238,10 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
     setSubmitting(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      // Strip the per-role hex object — we send the validated array shape.
-      const { brand_colors: _bc, ...formClean } = form
+      // Strip the per-role hex object (sent as validated array shape below) and
+      // website_url (scrape-only input for the autofill button — not part of
+      // the kit-generation payload).
+      const { brand_colors: _bc, website_url: _wu, ...formClean } = form
       const inputs = {
         path: isPath1 ? 'audit_prefill' : 'cold_start',
         ...formClean,
@@ -265,6 +302,27 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
 
       <Field label="Business name *">
         <input value={form.business_name} onChange={e => setField('business_name', e.target.value)} style={inputStyle} required />
+      </Field>
+
+      <Field label="Autofill from website + logo (optional)">
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            style={{ ...inputStyle, flex: 1 }}
+            value={form.website_url}
+            onChange={e => setField('website_url', e.target.value)}
+            placeholder="https://the-clients-website.com"
+          />
+          <button type="button" onClick={handleAutofill} disabled={autofilling} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 14px', whiteSpace: 'nowrap',
+            background: autofilling ? 'rgba(139,92,246,0.4)' : 'linear-gradient(135deg, #8B5CF6, #00D4FF)',
+            border: 'none', borderRadius: 8, color: '#020817', fontSize: 12, fontWeight: 700,
+            fontFamily: 'inherit', cursor: autofilling ? 'not-allowed' : 'pointer',
+          }}>{autofilling ? 'Reading…' : '✨ Autofill'}</button>
+        </div>
+        <p style={{ color: '#64748B', fontSize: '11px', margin: '4px 0 0' }}>
+          Reads the site + your uploaded logo and fills in the fields below. Review before generating.
+        </p>
+        {autofillErr && <p style={{ color: '#FCA5A5', fontSize: '11px', margin: '4px 0 0' }}>{autofillErr}</p>}
       </Field>
 
       {!isPath1 && (
