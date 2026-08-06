@@ -10,6 +10,7 @@ import {
   buildContentPillarsPrompt,
   buildColorPalettePrompt,
   buildImagePrompt,
+  buildHighlightCoverPrompt,
   buildArtDirectorPrompt,
   parseArtDirection,
   EMPTY_ART_DIRECTION,
@@ -88,6 +89,17 @@ const REFERENCE_ASSET_IDS: ImageAssetId[] = [
   'profile_picture', 'banner_ig', 'banner_fb', 'banner_yt',
   'banner_x', 'banner_tiktok', 'banner_linkedin_cover',
 ]
+// Instagram Highlight covers — whole-image gpt-image-1 designs generated in the
+// same (post-approval) phase as the banners, but via OpenAI direct, not KIE.
+// BEST-EFFORT: they are NOT part of the completion gate (banners are), so an
+// unrenderable cover can't fail an otherwise-complete kit.
+const HIGHLIGHT_COVER_IDS: ImageAssetId[] = [
+  'highlight_cover_1', 'highlight_cover_2', 'highlight_cover_3',
+  'highlight_cover_4', 'highlight_cover_5',
+]
+// Sensible default highlight titles used to backfill when the model returns
+// fewer than 5 (mini isn't run in strict mode).
+const DEFAULT_HIGHLIGHT_TITLES = ['About', 'Services', 'Reviews', 'Gallery', 'Contact', 'Booking', 'FAQ']
 const KIE_ASPECT_RATIOS: Record<string, string> = {
   profile_picture:      '1:1',
   banner_ig:            '9:16',
@@ -131,6 +143,11 @@ async function processBrandKit(
   phase: 'all' | 'logos_then_pause' | 'banners' | 'logos_only',
   existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
 ): Promise<void> {
+  // Function-entry time. Shared with generateBanners so its wall-time budget
+  // accounts for time already spent this invocation on derived logos + covers —
+  // otherwise banners could push the invocation past Supabase's ~150s hard cap
+  // before it gets a chance to fire the self-invoke.
+  const runStartedAt = Date.now()
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -194,22 +211,31 @@ async function processBrandKit(
         await update({ status: 'failed', error: `approved logo asset (${approvedLogoKey}) not found` })
         return
       }
-      // Resume-safe: skip banners we already have on the row.
+      // Resume-safe: skip banners we already have on the row. BANNERS are the
+      // completion gate — covers are best-effort (see generateHighlightCovers)
+      // so one unrenderable cover can never fail an otherwise-complete kit.
       const alreadyDone = new Set<string>(
         REFERENCE_ASSET_IDS.filter((id) => existingImages[id]?.public_url),
       )
-      const remaining = REFERENCE_ASSET_IDS.length - alreadyDone.size
       await update({
         status: 'generating',
-        progress_message: remaining === REFERENCE_ASSET_IDS.length
-          ? 'Generating banners…'
-          : `Resuming banners (${alreadyDone.size}/${REFERENCE_ASSET_IDS.length} already done)…`,
+        progress_message: alreadyDone.size === 0
+          ? 'Generating banners & highlight covers…'
+          : `Resuming (${alreadyDone.size}/${REFERENCE_ASSET_IDS.length} banners done)…`,
       })
       const persist = makePersistBanner()
       const artDirection = (existingAssets.art_direction ?? null) as ArtDirection | null
+      const bannerErrors: string[] = []
+      const coverErrors: string[] = []
       // Derive icon + monochrome from the brand alongside the banners (resume-safe).
       await ensureDerivedLogos(inputs, existingAssets.color_palette ?? [], client_id, kit_id, existingImages, persist, artDirection)
-      const bannerErrors: string[] = []
+      // Instagram highlight covers — best-effort: resume-safe, fail-soft, and
+      // NOT part of the completion gate. Their errors go to coverErrors so they
+      // never contaminate the banner failure decision below.
+      await generateHighlightCovers(
+        inputs, existingAssets.color_palette ?? [], client_id, kit_id, existingImages, persist,
+        artDirection, existingAssets.highlight_covers, coverErrors,
+      )
       await generateBanners(
         inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url,
         { tagline: existingAssets.tagline, cta: existingAssets.cta },
@@ -217,6 +243,7 @@ async function processBrandKit(
         alreadyDone,
         bannerErrors,
         artDirection,
+        runStartedAt,
       )
       // Re-read final state since per-banner writes mutated the row.
       const { data: finalRow } = await supabase
@@ -227,23 +254,20 @@ async function processBrandKit(
       const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
       const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
       const nowDone = REFERENCE_ASSET_IDS.filter((id) => finalImages[id]?.public_url).length
-      const madeProgress = nowDone > alreadyDone.size
+      // Self-invoke when we made banner progress OR when nothing errored (the
+      // round simply ran out of wall-time budget — e.g. covers used it). Only
+      // finalize as failed when banners are incomplete AND actually errored, so
+      // a real reason (e.g. KIE credits) surfaces instead of looping forever.
       const missing = REFERENCE_ASSET_IDS.filter(id => !finalImages[id]?.public_url)
       if (allDone) {
         await update({ status: 'done', progress_message: null, error: null })
-      } else if (madeProgress) {
-        // Wall-time budget hit but we DID complete some banners this round.
-        // Chain a self-invoke to finish the rest. The new invocation sees
-        // partial state in the row and only generates what's missing.
+      } else if (nowDone > alreadyDone.size || bannerErrors.length === 0) {
         await update({
           status: 'generating',
           progress_message: `${nowDone}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
         })
         await chainSelfInvoke(kit_id)
       } else {
-        // No progress at all this invocation — finalize as failed instead of
-        // looping forever. Surface the underlying reason (e.g. KIE credits) if
-        // we captured one.
         const reason = summarizeBannerErrors(bannerErrors)
         await update({
           status: 'failed',
@@ -330,6 +354,13 @@ async function processBrandKit(
       await ensureDerivedLogos(inputs, textAssets.color_palette, client_id, kit_id, images, persistAll, textAssets.art_direction ?? null)
     }
     const bannerErrors: string[] = []
+    const coverErrors: string[] = []
+    // Instagram highlight covers — best-effort (see banners phase): resume-safe,
+    // fail-soft, NOT part of the completion gate; errors kept separate.
+    await generateHighlightCovers(
+      inputs, textAssets.color_palette, client_id, kit_id, images, persistAll,
+      textAssets.art_direction ?? null, textAssets.highlight_covers, coverErrors,
+    )
     await generateBanners(
       inputs, textAssets.color_palette, client_id, kit_id, primaryRef.public_url,
       { tagline: textAssets.tagline, cta: textAssets.cta },
@@ -337,8 +368,10 @@ async function processBrandKit(
       new Set<string>(),  // fresh run, nothing to skip
       bannerErrors,
       textAssets.art_direction ?? null,
+      runStartedAt,
     )
-    // Re-read final state since per-banner writes mutated the row.
+    // Re-read final state since per-banner writes mutated the row. BANNERS gate
+    // completion; covers are best-effort.
     const { data: finalRow } = await supabase
       .from('brand_kits')
       .select('assets')
@@ -350,10 +383,10 @@ async function processBrandKit(
     const missing = REFERENCE_ASSET_IDS.filter((id) => !finalImages[id]?.public_url)
     if (allDone) {
       await update({ status: 'done', progress_message: null })
-    } else if (nowDoneCount > 0) {
-      // Phase='all' started fresh (0 banners present). If we landed >=1 but
-      // not all 7, the wall-time budget ran out. Hand off to a phase='banners'
-      // self-invoke so the remaining banners get their own function budget.
+    } else if (nowDoneCount > 0 || bannerErrors.length === 0) {
+      // Made banner progress, or nothing errored (ran out of wall-time budget,
+      // e.g. covers used it) → hand off to a phase='banners' self-invoke so the
+      // remaining banners get their own function budget.
       await update({
         status: 'generating',
         progress_message: `${nowDoneCount}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
@@ -414,6 +447,8 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
 
   const art_direction = await callArtDirector(inputs, palette, kit_id, evtProps)
 
+  const extras = normalizeStructuredExtras(structured, inputs)
+
   return {
     bios: normalizeBios(structured.bios),
     hashtags: structured.hashtags,
@@ -425,6 +460,9 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
     art_direction,
     tagline,
     cta,
+    keywords: extras.keywords,
+    instagram_page_name: extras.instagram_page_name,
+    highlight_covers: extras.highlight_covers,
   }
 }
 
@@ -451,7 +489,73 @@ async function callMiniStructured(inputs: BrandKitInputs, kitId: string, evtProp
     platform_priority: string
     tagline: string
     cta: string
+    // Optional: mini isn't run in strict mode so these can be missing/short;
+    // normalizeStructuredExtras backfills them.
+    keywords?: string[]
+    instagram_page_name?: string
+    highlight_covers?: { title?: string; keyword?: string }[]
   }
+}
+
+// Backfill the discovery/cover fields so they never render blank and there are
+// always exactly 5 highlight covers (mini isn't strict, so it occasionally
+// returns fewer keywords/covers or drops instagram_page_name entirely).
+function normalizeStructuredExtras(
+  structured: { keywords?: string[]; instagram_page_name?: string; highlight_covers?: { title?: string; keyword?: string }[] },
+  inputs: BrandKitInputs,
+): { keywords: string[]; instagram_page_name: string; highlight_covers: { title: string; keyword: string }[] } {
+  // Defend against loosely-typed model output: the schema constrains these to
+  // arrays, but mini isn't strict mode, so coerce non-arrays to [] rather than
+  // letting a stray object throw in the for..of below (which would fail the kit).
+  const rawKeywords = Array.isArray(structured.keywords) ? structured.keywords : []
+  const rawCovers = Array.isArray(structured.highlight_covers) ? structured.highlight_covers : []
+
+  // Keywords: clean + dedupe; derive from industry + description if empty.
+  const seen = new Set<string>()
+  const keywords: string[] = []
+  for (const raw of rawKeywords) {
+    const k = (raw || '').toString().trim().toLowerCase().replace(/^#+/, '').trim()
+    if (k && !seen.has(k)) { seen.add(k); keywords.push(k) }
+  }
+  if (keywords.length === 0) {
+    const src = `${inputs.industry || ''} ${inputs.business_description || ''}`.toLowerCase()
+    const STOP = new Set(['the','and','for','with','that','this','from','your','our','are','you','who','what','into','a','an','of','to','in','on','we','is','it','&'])
+    for (const w of src.split(/[^a-z0-9]+/)) {
+      if (w.length > 3 && !STOP.has(w) && !seen.has(w)) { seen.add(w); keywords.push(w) }
+      if (keywords.length >= 8) break
+    }
+    if (keywords.length === 0 && inputs.industry?.trim()) keywords.push(inputs.industry.trim().toLowerCase())
+  }
+
+  // Instagram page name: "Brand | Industry" fallback, trimmed to a sane length.
+  let ig = (structured.instagram_page_name || '').trim()
+  if (!ig) {
+    const cat = (inputs.industry || '').trim()
+    ig = cat ? `${inputs.business_name} | ${cat}` : inputs.business_name
+  }
+  if (ig.length > 60) ig = ig.slice(0, 60).trim()
+
+  // Highlight covers: keep valid provided ones, pad to exactly 5 from defaults.
+  const covers: { title: string; keyword: string }[] = []
+  const usedTitles = new Set<string>()
+  for (const c of rawCovers) {
+    const title = (c?.title || '').toString().trim()
+    if (!title) continue
+    const key = title.toLowerCase()
+    if (usedTitles.has(key)) continue
+    usedTitles.add(key)
+    const keyword = (c?.keyword || '').toString().trim() || keywords[covers.length] || keywords[0] || title.toLowerCase()
+    covers.push({ title: title.slice(0, 18), keyword: keyword.slice(0, 40) })
+    if (covers.length >= 5) break
+  }
+  for (const t of DEFAULT_HIGHLIGHT_TITLES) {
+    if (covers.length >= 5) break
+    if (usedTitles.has(t.toLowerCase())) continue
+    usedTitles.add(t.toLowerCase())
+    covers.push({ title: t, keyword: keywords[covers.length] || keywords[0] || t.toLowerCase() })
+  }
+
+  return { keywords, instagram_page_name: ig, highlight_covers: covers.slice(0, 5) }
 }
 
 async function callOpusVoiceTone(inputs: BrandKitInputs, kitId: string, evtProps: Record<string, unknown>): Promise<string> {
@@ -619,6 +723,52 @@ async function ensureDerivedLogos(
   }
 }
 
+// Generate the 5 Instagram Highlight covers — whole-image gpt-image-1 designs
+// (like ChatGPT makes), NOT KIE scenery+overlay. Runs in the post-approval
+// phase alongside banners. Resume-safe (skips covers already on the row) and
+// fail-soft per cover (pushes the reason into `errors`, never throws) so the
+// caller's completion/self-invoke logic can retry missing ones exactly like a
+// banner. Does NOT need the approved logo — each cover bakes its own icon.
+async function generateHighlightCovers(
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  clientId: string,
+  kitId: string,
+  existingImages: Partial<Record<ImageAssetId, ImageAssetRef>>,
+  persist: (assetId: ImageAssetId, ref: ImageAssetRef) => Promise<void>,
+  artDirection: ArtDirection | null,
+  providedSpecs: { title: string; keyword: string }[] | undefined,
+  errors: string[],
+): Promise<void> {
+  // Guarantee exactly 5 specs (pre-existing kits may have none stored yet).
+  const specs = (providedSpecs && providedSpecs.length
+    ? providedSpecs
+    : normalizeStructuredExtras({}, inputs).highlight_covers
+  ).slice(0, HIGHLIGHT_COVER_IDS.length)
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const jobs = specs
+    .map((spec, i) => ({ spec, assetId: HIGHLIGHT_COVER_IDS[i] }))
+    .filter(({ assetId }) => !existingImages[assetId]?.public_url)
+  if (jobs.length === 0) return
+
+  await Promise.all(jobs.map(async ({ spec, assetId }) => {
+    try {
+      const sizeSpec = SIZES[assetId]
+      const prompt = buildHighlightCoverPrompt(spec, inputs, palette, artDirection)
+      // Single attempt (no long backoff) — see generateImageWithRetry's retryDelays note.
+      const generated = await generateImageWithRetry(prompt, sizeSpec.generationSize, kitId, assetId, 'opaque', [])
+      const resized = await resizeToFinalDims(generated, sizeSpec)
+      const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+      await persist(assetId, uploaded)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`highlight cover ${assetId} failed:`, msg)
+      errors.push(msg)
+    }
+  }))
+}
+
 async function generateBanners(
   inputs: BrandKitInputs,
   palette: ColorPaletteEntry[],
@@ -638,6 +788,10 @@ async function generateBanners(
   // "did not generate" string. Mutated in place.
   bannerErrors: string[] = [],
   artDirection: ArtDirection | null = null,
+  // Wall-time budget is measured from this instant. Callers pass the function
+  // entry time so time already spent on derived logos + covers counts against
+  // the budget (keeping the whole invocation under Supabase's ~150s cap).
+  startedAt: number = Date.now(),
 ): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
@@ -672,7 +826,7 @@ async function generateBanners(
   // already in the row, so each chained call only does the remaining work.
   const BATCH_SIZE = 2
   const BUDGET_MS = 85_000
-  const startedAt = Date.now()
+  // startedAt comes from the caller (function entry) — see the param note.
   const runOne = async (assetId: ImageAssetId) => {
     try {
       const spec = SIZES[assetId]
@@ -796,9 +950,17 @@ async function generateImageWithRetry(
   size: '1024x1024' | '1024x1536' | '1536x1024',
   kitId: string,
   assetId: string,
+  // Logos need a transparent background so they drop onto banners/branding.
+  // Highlight covers are full designs with their own background → 'opaque'.
+  background: 'transparent' | 'opaque' = 'transparent',
+  // Backoff schedule between attempts. Covers pass [] (single attempt, no long
+  // waits) because they run inside the banner phase's wall-time budget and are
+  // fail-soft + retried across self-invokes — a slow 3× backoff on 5 parallel
+  // covers could starve the banners of their budget.
+  retryDelays: number[] = IMAGE_RETRY_DELAYS_MS,
 ): Promise<Uint8Array> {
   let lastErr: unknown = null
-  for (let attempt = 0; attempt < IMAGE_RETRY_DELAYS_MS.length + 1; attempt++) {
+  for (let attempt = 0; attempt < retryDelays.length + 1; attempt++) {
     try {
       const start = Date.now()
       const res = await fetch('https://api.openai.com/v1/images/generations', {
@@ -816,7 +978,7 @@ async function generateImageWithRetry(
           prompt,
           size,
           n: 1,
-          background: 'transparent',
+          background,
           output_format: 'png',
         }),
       })
@@ -847,8 +1009,8 @@ async function generateImageWithRetry(
         }).catch(() => {})
       }
 
-      if (res.status === 429 && attempt < IMAGE_RETRY_DELAYS_MS.length) {
-        await new Promise(r => setTimeout(r, IMAGE_RETRY_DELAYS_MS[attempt]))
+      if (res.status === 429 && attempt < retryDelays.length) {
+        await new Promise(r => setTimeout(r, retryDelays[attempt]))
         continue
       }
       if (!res.ok) {
@@ -869,8 +1031,8 @@ async function generateImageWithRetry(
       throw new Error(`gpt-image-1 returned no b64_json or url for ${assetId}`)
     } catch (err) {
       lastErr = err
-      if (attempt < IMAGE_RETRY_DELAYS_MS.length) {
-        await new Promise(r => setTimeout(r, IMAGE_RETRY_DELAYS_MS[attempt]))
+      if (attempt < retryDelays.length) {
+        await new Promise(r => setTimeout(r, retryDelays[attempt]))
         continue
       }
     }

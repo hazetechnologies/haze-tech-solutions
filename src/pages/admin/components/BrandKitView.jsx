@@ -27,6 +27,22 @@ const IMAGE_LABELS = {
   banner_x: { label: 'X header', dims: '1500×500' },
   banner_tiktok:         { label: 'TikTok profile',        dims: '200×200' },
   banner_linkedin_cover: { label: 'LinkedIn cover',         dims: '1128×191' },
+  highlight_cover_1: { label: 'Highlight cover 1', dims: '1024×1024' },
+  highlight_cover_2: { label: 'Highlight cover 2', dims: '1024×1024' },
+  highlight_cover_3: { label: 'Highlight cover 3', dims: '1024×1024' },
+  highlight_cover_4: { label: 'Highlight cover 4', dims: '1024×1024' },
+  highlight_cover_5: { label: 'Highlight cover 5', dims: '1024×1024' },
+}
+
+// For highlight covers, prefer the AI-chosen title ("About", "Tours"…) over the
+// generic slot label so the card reads like the cover the client will see.
+function labelForAsset(assetId, assets) {
+  if (assetId.startsWith('highlight_cover_')) {
+    const idx = Number(assetId.slice('highlight_cover_'.length)) - 1
+    const title = assets?.highlight_covers?.[idx]?.title
+    return title ? `Highlight: ${title}` : (IMAGE_LABELS[assetId]?.label ?? assetId)
+  }
+  return IMAGE_LABELS[assetId]?.label ?? assetId
 }
 
 const BIO_LIMITS = {
@@ -61,7 +77,7 @@ export default function BrandKitView({ kit, onRegenerate }) {
       <Section title="Visual identity">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
           {Object.entries(a.images || {}).filter(([assetId]) => !assetId.startsWith('logo_option_')).map(([assetId, img]) => {
-            const label = IMAGE_LABELS[assetId]?.label ?? assetId
+            const label = labelForAsset(assetId, a)
             const dims = IMAGE_LABELS[assetId]?.dims ?? ''
             return (
               <div key={assetId} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 12 }}>
@@ -106,6 +122,19 @@ export default function BrandKitView({ kit, onRegenerate }) {
                 <CopyableText text={a.cta} />
               </div>
             )}
+          </div>
+        </Section>
+      )}
+
+      {/* Instagram page name (searchable display name, not the @username) */}
+      {a.instagram_page_name && (
+        <Section title="Instagram page name">
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 12 }}>
+            <div style={{ color: '#64748B', fontSize: 11, marginBottom: 6 }}>
+              The bold “Name” field on the profile (not the @username). Includes a searchable term so the page ranks in Instagram search.
+            </div>
+            <div style={{ color: '#F1F5F9', fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{a.instagram_page_name}</div>
+            <CopyableText text={a.instagram_page_name} />
           </div>
         </Section>
       )}
@@ -157,6 +186,21 @@ export default function BrandKitView({ kit, onRegenerate }) {
         </div>
         <CopyableText text={(a.hashtags || []).join(' ')} />
       </Section>
+
+      {/* SEO / discovery keywords */}
+      {a.keywords?.length > 0 && (
+        <Section title="SEO keywords">
+          <div style={{ color: '#64748B', fontSize: 11, marginBottom: 8 }}>
+            Search terms customers type to find this business — use them in bios, captions, alt text, and highlight titles.
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {a.keywords.map(k => (
+              <span key={k} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#CBD5E1', borderRadius: 100, padding: '4px 12px', fontSize: 12 }}>{k}</span>
+            ))}
+          </div>
+          <CopyableText text={a.keywords.join(', ')} />
+        </Section>
+      )}
 
       {/* Content pillars */}
       <Section title="Content pillars">
