@@ -17,6 +17,7 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
     business_description: '', industry: '', audience: '',
     vibe: [], color_preference: '', inspirations: '',
     voice_tone_preference: '', existing_logo_url: '',
+    website_url: '',
     style_preset: 'auto',
     brand_colors: { primary: '', secondary: '', accent: '' },
   })
@@ -78,6 +79,7 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
         style_preset: form.style_preset || 'auto',
         existing_logo_url: form.existing_logo_url.trim() || undefined,
         voice_tone_preference: form.voice_tone_preference.trim() || undefined,
+        website_url: form.website_url.trim() || undefined,
         ...(validBrandColors.length > 0 ? { brand_colors: validBrandColors } : {}),
       }
       const { data: { session } } = await supabase.auth.getSession()
@@ -111,6 +113,9 @@ export default function PortalBrandKitIntakeForm({ onStarted }) {
         </Field>
         <Field label="Industry *">
           <input value={form.industry} onChange={(e) => setField('industry', e.target.value)} style={inputStyle} />
+        </Field>
+        <Field label="Website URL (optional)">
+          <input value={form.website_url} onChange={(e) => setField('website_url', e.target.value)} style={inputStyle} placeholder="e.g. www.yourbrand.com — shown under your logo on cover art" />
         </Field>
         <Field label="Target audience *">
           <textarea value={form.audience} onChange={(e) => setField('audience', e.target.value)} style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} placeholder="Who's your ideal customer?" />

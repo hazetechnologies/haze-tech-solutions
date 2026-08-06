@@ -238,9 +238,10 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
     setSubmitting(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      // Strip the per-role hex object (sent as validated array shape below) and
-      // website_url (scrape-only input for the autofill button — not part of
-      // the kit-generation payload).
+      // Strip the per-role hex object (sent as a validated array shape below) and
+      // the raw website_url (re-added trimmed). website_url feeds BOTH the
+      // autofill scrape AND the URL rendered under the logo on the cinematic
+      // cover banners.
       const { brand_colors: _bc, website_url: _wu, ...formClean } = form
       const inputs = {
         path: isPath1 ? 'audit_prefill' : 'cold_start',
@@ -250,6 +251,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
         imagery_direction: form.imagery_direction.trim() || undefined,
         tagline_override: form.tagline_override.trim() || undefined,
         cta_override: form.cta_override.trim() || undefined,
+        website_url: form.website_url.trim() || undefined,
         ...(validBrandColors.length > 0 ? { brand_colors: validBrandColors } : {}),
       }
       const res = await fetch('/api/start-brand-kit', {
@@ -321,6 +323,7 @@ export default function BrandKitIntakeForm({ client, linkedAudit, previousInputs
         </div>
         <p style={{ color: '#64748B', fontSize: '11px', margin: '4px 0 0' }}>
           Reads the site + your uploaded logo and fills in the fields below. Review before generating.
+          This URL is also rendered under the logo on the cinematic cover banners.
         </p>
         {autofillErr && <p style={{ color: '#FCA5A5', fontSize: '11px', margin: '4px 0 0' }}>{autofillErr}</p>}
       </Field>

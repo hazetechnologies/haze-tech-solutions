@@ -56,5 +56,14 @@ export function validateBrandKitInputs(inputs) {
       return { ok: false, error: `style_preset must be one of ${allowed.join(', ')}` }
     }
   }
+  // Optional brand website — rendered under the logo on the cinematic covers.
+  // Lenient: accept a bare domain or a full URL; just bound the length and
+  // reject obvious junk (whitespace/newlines). Empty/absent is fine.
+  if (inputs.website_url !== undefined && inputs.website_url !== null && inputs.website_url !== '') {
+    if (typeof inputs.website_url !== 'string') return { ok: false, error: 'website_url must be a string' }
+    const w = inputs.website_url.trim()
+    if (w.length > 200) return { ok: false, error: 'website_url must be 200 characters or fewer' }
+    if (/\s/.test(w)) return { ok: false, error: 'website_url must not contain spaces' }
+  }
   return { ok: true }
 }

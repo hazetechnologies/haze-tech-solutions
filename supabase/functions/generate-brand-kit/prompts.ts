@@ -349,3 +349,116 @@ export function buildHighlightCoverPrompt(
     `IMPORTANT: exactly ONE icon and ONLY the single word "${title}" as text — no other words, no letters, no numbers, no photographic imagery, no busy background, no logos, no watermarks, no borders or frames.${overall}`,
   ].join(' ')
 }
+
+// ── Cinematic cover banner prompt (whole-image gpt-image-1 IMAGE EDIT) ──
+//
+// This is the "$100k campaign" path the user asked for: the banner is ONE
+// cohesive photorealistic scene with the uploaded logo BLENDED into the center
+// (not a KIE scenery backdrop with a pasted-on overlay). Built as a professional
+// creative brief in the user's 12-part order: Mission → Audience → Emotion →
+// Story → Scene → Hero Elements → Composition → Branding → Colors → Lighting →
+// Style → Quality Rules → Final Creative Direction. Driven by the brand inputs
+// so it's generic across brands (swap mission/audience/story/heroes; the
+// structure stays). Consumed by the /images/edits call with the logo as input.
+export function normalizeUrlForDisplay(url?: string): string {
+  const u = (url || '').trim()
+  if (!u) return ''
+  return u.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
+}
+
+const COVER_ORIENTATION: Record<string, string> = {
+  banner_ig: 'a vertical 9:16 portrait Instagram story cover',
+  banner_fb: 'a wide horizontal Facebook cover',
+  banner_yt: 'a wide 16:9 cinematic YouTube channel banner',
+  banner_x: 'an ultra-wide horizontal X (Twitter) header',
+  banner_linkedin_cover: 'an ultra-wide horizontal LinkedIn company cover',
+}
+
+export function buildCinematicCoverPrompt(
+  assetId: string,
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  art?: ArtDirection | null,
+  branding?: { website?: string; tagline?: string },
+  // backgroundOnly = render the SCENE with NO baked logo/text, keeping the
+  // center calm — used for YouTube, where the exact logo + URL are composited
+  // into the 1546×423 safe strip afterward (a hard guarantee the model can't give).
+  opts?: { backgroundOnly?: boolean },
+): string {
+  const orientation = COVER_ORIENTATION[assetId] || 'a premium social media cover'
+  const isYouTube = assetId === 'banner_yt'
+  const backgroundOnly = !!opts?.backgroundOnly
+  const vibe = inputs.vibe.join(', ')
+  const paletteText = palette.map((c) => `${c.name} ${c.hex}`).join(', ')
+  const website = normalizeUrlForDisplay(branding?.website)
+  const tagline = (branding?.tagline || '').trim()
+
+  // Scene + hero elements come from the admin's imagery_direction / the
+  // art-director's imagery style; otherwise the model infers an aspirational
+  // scene from the industry + audience.
+  const sceneDir = [inputs.imagery_direction?.trim(), art?.banner_imagery_style?.trim()]
+    .filter(Boolean).join('; ')
+  const sceneLine = sceneDir
+    ? `Build the environment from this direction: ${sceneDir}.`
+    : `Build an aspirational, premium real-world environment that best represents ${inputs.industry} for this audience.`
+
+  // 8. Branding — how the logo + text appear.
+  const brandingText = website
+    ? `Below the logo, display "${website}" in elegant modern typography, correctly spelled.`
+    : tagline
+      ? `Below the logo, display the tagline "${tagline}" in elegant typography, correctly spelled.`
+      : `Keep clean, uncluttered space around the logo — no other text.`
+
+  const overall = art?.style_summary?.trim() ? ` Overall art direction: ${art.style_summary.trim()}.` : ''
+
+  // Background-only (YouTube): no baked logo/text; the exact logo + URL are
+  // composited into the safe strip afterward.
+  if (backgroundOnly) {
+    return [
+      `MISSION: Create ${orientation} BACKGROUND for "${inputs.business_name}", a ${vibe} ${inputs.industry} brand${inputs.business_description ? ` — ${inputs.business_description}` : ''}. A premium cinematic scene; the brand logo will be added separately.`,
+      `AUDIENCE: It must impress ${inputs.audience}.`,
+      `EMOTION: Viewers should feel ${vibe}, inspired and drawn in.`,
+      `STORY: ${inputs.business_description ? inputs.business_description : `Show the best of what ${inputs.business_name} delivers`} — one cohesive scene.`,
+      `SCENE: ${sceneLine}`,
+      `HERO ELEMENTS: Feature the signature subjects of this brand as the stars (from the direction above), rendered beautifully and realistically. No duplicated or floating objects.`,
+      `COMPOSITION: Wide, balanced, immersive. Keep the CENTER of the frame — a horizontal band across the middle (roughly the middle 60% of the width and middle 30% of the height) — CALM and relatively uncluttered, softly lit, so the brand logo and website can be overlaid there afterward and stay legible. Put the richest scenery, hero elements and sky ABOVE, BELOW and to the SIDES of that central band.`,
+      `BRANDING: Render ABSOLUTELY NO logo, wordmark, text, letters, numbers, URL, watermark or UI panels anywhere. This is a clean photographic scene only.`,
+      `COLORS: Use this luxury brand palette — ${paletteText}${inputs.color_preference ? ` (${inputs.color_preference})` : ''}. Rich, harmonious, on-brand.`,
+      `LIGHTING: Golden-hour, cinematic volumetric sunlight, HDR, soft rim lighting, warm highlights, deep shadows, gentle lens bloom and atmospheric haze, natural reflections.`,
+      `STYLE: Ultra-realistic, photorealistic, 8K HDR — luxury tourism/commercial-advertising quality, cinematic award-winning photography${inputs.inspirations ? `, in the spirit of ${inputs.inspirations}` : ''}.${overall}`,
+      `QUALITY: Every object highly detailed and razor sharp. No clutter, no floating objects, no duplicated people, perfect perspective, natural lighting, NO AI artifacts. Looks like a $100,000 campaign.`,
+      `FINAL DIRECTION: A single cohesive cinematic scene worthy of an international campaign — not a collage. Keep the middle open and calm for the branding that follows.`,
+    ].join('\n')
+  }
+
+  return [
+    // 1. Mission
+    `MISSION: Create ${orientation} for "${inputs.business_name}", a ${vibe} ${inputs.industry} brand${inputs.business_description ? ` — ${inputs.business_description}` : ''}. This is a premium marketing hero image.`,
+    // 2. Audience
+    `AUDIENCE: It must impress ${inputs.audience}.`,
+    // 3. Emotion
+    `EMOTION: Viewers should feel ${vibe}, inspired and drawn in — as if they are already experiencing what this brand offers. Emotion matters more than any single object.`,
+    // 4. Main Story
+    `STORY: The image tells ONE cohesive story${inputs.business_description ? `: ${inputs.business_description}` : ` about the best of what ${inputs.business_name} delivers`}. Every element works together toward that story.`,
+    // 5. Scene
+    `SCENE: ${sceneLine}`,
+    // 6. Hero Elements
+    `HERO ELEMENTS: Feature the signature subjects of this brand as the stars of the scene (drawn from the direction above), rendered beautifully and realistically. No duplicated or floating objects.`,
+    // 7. Composition
+    `COMPOSITION: Perfectly balanced. Reserve the CENTER for the brand identity with generous breathing room; arrange the scene and hero elements around it so every line leads the eye toward the center. Open sky and light toward the top; the ground/water/floor and the website text toward the bottom.`,
+    // 7b. YouTube safe zone — critical, only for banner_yt.
+    ...(isYouTube ? [`YOUTUBE SAFE ZONE (critical): the final banner is 2560×1440 but only the CENTERED 1546×423 region is guaranteed visible on every device (TV, desktop, mobile). The logo + the website text together must be COMPACT and sit ENTIRELY inside that central band: size the whole brand lockup to occupy at most the middle ~45% of the width and — most importantly — at most the middle ~28% of the HEIGHT (about a fifth-to-a-quarter of the image tall), vertically centered, with clear margin above and below it. Do NOT enlarge the logo to fill the frame — keep it small and centered. Fill the generous remaining space ABOVE and BELOW (open sky at top, water/scenery at bottom) and to the left and right with the cinematic scene that can be safely cropped. Nothing important in the outer thirds or near any edge; the compact centered lockup must read perfectly even if everything outside the band is cut off.`] : []),
+    // 8. Branding
+    `BRANDING: Use the uploaded logo, placed in the exact center and BLENDED naturally into the artwork — it must NOT look pasted on. It should catch the eye first while staying integrated. ${brandingText}`,
+    // 9. Colors
+    `COLORS: Use this luxury brand palette — ${paletteText}${inputs.color_preference ? ` (${inputs.color_preference})` : ''}. Keep colors rich, harmonious and on-brand.`,
+    // 10. Lighting
+    `LIGHTING: Golden-hour, cinematic volumetric sunlight, HDR, soft rim lighting, warm highlights, deep shadows, gentle lens bloom and atmospheric haze, natural reflections.`,
+    // 11. Style
+    `STYLE: Ultra-realistic, photorealistic, 8K HDR — luxury tourism/commercial-advertising quality, magazine-cover polish, cinematic and award-winning photography${inputs.inspirations ? `, in the spirit of ${inputs.inspirations}` : ''}.${overall}`,
+    // 12. Quality Rules
+    `QUALITY: Every object highly detailed and razor sharp. No clutter, no random floating objects, no duplicated people, perfect perspective, balanced composition, professional typography, natural lighting. It should look like it cost $100,000 to produce, with NO AI artifacts.`,
+    // Final Creative Direction
+    `FINAL DIRECTION: Design this as the hero image for the homepage of a billion-dollar ${inputs.industry} brand. Every element should naturally guide the viewer's eye toward the center logo while showcasing what makes ${inputs.business_name} exceptional. Cohesive, immersive, elegant, worthy of an international campaign. Do NOT make it look like a collage — every object belongs naturally within the same single cinematic scene.`,
+  ].join('\n')
+}

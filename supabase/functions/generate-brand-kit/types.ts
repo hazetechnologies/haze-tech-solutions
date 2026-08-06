@@ -30,6 +30,11 @@ export interface BrandKitInputs {
   tagline_override?: string
   cta_override?: string
 
+  // Optional brand website. When set, it's rendered under the logo on the
+  // cinematic cover banners (e.g. "www.florvania.com"). Also the URL the
+  // autofill action scrapes. When empty, covers fall back to the tagline.
+  website_url?: string
+
   // Optional named visual style preset that guides the art-director prompt
   // (see prompts.ts STYLE_PRESETS). Unset or 'auto' infers style from the
   // rest of the brand brief instead.
