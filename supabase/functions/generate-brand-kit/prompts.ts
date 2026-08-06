@@ -327,17 +327,25 @@ export function buildHighlightCoverPrompt(
   const primary = palette.find((c) => c.name === 'primary')?.hex || '#0F172A'
   const secondary = palette.find((c) => c.name === 'secondary')?.hex || primary
   const accent = palette.find((c) => c.name === 'accent')?.hex || primary
+  const light = palette.find((c) => c.name === 'light')?.hex || '#FFFFFF'
   const title = (cover.title || '').trim()
   const keyword = (cover.keyword || '').trim()
-  const styleBits = art && (art.style_summary || art.typography)
-    ? ` Style direction — overall: ${art.style_summary}; typography: ${art.typography}.`
-    : ''
+  // Pin the FONT so every cover in the set matches. Prefer the art-director's
+  // typography; otherwise a sensible default tied to the brand vibe. (The old
+  // prompt hardcoded "sans-serif" AND appended a possibly-serif art direction —
+  // the two conflicted and the set came out inconsistent.)
+  const typography = (art?.typography?.trim()) || `an elegant premium ${inputs.vibe[0] || 'modern'} serif`
+  const overall = art?.style_summary?.trim() ? ` Overall aesthetic: ${art.style_summary.trim()}.` : ''
+  // Everything below is pinned (background, text color, layout, line weight) so
+  // the 5 covers render as a uniform SET even though each is generated
+  // independently with no shared reference image.
   return [
-    `Instagram Story Highlight cover for the brand "${inputs.business_name}" (${inputs.industry}).`,
-    `Design: a SINGLE simple, modern, flat/line pictogram icon representing "${keyword || title}", perfectly centered, drawn in the accent color ${accent} on a smooth ${primary}${secondary && secondary !== primary ? `-to-${secondary}` : ''} background (a solid brand color or a subtle brand-color gradient).`,
-    `Below the icon, render the word "${title}" once, in a clean ${inputs.vibe[0] || 'modern'} sans-serif, high contrast against the background, correctly spelled.`,
-    `Keep ALL content within the centered middle circle with generous padding on every side, because Instagram crops this to a small circle — nothing important near the corners or edges.`,
-    `Minimal and premium. Brand palette only (primary ${primary}, secondary ${secondary}, accent ${accent}).`,
-    `IMPORTANT: exactly ONE icon and ONLY the single word "${title}" as text — no other words, no letters, no numbers, no photographic imagery, no busy background, no logos, no watermarks, no borders or frames.${styleBits}`,
+    `Instagram Story Highlight cover for "${inputs.business_name}" (${inputs.industry}) — ONE of a MATCHING SET of 5 covers that MUST look identical in style; only the icon subject and the single word change between covers.`,
+    `Background (use this EXACT treatment on every cover): a smooth diagonal gradient from ${primary} at the top-left to ${secondary} at the bottom-right, with a soft, slightly darker circular glow centered in the frame.`,
+    `Icon: a SINGLE minimal thin-line pictogram of "${keyword || title}", centered in the UPPER-MIDDLE, drawn in the accent color ${accent} with a consistent medium line weight — line art only, no fills, no photo, no 3D, exactly one icon.`,
+    `Title: the single word "${title}" centered directly BELOW the icon, in ${typography}, colored ${light} (NOT the accent color, NOT a second color), correctly spelled, large and clearly legible.`,
+    `Layout: the icon and word are grouped in the exact center of the frame with generous, even padding on all sides — Instagram crops this to a small circle, so keep everything well inside the center and nothing near the corners or edges.`,
+    `Flat, minimal, premium. Brand palette only (primary ${primary}, secondary ${secondary}, accent ${accent}, light ${light}).`,
+    `IMPORTANT: exactly ONE icon and ONLY the single word "${title}" as text — no other words, no letters, no numbers, no photographic imagery, no busy background, no logos, no watermarks, no borders or frames.${overall}`,
   ].join(' ')
 }
