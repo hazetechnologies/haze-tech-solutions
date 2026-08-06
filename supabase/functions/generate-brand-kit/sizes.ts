@@ -27,6 +27,13 @@ export const SIZES: Record<ImageAssetId, SizeSpec> = {
   banner_x:        { generationSize: '1536x1024', finalWidth: 1500, finalHeight: 500,  fit: 'cover' },
   banner_tiktok:        { generationSize: '1024x1024', finalWidth: 200,  finalHeight: 200,  fit: 'cover' },
   banner_linkedin_cover:{ generationSize: '1536x1024', finalWidth: 1128, finalHeight: 191,  fit: 'cover' },
+  // Instagram Highlight covers — square, whole-image gpt-image-1 designs. Kept
+  // 1:1 with a centered subject so they read inside IG's circular crop.
+  highlight_cover_1:    { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
+  highlight_cover_2:    { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
+  highlight_cover_3:    { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
+  highlight_cover_4:    { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
+  highlight_cover_5:    { generationSize: '1024x1024', finalWidth: 1024, finalHeight: 1024, fit: 'fill' },
 }
 
 export const ALL_ASSET_IDS: ImageAssetId[] = Object.keys(SIZES) as ImageAssetId[]

@@ -1,11 +1,15 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
-import { resolveStylePreset, parseArtDirection, buildImagePrompt, EMPTY_ART_DIRECTION } from './prompts.ts'
+import { resolveStylePreset, parseArtDirection, buildImagePrompt, buildHighlightCoverPrompt, STRUCTURED_SCHEMA, EMPTY_ART_DIRECTION } from './prompts.ts'
 
 const inputs = {
   path: 'cold_start', business_name: 'Acme', industry: 'Coffee', audience: 'Locals',
   vibe: ['warm'], inspirations: 'Blue Bottle',
 } as any
-const palette = [{ name: 'primary', hex: '#112233', use: '' }] as any
+const palette = [
+  { name: 'primary', hex: '#112233', use: '' },
+  { name: 'secondary', hex: '#445566', use: '' },
+  { name: 'accent', hex: '#FF8800', use: '' },
+] as any
 
 Deno.test('resolveStylePreset returns preset guidance for a known preset', () => {
   assertEquals(resolveStylePreset('luxury').includes('luxury'), true)
@@ -43,4 +47,33 @@ Deno.test('buildImagePrompt is unchanged when art is null', () => {
   const withNull = buildImagePrompt('logo_option_1', inputs, palette, null)
   const without = buildImagePrompt('logo_option_1', inputs, palette)
   assertEquals(withNull, without)
+})
+
+// ── Highlight covers + discovery fields ──
+
+Deno.test('STRUCTURED_SCHEMA requires keywords, instagram_page_name, highlight_covers', () => {
+  const req = STRUCTURED_SCHEMA.schema.required as readonly string[]
+  assertEquals(req.includes('keywords'), true)
+  assertEquals(req.includes('instagram_page_name'), true)
+  assertEquals(req.includes('highlight_covers'), true)
+  const covers = (STRUCTURED_SCHEMA.schema.properties as any).highlight_covers
+  assertEquals(covers.minItems, 5)
+  assertEquals(covers.maxItems, 5)
+})
+
+Deno.test('buildHighlightCoverPrompt bakes in the title + keyword and forbids extra text', () => {
+  const p = buildHighlightCoverPrompt({ title: 'Tours', keyword: 'florida tours' }, inputs, palette, null)
+  assertEquals(p.includes('"Tours"'), true)
+  assertEquals(p.includes('florida tours'), true)
+  assertEquals(p.includes('#FF8800'), true)            // accent color present
+  assertEquals(p.toLowerCase().includes('no other words'), true)
+  assertEquals(p.toLowerCase().includes('circle'), true) // safe-area guidance
+})
+
+Deno.test('buildHighlightCoverPrompt is deterministic and injects typography from art', () => {
+  const a = buildHighlightCoverPrompt({ title: 'About', keyword: 'coffee' }, inputs, palette, null)
+  const b = buildHighlightCoverPrompt({ title: 'About', keyword: 'coffee' }, inputs, palette, null)
+  assertEquals(a, b)
+  const withArt = buildHighlightCoverPrompt({ title: 'About', keyword: 'coffee' }, inputs, palette, { ...EMPTY_ART_DIRECTION, typography: 'ZTYPEZ' })
+  assertEquals(withArt.includes('ZTYPEZ'), true)
 })

@@ -88,7 +88,7 @@ export const STRUCTURED_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['bios', 'hashtags', 'handles', 'platform_priority', 'tagline', 'cta'],
+    required: ['bios', 'hashtags', 'handles', 'platform_priority', 'tagline', 'cta', 'keywords', 'instagram_page_name', 'highlight_covers'],
     properties: {
       bios: {
         type: 'object',
@@ -118,6 +118,33 @@ export const STRUCTURED_SCHEMA = {
       tagline: { type: 'string', maxLength: 80 },
       // 2-4 words. Action verb phrase ("Book Now", "Get a Quote") that goes ON the banner.
       cta:     { type: 'string', maxLength: 24 },
+      // 8-12 lowercase search terms a customer would type, drawn from the
+      // industry + what the business does. Used as SEO/discovery keywords and to
+      // seed the highlight-cover titles.
+      keywords: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 8, maxItems: 12,
+      },
+      // The Instagram profile display NAME (the "Name" field, NOT the @username).
+      // Must contain a searchable category term so the page ranks in IG search.
+      instagram_page_name: { type: 'string', maxLength: 60 },
+      // Exactly 5 Instagram Highlight covers. Each title is 1-2 words a visitor
+      // taps (About, Tours, Reviews…) and must echo one keyword; keyword is the
+      // matching search term.
+      highlight_covers: {
+        type: 'array',
+        minItems: 5, maxItems: 5,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['title', 'keyword'],
+          properties: {
+            title:   { type: 'string', maxLength: 18 },
+            keyword: { type: 'string', maxLength: 40 },
+          },
+        },
+      },
     },
   },
 } as const
@@ -132,6 +159,9 @@ export function buildStructuredSystemPrompt(): string {
     'For platform_priority (Path 3 only): one paragraph (max 80 words). Recommend ONE platform to launch first based on the audience and industry. Justify briefly.',
     'For tagline: a short brand promise / positioning phrase that gets rendered ON marketing banners. 5-8 words, title-cased or sentence case, NO emoji, NO trailing punctuation. Avoid the word "the". Should be memorable, evocative, and tied to what makes this brand distinct. Examples: "Luxury Living, Seamlessly Managed." — "Code That Compounds." — "Your AI Co-Pilot for Customer Conversations."',
     'For cta: a short action phrase rendered ON banners as a button label. 2-4 words, title case, NO emoji, NO trailing punctuation. Must match the brand\'s primary conversion action (buy, book, schedule, download, sign up). Examples: "Book Your Stay" — "Start Free Trial" — "Get a Quote" — "Schedule a Call".',
+    'For keywords: 8-12 lowercase search terms a real customer would type into Instagram or Google to find this business. Derive them from the industry and what the business does — mix the core category, the location/region if any, and the specific products or services. Plain words/short phrases, NO "#", no duplicates. Example (a Florida tour brand): ["florida tours", "yacht charters", "key west excursions", "everglades tours", "miami boat tours", "florida vacation", "things to do in florida", "sunset cruises"].',
+    'For instagram_page_name: the Instagram profile Name field (the bold display name, NOT the @username). Keep it under ~30 characters and ALWAYS append a searchable category term after the brand name so the profile surfaces in IG search — pattern "Brand | Searchable Category". Examples: "Florvania | Florida Tours" — "Acme | Austin Plumber" — "Lumen | Skincare".',
+    'For highlight_covers: exactly 5 Instagram Story Highlight covers. Each has a "title" (1-2 words, Title Case, that a visitor taps — e.g. About, Tours, Reviews, Booking, Gallery, Menu, FAQ) and a "keyword" (the matching search term from the keywords list, or closely related). Each title MUST contain or clearly echo a keyword/topic so the highlights double as search signals. Choose the 5 most useful highlights for THIS specific business.',
   ].join('\n\n')
 }
 
@@ -279,4 +309,35 @@ export function buildImagePrompt(
     default:
       return baseStyle
   }
+}
+
+// ── Instagram Highlight cover prompt (whole-image gpt-image-1, opaque) ──
+//
+// Unlike banners (KIE scenery + deterministic overlay), a highlight cover is a
+// small, simple, icon-forward design best rendered as ONE complete gpt-image-1
+// image — the same way ChatGPT produces them. The short title text is baked in
+// by the model; everything is centered inside a safe circle because Instagram
+// crops highlight covers to a small circle.
+export function buildHighlightCoverPrompt(
+  cover: { title: string; keyword: string },
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  art?: ArtDirection | null,
+): string {
+  const primary = palette.find((c) => c.name === 'primary')?.hex || '#0F172A'
+  const secondary = palette.find((c) => c.name === 'secondary')?.hex || primary
+  const accent = palette.find((c) => c.name === 'accent')?.hex || primary
+  const title = (cover.title || '').trim()
+  const keyword = (cover.keyword || '').trim()
+  const styleBits = art && (art.style_summary || art.typography)
+    ? ` Style direction — overall: ${art.style_summary}; typography: ${art.typography}.`
+    : ''
+  return [
+    `Instagram Story Highlight cover for the brand "${inputs.business_name}" (${inputs.industry}).`,
+    `Design: a SINGLE simple, modern, flat/line pictogram icon representing "${keyword || title}", perfectly centered, drawn in the accent color ${accent} on a smooth ${primary}${secondary && secondary !== primary ? `-to-${secondary}` : ''} background (a solid brand color or a subtle brand-color gradient).`,
+    `Below the icon, render the word "${title}" once, in a clean ${inputs.vibe[0] || 'modern'} sans-serif, high contrast against the background, correctly spelled.`,
+    `Keep ALL content within the centered middle circle with generous padding on every side, because Instagram crops this to a small circle — nothing important near the corners or edges.`,
+    `Minimal and premium. Brand palette only (primary ${primary}, secondary ${secondary}, accent ${accent}).`,
+    `IMPORTANT: exactly ONE icon and ONLY the single word "${title}" as text — no other words, no letters, no numbers, no photographic imagery, no busy background, no logos, no watermarks, no borders or frames.${styleBits}`,
+  ].join(' ')
 }
