@@ -91,14 +91,12 @@ const REFERENCE_ASSET_IDS: ImageAssetId[] = [
 ]
 // Instagram Highlight covers — whole-image gpt-image-1 designs generated in the
 // same (post-approval) phase as the banners, but via OpenAI direct, not KIE.
+// BEST-EFFORT: they are NOT part of the completion gate (banners are), so an
+// unrenderable cover can't fail an otherwise-complete kit.
 const HIGHLIGHT_COVER_IDS: ImageAssetId[] = [
   'highlight_cover_1', 'highlight_cover_2', 'highlight_cover_3',
   'highlight_cover_4', 'highlight_cover_5',
 ]
-// Every image the post-approval (banner) phase must produce before the kit is
-// "done". Drives the completion / resume / self-invoke accounting so covers are
-// guaranteed and retried exactly like banners (NOT silently dropped).
-const POST_APPROVAL_REQUIRED_IDS: ImageAssetId[] = [...REFERENCE_ASSET_IDS, ...HIGHLIGHT_COVER_IDS]
 // Sensible default highlight titles used to backfill when the model returns
 // fewer than 5 (mini isn't run in strict mode).
 const DEFAULT_HIGHLIGHT_TITLES = ['About', 'Services', 'Reviews', 'Gallery', 'Contact', 'Booking', 'FAQ']
@@ -145,6 +143,11 @@ async function processBrandKit(
   phase: 'all' | 'logos_then_pause' | 'banners' | 'logos_only',
   existing_logos?: Partial<Record<ImageAssetId, ImageAssetRef>>,
 ): Promise<void> {
+  // Function-entry time. Shared with generateBanners so its wall-time budget
+  // accounts for time already spent this invocation on derived logos + covers —
+  // otherwise banners could push the invocation past Supabase's ~150s hard cap
+  // before it gets a chance to fire the self-invoke.
+  const runStartedAt = Date.now()
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -208,30 +211,30 @@ async function processBrandKit(
         await update({ status: 'failed', error: `approved logo asset (${approvedLogoKey}) not found` })
         return
       }
-      // Resume-safe: skip banners we already have on the row.
+      // Resume-safe: skip banners we already have on the row. BANNERS are the
+      // completion gate — covers are best-effort (see generateHighlightCovers)
+      // so one unrenderable cover can never fail an otherwise-complete kit.
       const alreadyDone = new Set<string>(
         REFERENCE_ASSET_IDS.filter((id) => existingImages[id]?.public_url),
       )
-      // Snapshot of ALL required post-approval assets (banners + covers) already
-      // present — drives the progress/completion accounting below.
-      const preDone = new Set<string>(
-        POST_APPROVAL_REQUIRED_IDS.filter((id) => existingImages[id]?.public_url),
-      )
       await update({
         status: 'generating',
-        progress_message: preDone.size === 0
+        progress_message: alreadyDone.size === 0
           ? 'Generating banners & highlight covers…'
-          : `Resuming assets (${preDone.size}/${POST_APPROVAL_REQUIRED_IDS.length} already done)…`,
+          : `Resuming (${alreadyDone.size}/${REFERENCE_ASSET_IDS.length} banners done)…`,
       })
       const persist = makePersistBanner()
       const artDirection = (existingAssets.art_direction ?? null) as ArtDirection | null
       const bannerErrors: string[] = []
+      const coverErrors: string[] = []
       // Derive icon + monochrome from the brand alongside the banners (resume-safe).
       await ensureDerivedLogos(inputs, existingAssets.color_palette ?? [], client_id, kit_id, existingImages, persist, artDirection)
-      // Instagram highlight covers (whole-image gpt-image-1, resume-safe, fail-soft).
+      // Instagram highlight covers — best-effort: resume-safe, fail-soft, and
+      // NOT part of the completion gate. Their errors go to coverErrors so they
+      // never contaminate the banner failure decision below.
       await generateHighlightCovers(
         inputs, existingAssets.color_palette ?? [], client_id, kit_id, existingImages, persist,
-        artDirection, existingAssets.highlight_covers, bannerErrors,
+        artDirection, existingAssets.highlight_covers, coverErrors,
       )
       await generateBanners(
         inputs, existingAssets.color_palette ?? [], client_id, kit_id, approvedRef.public_url,
@@ -240,6 +243,7 @@ async function processBrandKit(
         alreadyDone,
         bannerErrors,
         artDirection,
+        runStartedAt,
       )
       // Re-read final state since per-banner writes mutated the row.
       const { data: finalRow } = await supabase
@@ -248,25 +252,22 @@ async function processBrandKit(
         .eq('id', kit_id)
         .single()
       const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
-      const allDone = POST_APPROVAL_REQUIRED_IDS.every((id) => finalImages[id]?.public_url)
-      const nowDone = POST_APPROVAL_REQUIRED_IDS.filter((id) => finalImages[id]?.public_url).length
-      const madeProgress = nowDone > preDone.size
-      const missing = POST_APPROVAL_REQUIRED_IDS.filter(id => !finalImages[id]?.public_url)
+      const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
+      const nowDone = REFERENCE_ASSET_IDS.filter((id) => finalImages[id]?.public_url).length
+      // Self-invoke when we made banner progress OR when nothing errored (the
+      // round simply ran out of wall-time budget — e.g. covers used it). Only
+      // finalize as failed when banners are incomplete AND actually errored, so
+      // a real reason (e.g. KIE credits) surfaces instead of looping forever.
+      const missing = REFERENCE_ASSET_IDS.filter(id => !finalImages[id]?.public_url)
       if (allDone) {
         await update({ status: 'done', progress_message: null, error: null })
-      } else if (madeProgress) {
-        // Wall-time budget hit but we DID complete some banners this round.
-        // Chain a self-invoke to finish the rest. The new invocation sees
-        // partial state in the row and only generates what's missing.
+      } else if (nowDone > alreadyDone.size || bannerErrors.length === 0) {
         await update({
           status: 'generating',
-          progress_message: `${nowDone}/${POST_APPROVAL_REQUIRED_IDS.length} assets done, continuing…`,
+          progress_message: `${nowDone}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
         })
         await chainSelfInvoke(kit_id)
       } else {
-        // No progress at all this invocation — finalize as failed instead of
-        // looping forever. Surface the underlying reason (e.g. KIE credits) if
-        // we captured one.
         const reason = summarizeBannerErrors(bannerErrors)
         await update({
           status: 'failed',
@@ -353,10 +354,12 @@ async function processBrandKit(
       await ensureDerivedLogos(inputs, textAssets.color_palette, client_id, kit_id, images, persistAll, textAssets.art_direction ?? null)
     }
     const bannerErrors: string[] = []
-    // Instagram highlight covers (whole-image gpt-image-1, resume-safe, fail-soft).
+    const coverErrors: string[] = []
+    // Instagram highlight covers — best-effort (see banners phase): resume-safe,
+    // fail-soft, NOT part of the completion gate; errors kept separate.
     await generateHighlightCovers(
       inputs, textAssets.color_palette, client_id, kit_id, images, persistAll,
-      textAssets.art_direction ?? null, textAssets.highlight_covers, bannerErrors,
+      textAssets.art_direction ?? null, textAssets.highlight_covers, coverErrors,
     )
     await generateBanners(
       inputs, textAssets.color_palette, client_id, kit_id, primaryRef.public_url,
@@ -365,26 +368,28 @@ async function processBrandKit(
       new Set<string>(),  // fresh run, nothing to skip
       bannerErrors,
       textAssets.art_direction ?? null,
+      runStartedAt,
     )
-    // Re-read final state since per-banner writes mutated the row.
+    // Re-read final state since per-banner writes mutated the row. BANNERS gate
+    // completion; covers are best-effort.
     const { data: finalRow } = await supabase
       .from('brand_kits')
       .select('assets')
       .eq('id', kit_id)
       .single()
     const finalImages = (((finalRow?.assets as any) || {}).images || {}) as Record<string, ImageAssetRef>
-    const allDone = POST_APPROVAL_REQUIRED_IDS.every((id) => finalImages[id]?.public_url)
-    const nowDoneCount = POST_APPROVAL_REQUIRED_IDS.filter((id) => finalImages[id]?.public_url).length
-    const missing = POST_APPROVAL_REQUIRED_IDS.filter((id) => !finalImages[id]?.public_url)
+    const allDone = REFERENCE_ASSET_IDS.every((id) => finalImages[id]?.public_url)
+    const nowDoneCount = REFERENCE_ASSET_IDS.filter((id) => finalImages[id]?.public_url).length
+    const missing = REFERENCE_ASSET_IDS.filter((id) => !finalImages[id]?.public_url)
     if (allDone) {
       await update({ status: 'done', progress_message: null })
-    } else if (nowDoneCount > 0) {
-      // Started fresh (0 present). If we landed >=1 but not all, the wall-time
-      // budget ran out. Hand off to a phase='banners' self-invoke so the
-      // remaining banners + covers get their own function budget.
+    } else if (nowDoneCount > 0 || bannerErrors.length === 0) {
+      // Made banner progress, or nothing errored (ran out of wall-time budget,
+      // e.g. covers used it) → hand off to a phase='banners' self-invoke so the
+      // remaining banners get their own function budget.
       await update({
         status: 'generating',
-        progress_message: `${nowDoneCount}/${POST_APPROVAL_REQUIRED_IDS.length} assets done, continuing…`,
+        progress_message: `${nowDoneCount}/${REFERENCE_ASSET_IDS.length} banners done, continuing…`,
       })
       chainSelfInvoke(kit_id)
     } else {
@@ -499,10 +504,16 @@ function normalizeStructuredExtras(
   structured: { keywords?: string[]; instagram_page_name?: string; highlight_covers?: { title?: string; keyword?: string }[] },
   inputs: BrandKitInputs,
 ): { keywords: string[]; instagram_page_name: string; highlight_covers: { title: string; keyword: string }[] } {
+  // Defend against loosely-typed model output: the schema constrains these to
+  // arrays, but mini isn't strict mode, so coerce non-arrays to [] rather than
+  // letting a stray object throw in the for..of below (which would fail the kit).
+  const rawKeywords = Array.isArray(structured.keywords) ? structured.keywords : []
+  const rawCovers = Array.isArray(structured.highlight_covers) ? structured.highlight_covers : []
+
   // Keywords: clean + dedupe; derive from industry + description if empty.
   const seen = new Set<string>()
   const keywords: string[] = []
-  for (const raw of structured.keywords || []) {
+  for (const raw of rawKeywords) {
     const k = (raw || '').toString().trim().toLowerCase().replace(/^#+/, '').trim()
     if (k && !seen.has(k)) { seen.add(k); keywords.push(k) }
   }
@@ -527,7 +538,7 @@ function normalizeStructuredExtras(
   // Highlight covers: keep valid provided ones, pad to exactly 5 from defaults.
   const covers: { title: string; keyword: string }[] = []
   const usedTitles = new Set<string>()
-  for (const c of structured.highlight_covers || []) {
+  for (const c of rawCovers) {
     const title = (c?.title || '').toString().trim()
     if (!title) continue
     const key = title.toLowerCase()
@@ -777,6 +788,10 @@ async function generateBanners(
   // "did not generate" string. Mutated in place.
   bannerErrors: string[] = [],
   artDirection: ArtDirection | null = null,
+  // Wall-time budget is measured from this instant. Callers pass the function
+  // entry time so time already spent on derived logos + covers counts against
+  // the budget (keeping the whole invocation under Supabase's ~150s cap).
+  startedAt: number = Date.now(),
 ): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
@@ -811,7 +826,7 @@ async function generateBanners(
   // already in the row, so each chained call only does the remaining work.
   const BATCH_SIZE = 2
   const BUDGET_MS = 85_000
-  const startedAt = Date.now()
+  // startedAt comes from the caller (function entry) — see the param note.
   const runOne = async (assetId: ImageAssetId) => {
     try {
       const spec = SIZES[assetId]
