@@ -1017,6 +1017,10 @@ async function generateImageWithRetry(
           prompt,
           size,
           n: 1,
+          // 'medium' quality: ~3-4x cheaper than 'high'/'auto' per image, with
+          // covers (photographic backgrounds) virtually indistinguishable. Keeps
+          // brand-kit generation cost low.
+          quality: 'medium',
           background,
           output_format: 'png',
         }),
