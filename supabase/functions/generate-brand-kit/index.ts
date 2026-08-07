@@ -840,42 +840,29 @@ async function generateBanners(
     try {
       const spec = SIZES[assetId]
 
-      // ── Cinematic cover: one whole gpt-image-1 IMAGE EDIT with the logo
-      // blended in (+ URL/tagline baked in). No KIE, no deterministic overlay. ──
+      // ── Cinematic cover: a gpt-image-1 cinematic BACKGROUND (no baked
+      // logo/text) with the client's EXACT approved logo + URL composited on
+      // top. Blending the logo INTO the scene (image-edit) made the model
+      // REDRAW the uploaded logo (distorted wordmark), so we composite the real
+      // file instead — the uploaded logo appears verbatim. composeBanner places
+      // it inside each platform's safe area (incl. YouTube's 1546×423 strip). ──
       if (CINEMATIC_COVER_IDS.includes(assetId)) {
         if (!logoBytes) throw new Error(`cinematic ${assetId}: approved-logo bytes unavailable`)
-
-        // YouTube is special: the exact logo + URL MUST land inside the 1546×423
-        // TV-safe strip, which a whole-image generation can't guarantee. So for
-        // YT we generate a cinematic BACKGROUND (no baked logo/text) and then
-        // composite the real logo + URL into the safe strip deterministically.
-        if (assetId === 'banner_yt') {
-          const bgPrompt = buildCinematicCoverPrompt(assetId, inputs, palette, artDirection,
-            { website: inputs.website_url, tagline }, { backgroundOnly: true })
-          const scene = await generateImageWithRetry(bgPrompt, spec.generationSize, kitId, assetId, 'opaque')
-          const resized = await resizeToFinalDims(scene, spec)
-          // The website (or tagline) is rendered beside the logo inside the safe strip.
-          const overlayText = normalizeUrlForDisplay(inputs.website_url) || tagline
-          let finalBytes = resized
-          try {
-            finalBytes = await composeBanner({
-              background: resized, logo: logoBytes, tagline: overlayText, cta: '', palette, assetId,
-            })
-          } catch (err) {
-            console.error(`compose ${assetId} failed, using bare cinematic scene:`, err instanceof Error ? err.message : err)
-          }
-          const uploaded = await uploadImage({ bytes: finalBytes, clientId, timestamp, assetId })
-          out[assetId] = uploaded
-          await persistBanner(assetId, uploaded)
-          return
+        const bgPrompt = buildCinematicCoverPrompt(assetId, inputs, palette, artDirection,
+          { website: inputs.website_url, tagline }, { backgroundOnly: true })
+        const scene = await generateImageWithRetry(bgPrompt, spec.generationSize, kitId, assetId, 'opaque')
+        const resized = await resizeToFinalDims(scene, spec)
+        // Rendered beside/under the logo: the website URL, falling back to the tagline.
+        const overlayText = normalizeUrlForDisplay(inputs.website_url) || tagline
+        let finalBytes = resized
+        try {
+          finalBytes = await composeBanner({
+            background: resized, logo: logoBytes, tagline: overlayText, cta: '', palette, assetId,
+          })
+        } catch (err) {
+          console.error(`compose ${assetId} failed, using bare cinematic scene:`, err instanceof Error ? err.message : err)
         }
-
-        const prompt = buildCinematicCoverPrompt(assetId, inputs, palette, artDirection, {
-          website: inputs.website_url, tagline,
-        })
-        const generated = await generateImageEdit(prompt, logoBytes, spec.generationSize, kitId, assetId)
-        const resized = await resizeToFinalDims(generated, spec)
-        const uploaded = await uploadImage({ bytes: resized, clientId, timestamp, assetId })
+        const uploaded = await uploadImage({ bytes: finalBytes, clientId, timestamp, assetId })
         out[assetId] = uploaded
         await persistBanner(assetId, uploaded)
         return
@@ -1090,81 +1077,4 @@ async function generateImageWithRetry(
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error(`image gen exhausted retries: ${String(lastErr)}`)
-}
-
-// Cinematic cover generation via OpenAI's IMAGE EDIT endpoint: passes the
-// approved logo as the input image so gpt-image-1 BLENDS it into a whole
-// photorealistic scene (ChatGPT's "upload logo" flow), instead of KIE scenery +
-// a pasted overlay. Returns the raw PNG bytes. Same retry/backoff shape as
-// generateImageWithRetry.
-async function generateImageEdit(
-  prompt: string,
-  logoBytes: Uint8Array,
-  size: '1024x1024' | '1024x1536' | '1536x1024',
-  kitId: string,
-  assetId: string,
-  retryDelays: number[] = IMAGE_RETRY_DELAYS_MS,
-): Promise<Uint8Array> {
-  let lastErr: unknown = null
-  for (let attempt = 0; attempt < retryDelays.length + 1; attempt++) {
-    try {
-      const start = Date.now()
-      const form = new FormData()
-      form.append('model', 'gpt-image-1')
-      form.append('prompt', prompt)
-      form.append('size', size)
-      form.append('n', '1')
-      form.append('quality', 'high')
-      // The logo is the image being "edited" — gpt-image-1 composes the scene
-      // around it and blends it in. (Cast: a Uint8Array is a valid BlobPart at
-      // runtime; Deno's lib types over-narrow it via ArrayBufferLike.)
-      form.append('image', new Blob([logoBytes as BlobPart], { type: 'image/png' }), 'logo.png')
-      const res = await fetch('https://api.openai.com/v1/images/edits', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${OPENAI_KEY}` },
-        body: form,
-      })
-      const latencyMs = Date.now() - start
-      const POSTHOG_KEY = Deno.env.get('POSTHOG_PROJECT_API_KEY')
-      const POSTHOG_HOST = Deno.env.get('POSTHOG_HOST') ?? 'https://us.i.posthog.com'
-      if (POSTHOG_KEY) {
-        fetch(`${POSTHOG_HOST}/capture/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            api_key: POSTHOG_KEY, event: '$ai_generation', distinct_id: kitId,
-            properties: {
-              $ai_model: 'gpt-image-1', $ai_provider: 'openai', $ai_latency: latencyMs,
-              $ai_http_status: res.status, surface: 'brand-kit', kit_id: kitId,
-              asset_id: assetId, mode: 'edit',
-            },
-          }),
-        }).catch(() => {})
-      }
-      if (res.status === 429 && attempt < retryDelays.length) {
-        await new Promise(r => setTimeout(r, retryDelays[attempt]))
-        continue
-      }
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '')
-        throw new Error(`gpt-image-1 edit ${res.status} on ${assetId}: ${errText.slice(0, 300)}`)
-      }
-      const json = await res.json() as { data?: Array<{ b64_json?: string; url?: string }> }
-      const item = json.data?.[0]
-      if (item?.b64_json) return Uint8Array.from(atob(item.b64_json), c => c.charCodeAt(0))
-      if (item?.url) {
-        const dl = await fetch(item.url)
-        if (!dl.ok) throw new Error(`failed to download edited image for ${assetId}: ${dl.status}`)
-        return new Uint8Array(await dl.arrayBuffer())
-      }
-      throw new Error(`gpt-image-1 edit returned no image for ${assetId}`)
-    } catch (err) {
-      lastErr = err
-      if (attempt < retryDelays.length) {
-        await new Promise(r => setTimeout(r, retryDelays[attempt]))
-        continue
-      }
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error(`image edit exhausted retries: ${String(lastErr)}`)
 }
