@@ -1271,6 +1271,14 @@ async function activateSocial(req, res) {
       hashtags: a.hashtags,
       content_pillars: a.content_pillars,
       imagery_direction: i.imagery_direction,
+      // Discovery data → first-class HSP BrandProfile columns (keywords /
+      // businessDescription / websiteUrl) that Haze Creator uses for hashtag
+      // grounding + keyword-trend remakes, plus the IG page name / highlight
+      // covers for reference.
+      keywords: a.keywords,
+      instagram_page_name: a.instagram_page_name,
+      highlight_covers: a.highlight_covers,
+      website_url: i.website_url,
     }
     const brandRes = await fetch(`${HSP_BASE}/tenants/${tenantId}/brand`, {
       method: 'PUT',
