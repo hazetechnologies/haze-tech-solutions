@@ -531,7 +531,7 @@ function normalizeStructuredExtras(
     const STOP = new Set(['the','and','for','with','that','this','from','your','our','are','you','who','what','into','a','an','of','to','in','on','we','is','it','&'])
     for (const w of src.split(/[^a-z0-9]+/)) {
       if (w.length > 3 && !STOP.has(w) && !seen.has(w)) { seen.add(w); keywords.push(w) }
-      if (keywords.length >= 8) break
+      if (keywords.length >= 15) break
     }
     if (keywords.length === 0 && inputs.industry?.trim()) keywords.push(inputs.industry.trim().toLowerCase())
   }
