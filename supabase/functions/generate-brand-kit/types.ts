@@ -109,5 +109,8 @@ export interface BrandKitAssets {
   // Specs for the 5 Instagram Highlight covers: each title contains a keyword.
   // The rendered images live in images.highlight_cover_1..5.
   highlight_covers?: { title: string; keyword: string }[]
+  // Short offering labels (Yachts, Tours, Dining…) baked as the icon strip on
+  // the cinematic cover banners.
+  services?: string[]
   images: Record<ImageAssetId, ImageAssetRef>
 }
