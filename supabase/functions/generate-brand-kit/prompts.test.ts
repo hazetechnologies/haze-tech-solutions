@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
-import { resolveStylePreset, parseArtDirection, buildImagePrompt, buildHighlightCoverPrompt, buildCinematicCoverPrompt, normalizeUrlForDisplay, STRUCTURED_SCHEMA, EMPTY_ART_DIRECTION } from './prompts.ts'
+import { resolveStylePreset, parseArtDirection, buildImagePrompt, buildHighlightCoverPrompt, buildCinematicCoverPrompt, buildCoverImg2ImgPrompt, normalizeUrlForDisplay, STRUCTURED_SCHEMA, EMPTY_ART_DIRECTION } from './prompts.ts'
 
 const inputs = {
   path: 'cold_start', business_name: 'Acme', industry: 'Coffee', audience: 'Locals',
@@ -51,14 +51,32 @@ Deno.test('buildImagePrompt is unchanged when art is null', () => {
 
 // ── Highlight covers + discovery fields ──
 
-Deno.test('STRUCTURED_SCHEMA requires keywords, instagram_page_name, highlight_covers', () => {
+Deno.test('STRUCTURED_SCHEMA requires keywords, instagram_page_name, highlight_covers, services', () => {
   const req = STRUCTURED_SCHEMA.schema.required as readonly string[]
   assertEquals(req.includes('keywords'), true)
   assertEquals(req.includes('instagram_page_name'), true)
   assertEquals(req.includes('highlight_covers'), true)
+  assertEquals(req.includes('services'), true)
   const covers = (STRUCTURED_SCHEMA.schema.properties as any).highlight_covers
   assertEquals(covers.minItems, 5)
   assertEquals(covers.maxItems, 5)
+  const svc = (STRUCTURED_SCHEMA.schema.properties as any).services
+  assertEquals(svc.minItems, 3)
+  assertEquals(svc.maxItems, 6)
+})
+
+Deno.test('buildCoverImg2ImgPrompt bakes exact text verbatim + icon strip + strict logo preserve', () => {
+  const p = buildCoverImg2ImgPrompt('banner_fb', inputs, palette, null, { website: 'https://acme.io/' }, ['Yachts', 'Tours', 'Dining'])
+  assertEquals(p.includes(`reads exactly "${inputs.business_name}"`), true) // wordmark verbatim
+  assertEquals(p.includes('acme.io'), true)                                 // url badge, protocol stripped
+  assertEquals(p.includes('"YACHTS"'), true)                                // icon-strip label, exact
+  assertEquals(p.includes('SERVICE ICON STRIP'), true)
+  assertEquals(p.toLowerCase().includes('do not redraw'), true)             // strict logo preserve
+})
+
+Deno.test('buildCoverImg2ImgPrompt omits the icon strip when fewer than 3 services', () => {
+  const p = buildCoverImg2ImgPrompt('banner_fb', inputs, palette, null, {}, ['Yachts'])
+  assertEquals(p.includes('SERVICE ICON STRIP'), false)
 })
 
 Deno.test('buildHighlightCoverPrompt bakes in the title + keyword and forbids extra text', () => {

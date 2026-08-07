@@ -11,8 +11,7 @@ import {
   buildColorPalettePrompt,
   buildImagePrompt,
   buildHighlightCoverPrompt,
-  buildCinematicCoverPrompt,
-  normalizeUrlForDisplay,
+  buildCoverImg2ImgPrompt,
   buildArtDirectorPrompt,
   parseArtDirection,
   EMPTY_ART_DIRECTION,
@@ -28,7 +27,7 @@ import type {
 } from './types.ts'
 import { uploadImage } from '../_shared/r2-upload.ts'
 import { resizeToFinalDims } from './post-process.ts'
-import { composeBanner } from './compose-banner.ts'
+import { composeBanner, fitToYouTubeSafeZone } from './compose-banner.ts'
 import { ALL_ASSET_IDS, SIZES } from './sizes.ts'
 import { unwrapKieEnvelope, summarizeBannerErrors } from './kie.ts'
 
@@ -253,6 +252,7 @@ async function processBrandKit(
         bannerErrors,
         artDirection,
         runStartedAt,
+        existingAssets.services ?? [],
       )
       // Re-read final state since per-banner writes mutated the row.
       const { data: finalRow } = await supabase
@@ -378,6 +378,7 @@ async function processBrandKit(
       bannerErrors,
       textAssets.art_direction ?? null,
       runStartedAt,
+      textAssets.services ?? [],
     )
     // Re-read final state since per-banner writes mutated the row. BANNERS gate
     // completion; covers are best-effort.
@@ -471,6 +472,7 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
     keywords: extras.keywords,
     instagram_page_name: extras.instagram_page_name,
     highlight_covers: extras.highlight_covers,
+    services: extras.services,
   }
 }
 
@@ -501,6 +503,7 @@ async function callMiniStructured(inputs: BrandKitInputs, kitId: string, evtProp
     keywords?: string[]
     instagram_page_name?: string
     highlight_covers?: { title?: string; keyword?: string }[]
+    services?: string[]
   }
 }
 
@@ -508,9 +511,9 @@ async function callMiniStructured(inputs: BrandKitInputs, kitId: string, evtProp
 // always exactly 5 highlight covers (mini isn't strict, so it occasionally
 // returns fewer keywords/covers or drops instagram_page_name entirely).
 function normalizeStructuredExtras(
-  structured: { keywords?: string[]; instagram_page_name?: string; highlight_covers?: { title?: string; keyword?: string }[] },
+  structured: { keywords?: string[]; instagram_page_name?: string; highlight_covers?: { title?: string; keyword?: string }[]; services?: string[] },
   inputs: BrandKitInputs,
-): { keywords: string[]; instagram_page_name: string; highlight_covers: { title: string; keyword: string }[] } {
+): { keywords: string[]; instagram_page_name: string; highlight_covers: { title: string; keyword: string }[]; services: string[] } {
   // Defend against loosely-typed model output: the schema constrains these to
   // arrays, but mini isn't strict mode, so coerce non-arrays to [] rather than
   // letting a stray object throw in the for..of below (which would fail the kit).
@@ -562,7 +565,24 @@ function normalizeStructuredExtras(
     covers.push({ title: t, keyword: keywords[covers.length] || keywords[0] || t.toLowerCase() })
   }
 
-  return { keywords, instagram_page_name: ig, highlight_covers: covers.slice(0, 5) }
+  // Services: short offering labels for the cover icon strip. Clean provided
+  // ones; if the model gave too few, backfill from non-generic highlight titles
+  // (which are already service-like for most brands).
+  const rawServices = Array.isArray(structured.services) ? structured.services : []
+  const services: string[] = []
+  const seenSvc = new Set<string>()
+  const pushSvc = (s: unknown) => {
+    const v = (s || '').toString().trim().replace(/\s+/g, ' ')
+    const k = v.toLowerCase()
+    if (v && v.length <= 20 && !seenSvc.has(k)) { seenSvc.add(k); services.push(v) }
+  }
+  for (const s of rawServices) { if (services.length >= 6) break; pushSvc(s) }
+  if (services.length < 3) {
+    const GENERIC = new Set(['about','reviews','gallery','contact','faq','booking','book','home','memories','info','more','services'])
+    for (const c of covers) { if (services.length >= 5) break; if (!GENERIC.has(c.title.toLowerCase())) pushSvc(c.title) }
+  }
+
+  return { keywords, instagram_page_name: ig, highlight_covers: covers.slice(0, 5), services: services.slice(0, 6) }
 }
 
 async function callOpusVoiceTone(inputs: BrandKitInputs, kitId: string, evtProps: Record<string, unknown>): Promise<string> {
@@ -799,6 +819,8 @@ async function generateBanners(
   // entry time so time already spent on derived logos + covers counts against
   // the budget (keeping the whole invocation under Supabase's ~150s cap).
   startedAt: number = Date.now(),
+  // Short offering labels baked as the cover icon strip (buildCoverImg2ImgPrompt).
+  services: string[] = [],
 ): Promise<Record<typeof REFERENCE_ASSET_IDS[number], ImageAssetRef>> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const out: Partial<Record<ImageAssetId, ImageAssetRef>> = {}
@@ -838,27 +860,32 @@ async function generateBanners(
     try {
       const spec = SIZES[assetId]
 
-      // ── Cinematic cover: a gpt-image-1 cinematic BACKGROUND (no baked
-      // logo/text) with the client's EXACT approved logo + URL composited on
-      // top. Blending the logo INTO the scene (image-edit) made the model
-      // REDRAW the uploaded logo (distorted wordmark), so we composite the real
-      // file instead — the uploaded logo appears verbatim. composeBanner places
-      // it inside each platform's safe area (incl. YouTube's 1546×423 strip). ──
+      // ── Cinematic cover: KIE gpt-image-2 IMG2IMG with the client's EXACT logo
+      // as the reference image (input_urls). The model integrates the logo into
+      // the scene AND bakes the exact wordmark + a service-icon strip + the URL
+      // badge — the ChatGPT-cover look. Every string is fed VERBATIM in the
+      // prompt so the model stops garbling words, and the logo is passed as a
+      // reference with strict "reproduce exactly" instructions (we accept that
+      // img2img reinterprets slightly — the client chose this over the flatter
+      // exact-logo composite). We do NOT composite afterward. YouTube then gets a
+      // deterministic safe-zone fit so nothing is cropped on phone/desktop. ──
       if (CINEMATIC_COVER_IDS.includes(assetId)) {
-        if (!logoBytes) throw new Error(`cinematic ${assetId}: approved-logo bytes unavailable`)
-        const bgPrompt = buildCinematicCoverPrompt(assetId, inputs, palette, artDirection,
-          { website: inputs.website_url, tagline }, { backgroundOnly: true })
-        const scene = await generateImageWithRetry(bgPrompt, spec.generationSize, kitId, assetId, 'opaque')
-        const resized = await resizeToFinalDims(scene, spec)
-        // Rendered beside/under the logo: the website URL, falling back to the tagline.
-        const overlayText = normalizeUrlForDisplay(inputs.website_url) || tagline
-        let finalBytes = resized
-        try {
-          finalBytes = await composeBanner({
-            background: resized, logo: logoBytes, tagline: overlayText, cta: '', palette, assetId,
-          })
-        } catch (err) {
-          console.error(`compose ${assetId} failed, using bare cinematic scene:`, err instanceof Error ? err.message : err)
+        const coverPrompt = buildCoverImg2ImgPrompt(
+          assetId, inputs, palette, artDirection, { website: inputs.website_url }, services,
+        )
+        const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
+        const taskId = await createKieTask(coverPrompt, aspectRatio, approvedLogoUrl, kitId, assetId)
+        const resultUrl = await pollKieTask(taskId, assetId)
+        const raw = await downloadRemoteImage(resultUrl, assetId)
+        let finalBytes = await resizeToFinalDims(raw, spec)
+        // YouTube: reframe so the WHOLE design sits inside the 1546×423 all-device
+        // safe strip (nothing cropped on phone/desktop), scene bleeding around it.
+        if (assetId === 'banner_yt') {
+          try {
+            finalBytes = await fitToYouTubeSafeZone(finalBytes)
+          } catch (err) {
+            console.error(`YT safe-zone fit failed, using bare cover:`, err instanceof Error ? err.message : err)
+          }
         }
         const uploaded = await uploadImage({ bytes: finalBytes, clientId, timestamp, assetId })
         out[assetId] = uploaded

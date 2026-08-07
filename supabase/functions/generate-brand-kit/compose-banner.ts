@@ -300,3 +300,39 @@ export async function composeBanner(args: ComposeArgs): Promise<Uint8Array> {
 
   return new Uint8Array(await bg.encode())
 }
+
+// Reframe a finished YouTube cover so the ENTIRE design sits inside the centered
+// 1546×423 all-device safe strip (nothing is cropped on phone/desktop), with a
+// blurred, dimmed copy of the same scene bleeding out to fill the rest of the
+// 2560×1440 frame. Deterministic: the fit is by the limiting dimension, so every
+// element is guaranteed visible regardless of where the model placed it. This is
+// the "resize into the safe zone" step the pipeline runs on banner_yt.
+export async function fitToYouTubeSafeZone(coverBytes: Uint8Array): Promise<Uint8Array> {
+  const CW = 2560, CH = 1440, SW = 1546, SH = 423
+  const SX0 = Math.round((CW - SW) / 2), SY0 = Math.round((CH - SH) / 2)
+  const src = await Image.decode(coverBytes) as Image
+  const sw = src.width, sh = src.height
+
+  // Backdrop: same scene scaled to COVER the whole canvas, blurred + dimmed.
+  const cov = Math.max(CW / sw, CH / sh)
+  const bg = src.clone().resize(Math.max(1, Math.round(sw * cov)), Math.max(1, Math.round(sh * cov)))
+  bg.crop(Math.max(0, Math.round((bg.width - CW) / 2)), Math.max(0, Math.round((bg.height - CH) / 2)), CW, CH)
+  // Cheap blur: downscale hard, then scale back up.
+  bg.resize(Math.max(1, Math.round(CW / 24)), Math.max(1, Math.round(CH / 24)))
+  bg.resize(CW, CH)
+  // Dim ~25% via a translucent black layer (fast — no per-pixel loop).
+  const dim = new Image(CW, CH); dim.fill(0x00000040)
+  bg.composite(dim, 0, 0)
+
+  // Foreground: the ENTIRE cover fit inside the safe strip, centered.
+  const scale = Math.min(SW / sw, SH / sh)
+  const fw = Math.max(1, Math.round(sw * scale)), fh = Math.max(1, Math.round(sh * scale))
+  const fg = src.clone().resize(fw, fh)
+  const X = SX0 + Math.round((SW - fw) / 2), Y = SY0 + Math.round((SH - fh) / 2)
+
+  // Soft drop-shadow so the sharp panel reads as a layer, not a hard cutout.
+  const pad = Math.round(Math.max(fw, fh) * 0.03)
+  bg.composite(makeScrim(fw + pad * 2, fh + pad * 2, 150, 0.25, 0.25), X - pad, Y - pad + 8)
+  bg.composite(fg, X, Y)
+  return new Uint8Array(await bg.encode())
+}

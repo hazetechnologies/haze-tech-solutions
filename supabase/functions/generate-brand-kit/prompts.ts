@@ -88,7 +88,7 @@ export const STRUCTURED_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['bios', 'hashtags', 'platform_priority', 'tagline', 'cta', 'keywords', 'instagram_page_name', 'highlight_covers'],
+    required: ['bios', 'hashtags', 'platform_priority', 'tagline', 'cta', 'keywords', 'instagram_page_name', 'highlight_covers', 'services'],
     properties: {
       bios: {
         type: 'object',
@@ -140,6 +140,13 @@ export const STRUCTURED_SCHEMA = {
           },
         },
       },
+      // 3-6 SHORT (1-2 word) Title-Case service/offering labels — these become
+      // the icon strip on the marketing cover (e.g. Yachts, Tours, Dining).
+      services: {
+        type: 'array',
+        items: { type: 'string', maxLength: 20 },
+        minItems: 3, maxItems: 6,
+      },
     },
   },
 } as const
@@ -156,6 +163,7 @@ export function buildStructuredSystemPrompt(): string {
     'For keywords: 12-20 lowercase search terms a real customer would type into Instagram or Google to find this business. Derive them from the industry and what the business does — mix the core category, the location/region if any, and the specific products or services. Plain words/short phrases, NO "#", no duplicates. Example (a Florida tour brand): ["florida tours", "yacht charters", "key west excursions", "everglades tours", "miami boat tours", "florida vacation", "things to do in florida", "sunset cruises", "jet ski rentals", "snorkeling tours", "private boat charters", "miami nightlife", "family excursions", "fishing charters"].',
     'For instagram_page_name: the Instagram profile Name field (the bold display name, NOT the @username). Keep it under ~30 characters and ALWAYS append a searchable category term after the brand name so the profile surfaces in IG search — pattern "Brand | Searchable Category". Examples: "Florvania | Florida Tours" — "Acme | Austin Plumber" — "Lumen | Skincare".',
     'For highlight_covers: exactly 5 Instagram Story Highlight covers. Each has a "title" (1-2 words, Title Case, that a visitor taps — e.g. About, Tours, Reviews, Booking, Gallery, Menu, FAQ) and a "keyword" (the matching search term from the keywords list, or closely related). Each title MUST contain or clearly echo a keyword/topic so the highlights double as search signals. Choose the 5 most useful highlights for THIS specific business.',
+    'For services: 3-6 SHORT (1-2 word) Title-Case labels naming the brand\'s core offerings — these render as an icon strip on the marketing cover, so each must be concrete and easy to draw as a simple icon. Example (a Florida travel brand): ["Yachts", "Tours", "Excursions", "Cruises", "Dining"]. A plumber: ["Repairs", "Installs", "Drains", "Heaters", "Emergency"].',
   ].join('\n\n')
 }
 
@@ -455,4 +463,55 @@ export function buildCinematicCoverPrompt(
     // Final Creative Direction
     `FINAL DIRECTION: Design this as the hero image for the homepage of a billion-dollar ${inputs.industry} brand. Every element should naturally guide the viewer's eye toward the center logo while showcasing what makes ${inputs.business_name} exceptional. Cohesive, immersive, elegant, worthy of an international campaign. Do NOT make it look like a collage — every object belongs naturally within the same single cinematic scene.`,
   ].join('\n')
+}
+
+// Cover img2img prompt (KIE gpt-image-2-image-to-image). The client's EXACT logo
+// is passed as the reference image; this prompt tells the model to KEEP the logo
+// verbatim, blend it into a cinematic scene, and bake the EXACT text + a service
+// icon strip + URL badge (the ChatGPT-cover style the client asked for). Every
+// string is fed VERBATIM so the model stops inventing/garbling words. For
+// YouTube the lockup is confined to a compact centered cluster because a
+// deterministic safe-zone fit (fitToYouTubeSafeZone) runs on the result.
+export function buildCoverImg2ImgPrompt(
+  assetId: string,
+  inputs: BrandKitInputs,
+  palette: ColorPaletteEntry[],
+  art: ArtDirection | null | undefined,
+  branding: { website?: string } | undefined,
+  services: string[],
+): string {
+  const orientation = COVER_ORIENTATION[assetId] || 'a premium social media cover'
+  const isVertical = assetId === 'banner_ig'
+  const website = normalizeUrlForDisplay(branding?.website)
+  const svc = (services || []).map((s) => s.trim()).filter(Boolean).slice(0, 6)
+  const svcUpper = svc.map((s) => s.toUpperCase())
+  const paletteText = palette.map((c) => `${c.name} ${c.hex}`).join(', ')
+
+  const sceneDir = [inputs.imagery_direction?.trim(), art?.banner_imagery_style?.trim()].filter(Boolean).join('; ')
+  const sceneLine = sceneDir
+    ? `Build the environment from this direction: ${sceneDir}.`
+    : `Build an aspirational, premium, photoreal environment that best represents ${inputs.industry} for this audience, with a few lifestyle vignettes of the experience.`
+
+  const layoutLine = isVertical
+    ? 'LAYOUT: stack the brand lockup across the upper-middle; keep the lower half mostly scenery.'
+    : 'LAYOUT: center the brand lockup with generous scenery around it.'
+
+  const iconStrip = svc.length >= 3
+    ? `SERVICE ICON STRIP — a horizontal semi-transparent deep-navy bar with ${svc.length} evenly-spaced thin-line icons, each with a label underneath, in THIS exact order and spelling: ${svcUpper.map((s) => `"${s}"`).join(', ')}. Give each a simple, fitting line icon.`
+    : ''
+  const serviceLine = svc.length >= 3 ? `a thin line spelled EXACTLY: "${svcUpper.join(' · ')}"` : ''
+  const urlBadge = website ? `a small rounded deep-navy badge with a white globe icon and the text spelled EXACTLY: "${website}"` : ''
+
+  return [
+    `Design a premium, ultra-realistic ${orientation} for "${inputs.business_name}", a ${inputs.vibe.join(', ')} ${inputs.industry} brand${inputs.business_description ? ` — ${inputs.business_description}` : ''}. A high-end marketing hero image in the style of a $100,000 advertising campaign.`,
+    `SCENE (photoreal, golden-hour, 8K HDR, cinematic): ${sceneLine} ONE cohesive immersive scene, NOT a collage.`,
+    layoutLine,
+    `LOGO — the PROVIDED image is the brand's FINISHED logo. Reproduce it EXACTLY as provided: do NOT redraw, restyle, recolor, distort, crop or re-letter the emblem or wordmark; keep every letter and mark pixel-accurate. Blend it into the scene with matching light and a soft realistic shadow so it looks designed-in, not pasted. Make it the centerpiece of the lockup.`,
+    `EXACT TEXT — render every string below spelled EXACTLY, verbatim, with NO substitutions and NO invented or extra words:`,
+    `- the wordmark reads exactly "${inputs.business_name}"${serviceLine ? `\n- under the wordmark, ${serviceLine}` : ''}${urlBadge ? `\n- ${urlBadge}, placed in a lower corner` : ''}`,
+    iconStrip,
+    `COLORS: use this brand palette — ${paletteText}${inputs.color_preference ? ` (${inputs.color_preference})` : ''}. Rich, harmonious, on-brand.`,
+    `LIGHTING: golden-hour, cinematic volumetric light, HDR, soft rim light, warm highlights, gentle bloom, natural reflections.`,
+    `QUALITY: razor sharp, correct spelling everywhere, professional typography, no watermarks, no duplicated people, no extra text beyond what is specified, no AI artifacts.${art?.style_summary ? ` Art direction: ${art.style_summary.trim()}.` : ''}`,
+  ].filter(Boolean).join('\n')
 }
