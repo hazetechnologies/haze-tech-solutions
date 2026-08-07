@@ -141,6 +141,45 @@ function resizeToHeight(img: Image, targetH: number): Image {
   return img
 }
 
+// Resize to a target WIDTH, preserving aspect ratio.
+function resizeToWidth(img: Image, targetW: number): Image {
+  if (img.width === targetW) return img
+  const scale = targetW / img.width
+  img.resize(targetW, Math.max(1, Math.round(img.height * scale)))
+  return img
+}
+
+// A soft, blurred drop-shadow silhouette of the logo — gentle depth + legibility
+// on a photographic scene WITHOUT the hard dark box the old scrim produced.
+// Recolor opaque pixels to near-black at reduced alpha, then blur via down/up-scale.
+function makeSoftLogoShadow(logo: Image): Image {
+  const s = logo.clone()
+  for (let y = 1; y <= s.height; y++) {
+    for (let x = 1; x <= s.width; x++) {
+      const a = s.getPixelAt(x, y) & 0xff
+      s.setPixelAt(x, y, a > 12 ? (((6 << 24) | (8 << 16) | (14 << 8) | Math.round(a * 0.5)) >>> 0) : 0)
+    }
+  }
+  const w = s.width, h = s.height
+  s.resize(Math.max(1, Math.round(w / 7)), Math.max(1, Math.round(h / 7)))
+  s.resize(w, h)  // cheap blur
+  return s
+}
+
+// Render text with a soft dark drop-shadow so it stays legible on any scene
+// (no opaque panel needed). Padded to contain the shadow.
+async function renderTextShadowed(font: Uint8Array, size: number, text: string, colorHex: string): Promise<Image> {
+  const main = await Image.renderText(font, size, text, hexToColor(colorHex, 255))
+  const shadow = await Image.renderText(font, size, text, hexToColor('#0A0E14', 190))
+  const off = Math.max(2, Math.round(size * 0.08))
+  const pad = off + Math.round(size * 0.12)
+  const canvas = new Image(main.width + pad * 2, main.height + pad * 2)
+  canvas.composite(shadow, pad + off, pad + off)
+  canvas.composite(shadow, pad + off + 2, pad + off + 2)
+  canvas.composite(main, pad, pad)
+  return canvas
+}
+
 // Build a stadium-shaped OUTLINE (ghost) CTA: accent border + accent label, no
 // fill, so the scenery shows through. Drawn by stamping a filled accent stadium
 // then knocking out the interior with a slightly smaller transparent stadium.
@@ -191,68 +230,45 @@ export async function composeBanner(args: ComposeArgs): Promise<Uint8Array> {
   const font = await loadFont()
   const logoImg = await Image.decode(logo) as Image
 
+  // Fit the logo within the box, centered, with a soft drop-shadow (no dark box).
+  const placeLogo = (targetH: number, availW: number): Image => {
+    let lg = resizeToHeight(logoImg, Math.max(24, targetH))
+    const capW = Math.round(availW * 0.96)
+    if (lg.width > capW) lg = resizeToWidth(lg, capW)
+    return lg
+  }
+
   if (layout.mode === 'logo-only') {
-    const lg = resizeToHeight(logoImg, layout.logoH)
+    const lg = placeLogo(layout.logoH, box.w)
     const lx = Math.round(box.x + (box.w - lg.width) / 2)
     const ly = Math.round(box.y + (box.h - lg.height) / 2)
-    backLogoGlow(bg, lx, ly, lg.width, lg.height)
+    const shOff = Math.max(3, Math.round(lg.height * 0.03))
+    bg.composite(makeSoftLogoShadow(lg), lx + shOff, ly + shOff)
     bg.composite(lg, lx, ly)
     return new Uint8Array(await bg.encode())
   }
 
-  // Soft scrim behind the whole content box for text legibility.
-  bg.composite(makeScrim(box.w, box.h, 200), box.x, box.y)
+  // Text covers: the client's EXACT logo + the URL/tagline, stacked and CENTERED
+  // in the frame. Never a dark box, never cropped — the logo auto-fits the safe
+  // box (leaving room for the text) and a soft drop-shadow gives depth/legibility.
+  const copy = (layout.withCopy && tagline) ? tagline.trim() : ''
+  let textImg = copy ? await renderTextShadowed(font, layout.taglineSize, copy, lightHex) : null
+  if (textImg && textImg.width > box.w * 0.98) textImg = resizeToWidth(textImg, Math.round(box.w * 0.98))
+  const gap = textImg ? Math.round(layout.taglineSize * 0.5) : 0
 
-  const lg = resizeToHeight(logoImg, layout.logoH)
+  const availH = box.h - (textImg ? gap + textImg.height : 0)
+  const lg = placeLogo(Math.min(layout.logoH, availH), box.w)
 
-  // Render tagline lines.
-  const taglineLines = layout.withCopy && tagline ? wrapText(tagline, layout.taglineSize, layout.mode === 'horizontal' ? box.w - lg.width - 60 : box.w) : []
-  const taglineImgs: Image[] = []
-  for (const ln of taglineLines) {
-    taglineImgs.push(await Image.renderText(font, layout.taglineSize, ln, hexToColor(lightHex, 255)))
-  }
-  const lineGap = Math.round(layout.taglineSize * 0.28)
-  const taglineH = taglineImgs.reduce((s, im) => s + im.height, 0) + Math.max(0, taglineImgs.length - 1) * lineGap
-  const taglineW = taglineImgs.reduce((m, im) => Math.max(m, im.width), 0)
+  const groupH = lg.height + (textImg ? gap + textImg.height : 0)
+  const cx = Math.round(W / 2)
+  let cy = Math.round(box.y + (box.h - groupH) / 2)
 
-  const pill = layout.withCta && cta ? await makeCtaPill(font, cta, layout.ctaSize, accentHex, lightHex) : null
-  const ctaGap = Math.round(layout.taglineSize * 0.5)
-
-  if (layout.mode === 'horizontal') {
-    // Logo on the left, tagline + CTA stacked on the right, vertically centered.
-    const logoX = box.x
-    const logoY = Math.round(box.y + (box.h - lg.height) / 2)
-    backLogoGlow(bg, logoX, logoY, lg.width, lg.height)
-    bg.composite(lg, logoX, logoY)
-
-    const copyX = logoX + lg.width + 60
-    const copyBlockH = taglineH + (pill ? ctaGap + pill.height : 0)
-    let cy = Math.round(box.y + (box.h - copyBlockH) / 2)
-    for (const im of taglineImgs) {
-      bg.composite(im, copyX, cy)
-      cy += im.height + lineGap
-    }
-    if (pill) {
-      bg.composite(pill, copyX, cy - lineGap + ctaGap)
-    }
-  } else {
-    // Vertical: logo on top (centered), tagline below, CTA below that.
-    const cxCenter = box.x + box.w / 2
-    let cy = box.y
-    const lgx = Math.round(cxCenter - lg.width / 2)
-    backLogoGlow(bg, lgx, cy, lg.width, lg.height)
-    bg.composite(lg, lgx, cy)
-    cy += lg.height + Math.round(layout.taglineSize * 0.9)
-    for (const im of taglineImgs) {
-      bg.composite(im, Math.round(cxCenter - im.width / 2), cy)
-      cy += im.height + lineGap
-    }
-    if (pill) {
-      cy += ctaGap
-      bg.composite(pill, Math.round(cxCenter - pill.width / 2), cy)
-    }
-    void taglineW
-  }
+  const shOff = Math.max(3, Math.round(lg.height * 0.03))
+  const lgx = Math.round(cx - lg.width / 2)
+  bg.composite(makeSoftLogoShadow(lg), lgx + shOff, cy + shOff)
+  bg.composite(lg, lgx, cy)
+  cy += lg.height + gap
+  if (textImg) bg.composite(textImg, Math.round(cx - textImg.width / 2), cy)
 
   return new Uint8Array(await bg.encode())
 }
