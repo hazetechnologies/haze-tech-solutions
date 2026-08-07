@@ -214,20 +214,7 @@ export default function BrandKitView({ kit, onRegenerate }) {
         </div>
       </Section>
 
-      {/* Path 3 only: handle suggestions + platform priority */}
-      {a.handles && (
-        <Section title="Handle suggestions">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {a.handles.map(h => (
-              <div key={h} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px' }}>
-                <code style={{ color: '#F1F5F9', fontSize: 13, fontFamily: 'monospace' }}>{h}</code>
-                <CopyableText text={h} small />
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
+      {/* Path 3 only: platform launch priority */}
       {a.platform_priority && (
         <Section title="Platform launch priority">
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 16, color: '#CBD5E1', fontSize: 13 }}>

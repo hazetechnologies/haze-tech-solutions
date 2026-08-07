@@ -87,7 +87,6 @@ export interface BrandKitAssets {
   voice_tone: string                       // markdown
   hashtags: string[]
   content_pillars: ContentPillar[]
-  handles?: string[]                        // Path 3 only
   platform_priority?: string                // Path 3 only
   color_palette: ColorPaletteEntry[]
   art_direction?: {

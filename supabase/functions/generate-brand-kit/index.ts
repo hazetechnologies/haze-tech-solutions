@@ -461,7 +461,6 @@ async function generateAllText(inputs: BrandKitInputs, kit_id: string) {
   return {
     bios: normalizeBios(structured.bios),
     hashtags: structured.hashtags,
-    handles: inputs.path === 'cold_start' ? structured.handles : undefined,
     platform_priority: inputs.path === 'cold_start' ? structured.platform_priority : undefined,
     voice_tone: voiceTone,
     content_pillars: pillarsResp,
@@ -494,7 +493,6 @@ async function callMiniStructured(inputs: BrandKitInputs, kitId: string, evtProp
   return JSON.parse(content) as {
     bios: { instagram: string; tiktok: string; youtube: string; x: string; facebook: string; linkedin: string }
     hashtags: string[]
-    handles: string[]
     platform_priority: string
     tagline: string
     cta: string
