@@ -81,14 +81,14 @@ export function buildArtDirectorPrompt(
   return { system, user }
 }
 
-// ── gpt-4o-mini single-call prompt: bios + hashtags + handles + platform_priority ──
+// ── gpt-4o-mini single-call prompt: bios + hashtags + platform_priority ──
 
 export const STRUCTURED_SCHEMA = {
   name: 'brand_kit_structured',
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['bios', 'hashtags', 'handles', 'platform_priority', 'tagline', 'cta', 'keywords', 'instagram_page_name', 'highlight_covers'],
+    required: ['bios', 'hashtags', 'platform_priority', 'tagline', 'cta', 'keywords', 'instagram_page_name', 'highlight_covers'],
     properties: {
       bios: {
         type: 'object',
@@ -107,11 +107,6 @@ export const STRUCTURED_SCHEMA = {
         type: 'array',
         items: { type: 'string', pattern: '^#[a-zA-Z0-9_]+$' },
         minItems: 10, maxItems: 10,
-      },
-      handles: {
-        type: 'array',
-        items: { type: 'string' },
-        minItems: 5, maxItems: 5,
       },
       platform_priority: { type: 'string' },
       // 5-8 words. The brand promise/positioning phrase that goes ON the banner.
@@ -155,7 +150,6 @@ export function buildStructuredSystemPrompt(): string {
     'Always output ONLY the JSON specified by the schema. No markdown, no prose, no commentary.',
     'For bios: use plain text (no emoji unless the brand vibe is playful), respect platform character limits, lead with what the brand DOES, end with a soft CTA where space allows. ALWAYS include a bio for ALL SIX platforms — instagram, tiktok, youtube, x, facebook, linkedin — never omit any. LinkedIn bio (2000 chars max): write a professional company page "About" section with 2-3 short paragraphs covering what the company does, who it serves, and its key differentiators. YouTube bio (1000 chars max): write a channel "About" description — what the brand is about and what viewers/subscribers get from following, 1-2 short paragraphs.',
     'For hashtags: mix 3 broad (>1M posts) + 4 niche (~100k posts) + 3 ultra-niche (<10k posts). All lowercase. No spaces. Brand-relevant.',
-    'For handles (Path 3 only): 5 candidates the team can check for availability. Mix variants: brand name, brand+industry, brand+region/HQ, brand+function (e.g. "_official", "hq"), creative twist. Keep 3-30 chars, lowercase, alphanumeric + underscore only.',
     'For platform_priority (Path 3 only): one paragraph (max 80 words). Recommend ONE platform to launch first based on the audience and industry. Justify briefly.',
     'For tagline: a short brand promise / positioning phrase that gets rendered ON marketing banners. 5-8 words, title-cased or sentence case, NO emoji, NO trailing punctuation. Avoid the word "the". Should be memorable, evocative, and tied to what makes this brand distinct. Examples: "Luxury Living, Seamlessly Managed." — "Code That Compounds." — "Your AI Co-Pilot for Customer Conversations."',
     'For cta: a short action phrase rendered ON banners as a button label. 2-4 words, title case, NO emoji, NO trailing punctuation. Must match the brand\'s primary conversion action (buy, book, schedule, download, sign up). Examples: "Book Your Stay" — "Start Free Trial" — "Get a Quote" — "Schedule a Call".',
@@ -173,8 +167,8 @@ export function buildStructuredUserPrompt(inputs: BrandKitInputs): string {
     clientContext(inputs),
     '',
     isCold
-      ? 'This client is starting from scratch — generate handles + platform_priority.'
-      : 'This client has existing accounts — set handles to ["existing"] and platform_priority to "(existing client — N/A)".',
+      ? 'This client is starting from scratch — generate platform_priority.'
+      : 'This client has existing accounts — set platform_priority to "(existing client — N/A)".',
   ].join('\n')
 }
 
