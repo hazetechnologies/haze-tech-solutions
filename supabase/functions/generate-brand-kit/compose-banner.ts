@@ -149,6 +149,31 @@ function resizeToWidth(img: Image, targetW: number): Image {
   return img
 }
 
+// Crop away the transparent margin around a logo so the visible mark fills its
+// bounding box (uploaded PNGs often carry heavy padding, which made the logo
+// render tiny once fit to a box).
+function trimTransparent(img: Image): Image {
+  let minX = img.width, minY = img.height, maxX = 1, maxY = 1, found = false
+  for (let y = 1; y <= img.height; y++) {
+    for (let x = 1; x <= img.width; x++) {
+      if ((img.getPixelAt(x, y) & 0xff) > 8) {
+        found = true
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+    }
+  }
+  if (!found) return img
+  const w = maxX - minX + 1, h = maxY - minY + 1
+  if (w >= img.width - 2 && h >= img.height - 2) return img
+  const pad = Math.round(Math.max(w, h) * 0.02)
+  const cx = Math.max(0, minX - 1 - pad), cy = Math.max(0, minY - 1 - pad)
+  const cw = Math.min(img.width - cx, w + pad * 2), ch = Math.min(img.height - cy, h + pad * 2)
+  return img.clone().crop(cx, cy, cw, ch)
+}
+
 // A soft, blurred drop-shadow silhouette of the logo — gentle depth + legibility
 // on a photographic scene WITHOUT the hard dark box the old scrim produced.
 // Recolor opaque pixels to near-black at reduced alpha, then blur via down/up-scale.
@@ -228,7 +253,8 @@ export async function composeBanner(args: ComposeArgs): Promise<Uint8Array> {
   const lightHex = '#FFFFFF'
 
   const font = await loadFont()
-  const logoImg = await Image.decode(logo) as Image
+  // Trim the uploaded logo's transparent padding so it renders at full size.
+  const logoImg = trimTransparent(await Image.decode(logo) as Image)
 
   // Fit the logo within the box, centered, with a soft drop-shadow (no dark box).
   const placeLogo = (targetH: number, availW: number): Image => {
@@ -248,16 +274,18 @@ export async function composeBanner(args: ComposeArgs): Promise<Uint8Array> {
     return new Uint8Array(await bg.encode())
   }
 
-  // Text covers: the client's EXACT logo + the URL/tagline, stacked and CENTERED
-  // in the frame. Never a dark box, never cropped — the logo auto-fits the safe
-  // box (leaving room for the text) and a soft drop-shadow gives depth/legibility.
+  // Text covers: the client's EXACT logo (the hero) + a SUBORDINATE URL/tagline,
+  // stacked and CENTERED. Never a dark box, never cropped — the logo fills the
+  // safe box (minus the small text line) and a soft drop-shadow gives depth.
   const copy = (layout.withCopy && tagline) ? tagline.trim() : ''
-  let textImg = copy ? await renderTextShadowed(font, layout.taglineSize, copy, lightHex) : null
+  // URL is deliberately smaller than the logo so the logo reads as the hero.
+  const urlSize = Math.max(20, Math.min(Math.round(box.h * 0.13), 52))
+  let textImg = copy ? await renderTextShadowed(font, urlSize, copy, lightHex) : null
   if (textImg && textImg.width > box.w * 0.98) textImg = resizeToWidth(textImg, Math.round(box.w * 0.98))
-  const gap = textImg ? Math.round(layout.taglineSize * 0.5) : 0
+  const gap = textImg ? Math.round(urlSize * 0.6) : 0
 
   const availH = box.h - (textImg ? gap + textImg.height : 0)
-  const lg = placeLogo(Math.min(layout.logoH, availH), box.w)
+  const lg = placeLogo(availH, box.w)   // logo fills the remaining height (the hero)
 
   const groupH = lg.height + (textImg ? gap + textImg.height : 0)
   const cx = Math.round(W / 2)
