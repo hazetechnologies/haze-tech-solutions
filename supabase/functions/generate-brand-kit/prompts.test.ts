@@ -79,6 +79,20 @@ Deno.test('buildCoverImg2ImgPrompt omits the icon strip when fewer than 3 servic
   assertEquals(p.includes('SERVICE ICON STRIP'), false)
 })
 
+Deno.test('buildCoverImg2ImgPrompt confines the lockup to a central band for ultra-wide crops', () => {
+  // LinkedIn cover keeps only ~30% of the height after the center-crop.
+  const wide = buildCoverImg2ImgPrompt('banner_linkedin_cover', inputs, palette, null, { website: 'acme.io' }, ['Yachts', 'Tours', 'Dining'], 0.30)
+  assertEquals(wide.includes('survives the crop'), true)
+  assertEquals(wide.toLowerCase().includes('horizontal cluster') || wide.toLowerCase().includes('horizontal'), true)
+  assertEquals(/central \d+% of the image HEIGHT/.test(wide), true)
+  // With no safeHeightPct the crop-safe block is absent (backward compatible).
+  const normal = buildCoverImg2ImgPrompt('banner_fb', inputs, palette, null, { website: 'acme.io' }, ['Yachts', 'Tours', 'Dining'])
+  assertEquals(normal.includes('survives the crop'), false)
+  // A near-full band (e.g. YouTube, 1.0) also skips the block.
+  const yt = buildCoverImg2ImgPrompt('banner_yt', inputs, palette, null, { website: 'acme.io' }, ['Yachts', 'Tours', 'Dining'], 1)
+  assertEquals(yt.includes('survives the crop'), false)
+})
+
 Deno.test('buildHighlightCoverPrompt bakes in the title + keyword and forbids extra text', () => {
   const p = buildHighlightCoverPrompt({ title: 'Tours', keyword: 'florida tours' }, inputs, palette, null)
   assertEquals(p.includes('"Tours"'), true)
