@@ -118,6 +118,24 @@ const KIE_ASPECT_RATIOS: Record<string, string> = {
   banner_linkedin_cover:'16:9',
 }
 
+// Fraction of the KIE-generated image's HEIGHT that survives the center-crop
+// (resizeToFinalDims, fit:'cover') to this asset's final dimensions. When the
+// final banner is far wider than the 16:9 render — X is 3:1 (≈0.59), LinkedIn is
+// ≈5.9:1 (≈0.30) — the crop keeps only a central horizontal band and clips the
+// top/bottom. buildCoverImg2ImgPrompt uses this to confine the whole lockup to
+// the band. Returns 1 when the height isn't cropped (e.g. YouTube, which is 16:9
+// and gets its own fitToYouTubeSafeZone step).
+function coverSafeHeightFraction(assetId: ImageAssetId, aspectRatio: string): number {
+  const spec = SIZES[assetId]
+  if (!spec || spec.fit !== 'cover') return 1
+  const [aw, ah] = aspectRatio.split(':').map(Number)
+  if (!aw || !ah) return 1
+  const srcAspect = aw / ah                                // generated W/H
+  const tgtAspect = spec.finalWidth / spec.finalHeight     // final W/H
+  if (tgtAspect <= srcAspect) return 1                     // height not cropped
+  return srcAspect / tgtAspect
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
@@ -870,10 +888,11 @@ async function generateBanners(
       // exact-logo composite). We do NOT composite afterward. YouTube then gets a
       // deterministic safe-zone fit so nothing is cropped on phone/desktop. ──
       if (CINEMATIC_COVER_IDS.includes(assetId)) {
+        const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
         const coverPrompt = buildCoverImg2ImgPrompt(
           assetId, inputs, palette, artDirection, { website: inputs.website_url }, services,
+          coverSafeHeightFraction(assetId, aspectRatio),
         )
-        const aspectRatio = KIE_ASPECT_RATIOS[assetId] ?? '16:9'
         const taskId = await createKieTask(coverPrompt, aspectRatio, approvedLogoUrl, kitId, assetId)
         const resultUrl = await pollKieTask(taskId, assetId)
         const raw = await downloadRemoteImage(resultUrl, assetId)

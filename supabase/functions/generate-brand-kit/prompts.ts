@@ -479,6 +479,11 @@ export function buildCoverImg2ImgPrompt(
   art: ArtDirection | null | undefined,
   branding: { website?: string } | undefined,
   services: string[],
+  // Fraction (0..1) of the GENERATED image's height that survives the
+  // center-crop to this asset's final dimensions. Ultra-wide covers (X ≈ 0.59,
+  // LinkedIn ≈ 0.30) crop away the top and bottom, so the whole lockup must be
+  // confined to that central band or it gets clipped. Omit / 1 = no crop.
+  safeHeightPct?: number,
 ): string {
   const orientation = COVER_ORIENTATION[assetId] || 'a premium social media cover'
   const isVertical = assetId === 'banner_ig'
@@ -492,15 +497,23 @@ export function buildCoverImg2ImgPrompt(
     ? `Build the environment from this direction: ${sceneDir}.`
     : `Build an aspirational, premium, photoreal environment that best represents ${inputs.industry} for this audience, with a few lifestyle vignettes of the experience.`
 
-  const layoutLine = isVertical
-    ? 'LAYOUT: stack the brand lockup across the upper-middle; keep the lower half mostly scenery.'
-    : 'LAYOUT: center the brand lockup with generous scenery around it.'
-
   const iconStrip = svc.length >= 3
     ? `SERVICE ICON STRIP — a horizontal semi-transparent deep-navy bar with ${svc.length} evenly-spaced thin-line icons, each with a label underneath, in THIS exact order and spelling: ${svcUpper.map((s) => `"${s}"`).join(', ')}. Give each a simple, fitting line icon.`
     : ''
   const serviceLine = svc.length >= 3 ? `a thin line spelled EXACTLY: "${svcUpper.join(' · ')}"` : ''
   const urlBadge = website ? `a small rounded deep-navy badge with a white globe icon and the text spelled EXACTLY: "${website}"` : ''
+
+  // Ultra-wide covers are rendered at 16:9 then center-cropped to a long
+  // letterbox, so anything outside the central height band is clipped. When the
+  // surviving band is meaningfully smaller than the frame, tell the model to
+  // pack the entire lockup into that band as a compact horizontal cluster.
+  const cropSafe = !isVertical && typeof safeHeightPct === 'number' && safeHeightPct < 0.72
+  const bandPct = Math.max(15, Math.round((safeHeightPct ?? 1) * 100) - 8)
+  const layoutLine = isVertical
+    ? 'LAYOUT: stack the brand lockup across the upper-middle; keep the lower half mostly scenery.'
+    : cropSafe
+      ? `LAYOUT (CROP-SAFE, CRITICAL): this banner is cropped to a wide letterbox — only the central ${bandPct}% of the image HEIGHT survives the crop; everything above and below is cut off. Arrange the ENTIRE brand lockup (logo, wordmark${serviceLine ? ', the services line' : ''}${iconStrip ? ', the service icon strip' : ''}${urlBadge ? ', the URL badge' : ''}) as ONE COMPACT, primarily HORIZONTAL cluster, vertically centered and kept ENTIRELY within that central ${bandPct}% band — NOT a tall vertical stack. Place cinematic scenery you can afford to lose ABOVE and BELOW the band.`
+      : 'LAYOUT: center the brand lockup with generous scenery around it.'
 
   return [
     `Design a premium, ultra-realistic ${orientation} for "${inputs.business_name}", a ${inputs.vibe.join(', ')} ${inputs.industry} brand${inputs.business_description ? ` — ${inputs.business_description}` : ''}. A high-end marketing hero image in the style of a $100,000 advertising campaign.`,
