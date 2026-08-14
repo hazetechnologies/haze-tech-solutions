@@ -711,14 +711,25 @@ async function portalReset(req, res) {
   }
   try {
     const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
-    const { data: row } = await sb.from('portal_reset_tokens').select('token, user_id, used_at, expires_at').eq('token', token).maybeSingle()
-    if (!row || row.used_at || new Date(row.expires_at) < new Date()) {
+    // Atomically CLAIM the token before doing anything with it: mark used_at on a
+    // row that is still unused AND unexpired, returning it only if we won the
+    // claim. This makes the token truly single-use even under two concurrent
+    // POSTs (the previous check-then-update left a race where both could reset).
+    const nowIso = new Date().toISOString()
+    const { data: claimedRows } = await sb.from('portal_reset_tokens')
+      .update({ used_at: nowIso })
+      .eq('token', token).is('used_at', null).gt('expires_at', nowIso)
+      .select('user_id')
+    const claimed = claimedRows?.[0]
+    if (!claimed) {
       return res.status(400).json({ error: 'invalid_or_expired', message: 'This link is invalid or has expired. Please request a new one.' })
     }
-    const { error: upErr } = await sb.auth.admin.updateUserById(row.user_id, { password, email_confirm: true })
-    if (upErr) return res.status(400).json({ error: 'update_failed', message: upErr.message })
-    // Burn the token (idempotent: only the row we just used).
-    await sb.from('portal_reset_tokens').update({ used_at: new Date().toISOString() }).eq('token', token).is('used_at', null)
+    const { error: upErr } = await sb.auth.admin.updateUserById(claimed.user_id, { password, email_confirm: true })
+    if (upErr) {
+      // Release the claim so the (still-unexpired) link can be retried.
+      await sb.from('portal_reset_tokens').update({ used_at: null }).eq('token', token)
+      return res.status(400).json({ error: 'update_failed', message: upErr.message })
+    }
     return res.status(200).json({ ok: true })
   } catch (e) {
     console.error('[portal-reset] failed:', e?.message || e)

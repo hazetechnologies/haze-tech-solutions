@@ -1,19 +1,40 @@
+import { isSafePublicUrl } from './_lib/brand-autofill.js'
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
 
   const { url } = req.query
   if (!url) return res.status(400).json({ error: 'URL required' })
+  // SSRF guard: this endpoint is public and fetches a caller-supplied URL, so
+  // reject internal / link-local / cloud-metadata targets before any fetch.
+  if (!isSafePublicUrl(url)) return res.status(400).json({ error: 'Please enter a valid public website URL' })
 
   try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HazeTechAudit/1.0; +https://hazetechsolutions.com)' },
-      signal: AbortSignal.timeout(15000),
-      redirect: 'follow',
-    })
+    // SSRF-safe fetch: follow redirects MANUALLY and re-validate every hop, so a
+    // public URL that 30x-redirects to an internal address can't slip through.
+    let current = url
+    let response = null
+    for (let hop = 0; hop < 4; hop++) {
+      if (!isSafePublicUrl(current)) throw new Error('blocked a non-public address')
+      const r = await fetch(current, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HazeTechAudit/1.0; +https://hazetechsolutions.com)' },
+        signal: AbortSignal.timeout(15000),
+        redirect: 'manual',
+      })
+      if (r.status >= 300 && r.status < 400) {
+        const loc = r.headers.get('location')
+        if (!loc) break
+        current = new URL(loc, current).toString()  // resolve relative; re-validated next loop
+        continue
+      }
+      response = r
+      break
+    }
+    if (!response || !response.ok) throw new Error(`HTTP ${response?.status ?? 'redirect'}`)
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-
-    const html = await response.text()
+    // Cap the body at 2 MB before decoding to avoid a pathological page blowing memory.
+    const buf = await response.arrayBuffer()
+    const html = new TextDecoder('utf-8').decode(buf.slice(0, 2 * 1024 * 1024))
     const result = analyzeHTML(html)
     res.setHeader('Cache-Control', 's-maxage=300')
     res.json(result)
