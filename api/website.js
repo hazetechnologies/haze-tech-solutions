@@ -724,11 +724,21 @@ async function portalReset(req, res) {
     if (!claimed) {
       return res.status(400).json({ error: 'invalid_or_expired', message: 'This link is invalid or has expired. Please request a new one.' })
     }
-    const { error: upErr } = await sb.auth.admin.updateUserById(claimed.user_id, { password, email_confirm: true })
+    // Set the password. On ANY failure — a returned error OR a thrown
+    // network/timeout exception — release the claim so the still-unexpired link
+    // can be retried; otherwise a transient failure would burn a valid token and
+    // lock the user out (the throw path used to fall through to the outer catch,
+    // which returned 500 WITHOUT releasing the claim).
+    let upErr = null
+    try {
+      const { error } = await sb.auth.admin.updateUserById(claimed.user_id, { password, email_confirm: true })
+      upErr = error
+    } catch (e) {
+      upErr = e
+    }
     if (upErr) {
-      // Release the claim so the (still-unexpired) link can be retried.
       await sb.from('portal_reset_tokens').update({ used_at: null }).eq('token', token)
-      return res.status(400).json({ error: 'update_failed', message: upErr.message })
+      return res.status(400).json({ error: 'update_failed', message: upErr.message || 'Could not set your password. Please try again.' })
     }
     return res.status(200).json({ ok: true })
   } catch (e) {
