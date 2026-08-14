@@ -32,9 +32,14 @@ export default async function handler(req, res) {
     }
     if (!response || !response.ok) throw new Error(`HTTP ${response?.status ?? 'redirect'}`)
 
-    // Cap the body at 2 MB before decoding to avoid a pathological page blowing memory.
+    // Cap the body at 2 MB. Reject early when the server declares an oversized
+    // body; a lying/absent Content-Length is still bounded by the 15s request
+    // timeout above, and we decode at most 2 MB regardless.
+    const MAX_BYTES = 2 * 1024 * 1024
+    const declaredLen = parseInt(response.headers.get('content-length') || '0', 10)
+    if (declaredLen && declaredLen > MAX_BYTES) throw new Error('page too large')
     const buf = await response.arrayBuffer()
-    const html = new TextDecoder('utf-8').decode(buf.slice(0, 2 * 1024 * 1024))
+    const html = new TextDecoder('utf-8').decode(buf.slice(0, MAX_BYTES))
     const result = analyzeHTML(html)
     res.setHeader('Cache-Control', 's-maxage=300')
     res.json(result)
