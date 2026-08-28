@@ -7,6 +7,7 @@ const services = [
   {
     icon: Bot,
     title: 'AI Automation',
+    slug: 'ai-automation',
     tagline: 'Work smarter, not harder.',
     accent: '#00CFFF',
     glowColor: 'rgba(0, 207, 255, 0.25)',
@@ -21,6 +22,7 @@ const services = [
   {
     icon: TrendingUp,
     title: 'Social Media Marketing',
+    slug: 'social-media',
     tagline: 'Grow your audience on autopilot.',
     accent: '#FF6B00',
     glowColor: 'rgba(255, 107, 0, 0.25)',
@@ -36,6 +38,7 @@ const services = [
   {
     icon: Globe,
     title: 'Website Development',
+    slug: 'web-development',
     tagline: 'Sites built to convert.',
     accent: '#00CFFF',
     glowColor: 'rgba(0, 207, 255, 0.15)',
@@ -156,22 +159,16 @@ export default function Services() {
                   ))}
                 </ul>
 
-                {/* Per-service CTA */}
-                {service.cta && (
-                  <Link
-                    to={service.cta.to}
-                    onClick={() => trackCta(service.cta.to === '/free-social-audit' ? 'services-social-media-audit' : 'services-website-audit', 'services')}
-                    className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-all"
-                    style={{
-                      color: service.accent,
-                      textDecoration: 'none',
-                      letterSpacing: '0.01em',
-                    }}
-                  >
-                    {service.cta.label}
-                    <ArrowRight size={14} aria-hidden="true" />
-                  </Link>
-                )}
+                {/* Link to the full service page (with a 2-minute explainer video) */}
+                <Link
+                  to={`/services/${service.slug}`}
+                  onClick={() => trackCta(`services-${service.slug}-learnmore`, 'services')}
+                  className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-all"
+                  style={{ color: service.accent, textDecoration: 'none', letterSpacing: '0.01em' }}
+                >
+                  Watch the 2-min overview
+                  <ArrowRight size={14} aria-hidden="true" />
+                </Link>
 
                 {/* Bottom accent line */}
                 <div
