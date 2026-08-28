@@ -35,6 +35,7 @@ import BlogPage        from './pages/BlogPage'
 import BlogPost        from './pages/BlogPost'
 import PricingPage     from './pages/PricingPage'
 import CartPage        from './pages/CartPage'
+import ServicePage     from './pages/ServicePage'
 
 import PortalLogin          from './pages/portal/PortalLogin'
 import PortalLayout         from './pages/portal/PortalLayout'
@@ -92,6 +93,7 @@ export default function App() {
           <Route path="/blog"   element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/services/:slug" element={<ServicePage />} />
           <Route path="/cart"    element={<CartPage />} />
           <Route path="/affiliate" element={<AffiliateDashboard />} />
           <Route path="/affiliate/confirm" element={<AffiliateConfirm />} />
