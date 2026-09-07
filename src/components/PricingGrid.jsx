@@ -10,13 +10,17 @@ import { supabase } from '../lib/supabase'
 import { effectivePrice } from '../lib/pricing'
 import { useCart } from '../lib/cart'
 import PurchaseModal from './PurchaseModal'
+import { useI18n } from '../i18n'
 
 function sectionFor(o) { if (o <= 3) return 'smm'; if (o === 4) return 'ai'; if (o <= 7) return 'web'; return 'seo' }
+// Anchor ids and colours are fixed; the heading copy is looked up per locale
+// (pricingPage.categories.<key>). Plan names, prices and feature bullets come
+// from the products/plans tables and stay in the language they were entered in.
 const SECTION_META = {
-  smm: { id: 'smm', title: 'Social Media Management', subtitle: 'Daily content and growth on the platforms your customers use.', accent: '#FF6B00', icon: Users },
-  web: { id: 'web-dev', title: 'Website Development', subtitle: 'Brand-aligned sites built to convert — live in days.', accent: '#00CFFF', icon: BarChart3 },
-  ai: { id: 'ai', title: 'AI Automation', subtitle: 'Custom workflows that run while you sleep.', accent: '#A78BFA', icon: TrendingUp },
-  seo: { id: 'seo', title: 'SEO & Digital Marketing', subtitle: 'Get found. Stay found. Convert.', accent: '#22C55E', icon: Search },
+  smm: { key: 'smm', id: 'smm', accent: '#FF6B00', icon: Users },
+  web: { key: 'web', id: 'web-dev', accent: '#00CFFF', icon: BarChart3 },
+  ai: { key: 'ai', id: 'ai', accent: '#A78BFA', icon: TrendingUp },
+  seo: { key: 'seo', id: 'seo', accent: '#22C55E', icon: Search },
 }
 const fmt = (v) => Number(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -64,14 +68,15 @@ export default function PricingGrid({ readOnly = false, note }) {
 }
 
 function Section({ meta, products, readOnly, onBuy }) {
+  const { t } = useI18n()
   const Icon = meta.icon
   return (
     <section id={meta.id}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <div style={{ width: 34, height: 34, borderRadius: 9, background: `${meta.accent}15`, border: `1px solid ${meta.accent}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} color={meta.accent} /></div>
-        <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 19, fontWeight: 800, color: '#F1F5F9', margin: 0, letterSpacing: '0.03em' }}>{meta.title}</h2>
+        <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 19, fontWeight: 800, color: '#F1F5F9', margin: 0, letterSpacing: '0.03em' }}>{t(`pricingPage.categories.${meta.key}.title`)}</h2>
       </div>
-      <p style={{ fontSize: 13, color: '#94A3B8', margin: '0 0 18px' }}>{meta.subtitle}</p>
+      <p style={{ fontSize: 13, color: '#94A3B8', margin: '0 0 18px' }}>{t(`pricingPage.categories.${meta.key}.subtitle`)}</p>
       <div style={{ display: 'grid', gridTemplateColumns: products.length === 1 ? 'minmax(260px, 460px)' : 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
         {products.map(p => <Card key={p.id} product={p} accent={meta.accent} readOnly={readOnly} onBuy={onBuy} />)}
       </div>
@@ -80,6 +85,7 @@ function Section({ meta, products, readOnly, onBuy }) {
 }
 
 function Card({ product, accent, readOnly, onBuy }) {
+  const { t } = useI18n()
   const { add, remove, has } = useCart()
   const plans = (product.subscription_plans || []).filter(p => p.stripe_price_id != null).sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
   const featured = product.name.toLowerCase().includes('growth') || product.name.includes('AI Automation')
@@ -91,7 +97,7 @@ function Card({ product, accent, readOnly, onBuy }) {
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', color: accent, textTransform: 'uppercase', marginBottom: 6 }}>{product.name.replace(/^.*?— ?/, '') || product.name}</div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
           <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 30, fontWeight: 800, color: '#F1F5F9' }}>${fmt(plans[0] ? effectivePrice(plans[0], product) : product.base_price)}</span>
-          {plans[0] && <span style={{ fontSize: 13, color: '#64748B' }}>{plans[0].billing_cycle === 'one-time' ? 'one-time' : `/ ${plans[0].billing_cycle}`}</span>}
+          {plans[0] && <span style={{ fontSize: 13, color: '#64748B' }}>{plans[0].billing_cycle === 'one-time' ? t('pricingPage.oneTime') : `/ ${plans[0].billing_cycle}`}</span>}
         </div>
       </div>
       {features.length > 0 && (
@@ -103,16 +109,16 @@ function Card({ product, accent, readOnly, onBuy }) {
       {!readOnly && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto', paddingTop: 8 }}>
           {plans.length === 0 ? (
-            <button disabled style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, color: '#475569', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'not-allowed' }}>Coming soon</button>
+            <button disabled style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, color: '#475569', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'not-allowed' }}>{t('pricingPage.comingSoon')}</button>
           ) : plans.map(plan => {
             const inCart = has(plan.id)
             return (
               <div key={plan.id} style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => onBuy(product, plan)} style={{ flex: 1, padding: '10px 16px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, background: featured ? `linear-gradient(135deg, ${accent}, ${accent}CC)` : 'rgba(255,255,255,0.04)', color: featured ? '#020617' : '#F1F5F9', border: featured ? 'none' : `1px solid ${accent}40`, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Buy {plan.name.replace(/\(.*\)/, '').trim()}</span>
+                  <span>{t('pricingPage.buy')} {plan.name.replace(/\(.*\)/, '').trim()}</span>
                   {plan.discount_percent > 0 && <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.85 }}>-{plan.discount_percent}%</span>}
                 </button>
-                <button onClick={() => inCart ? remove(plan.id) : add(plan.id, product.id)} title={inCart ? 'Remove from cart' : 'Add to cart'} aria-label={inCart ? 'Remove from cart' : 'Add to cart'} style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: inCart ? `${accent}25` : 'rgba(255,255,255,0.04)', border: `1px solid ${inCart ? accent : 'rgba(255,255,255,0.1)'}`, borderRadius: 10, cursor: 'pointer', color: inCart ? accent : '#94A3B8', flexShrink: 0 }}>
+                <button onClick={() => inCart ? remove(plan.id) : add(plan.id, product.id)} title={inCart ? t('pricingPage.removeFromCart') : t('pricingPage.addToCart')} aria-label={inCart ? t('pricingPage.removeFromCart') : t('pricingPage.addToCart')} style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: inCart ? `${accent}25` : 'rgba(255,255,255,0.04)', border: `1px solid ${inCart ? accent : 'rgba(255,255,255,0.1)'}`, borderRadius: 10, cursor: 'pointer', color: inCart ? accent : '#94A3B8', flexShrink: 0 }}>
                   {inCart ? <CheckCircle2 size={15} /> : <ShoppingCart size={15} />}
                 </button>
               </div>

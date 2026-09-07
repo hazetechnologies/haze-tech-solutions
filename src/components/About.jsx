@@ -1,28 +1,12 @@
 import { motion } from 'framer-motion'
 import { Zap, Heart, Target } from 'lucide-react'
+import { useI18n } from '../i18n'
 
-const values = [
-  {
-    icon: Heart,
-    title: 'Boutique & Hands-On',
-    description:
-      "You're not a ticket in a queue. Every client gets direct access to our team, personalized strategies, and consistent communication from day one.",
-    accent: '#00CFFF',
-  },
-  {
-    icon: Zap,
-    title: 'AI-First Approach',
-    description:
-      'We build around the best AI tools available — not as a gimmick, but because they genuinely compress timelines, reduce costs, and unlock capabilities that weren\'t possible before.',
-    accent: '#FF6B00',
-  },
-  {
-    icon: Target,
-    title: 'Results-Focused',
-    description:
-      'We measure success in outcomes, not deliverables. More leads, more conversions, more growth — that\'s the standard we hold ourselves to for every engagement.',
-    accent: '#00CFFF',
-  },
+// Icons/accents only; titles and descriptions come from the locale dictionary.
+const VALUE_CARDS = [
+  { icon: Heart,  key: 'boutique', accent: '#00CFFF' },
+  { icon: Zap,    key: 'aiFirst',  accent: '#FF6B00' },
+  { icon: Target, key: 'results',  accent: '#00CFFF' },
 ]
 
 const containerVariants = {
@@ -36,12 +20,14 @@ const itemVariants = {
 }
 
 export default function About() {
+  const { t } = useI18n()
+
   return (
     <section
       id="about"
       className="relative py-28 px-6 overflow-hidden"
       style={{ background: '#040D1A' }}
-      aria-label="About Haze Tech Solutions"
+      aria-label={t('about.sectionAria')}
     >
       {/* Orbs */}
       <div
@@ -65,30 +51,18 @@ export default function About() {
             viewport={{ once: true }}
             transition={{ duration: 0.7 }}
           >
-            <span className="section-label">Our Story</span>
+            <span className="section-label">{t('about.label')}</span>
             <h2
               className="font-display font-black mt-4 mb-6 text-text-main"
               style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', lineHeight: 1.15 }}
             >
-              Built for the{' '}
-              <span className="gradient-text">Underdog</span>
+              {t('about.title1')}{' '}
+              <span className="gradient-text">{t('about.title2')}</span>
             </h2>
             <div className="space-y-4 text-muted text-base leading-relaxed">
-              <p>
-                Haze Tech Solutions was founded with one belief: small businesses
-                and startups deserve the same caliber of automation, marketing, and
-                technology that Fortune 500 companies take for granted.
-              </p>
-              <p>
-                The gap was clear. Enterprise teams had AI tools, dedicated social
-                teams, and custom-built websites. Small business owners had duct tape
-                and late nights. We set out to close that gap permanently.
-              </p>
-              <p>
-                Today we partner with founders, local businesses, and growing startups
-                to build the systems, content, and digital presence that let them
-                compete — and win.
-              </p>
+              <p>{t('about.p1')}</p>
+              <p>{t('about.p2')}</p>
+              <p>{t('about.p3')}</p>
             </div>
           </motion.div>
 
@@ -134,11 +108,10 @@ export default function About() {
                 Josiah
               </h3>
               <p className="text-primary text-sm font-medium mb-1">
-                Founder & Lead Strategist
+                {t('about.founderRole')}
               </p>
               <p className="text-muted text-xs mb-6 leading-relaxed">
-                Automation architect & growth strategist helping small businesses
-                operate at enterprise speed.
+                {t('about.founderBio')}
               </p>
 
               {/* Divider */}
@@ -149,11 +122,11 @@ export default function About() {
 
               <div className="grid grid-cols-3 gap-3 text-center">
                 {[
-                  { val: '50+', lbl: 'Clients' },
-                  { val: '3yrs', lbl: 'Experience' },
-                  { val: '98%', lbl: 'Satisfaction' },
+                  { val: '50+', lbl: t('about.statClients') },
+                  { val: '3yrs', lbl: t('about.statExperience') },
+                  { val: '98%', lbl: t('about.statSatisfaction') },
                 ].map((s) => (
-                  <div key={s.lbl}>
+                  <div key={s.val}>
                     <div className="font-display font-bold text-primary text-base">{s.val}</div>
                     <div className="text-muted text-xs">{s.lbl}</div>
                   </div>
@@ -175,17 +148,17 @@ export default function About() {
               className="font-display font-black text-text-main"
               style={{ fontSize: 'clamp(1.6rem, 3.5vw, 2.5rem)' }}
             >
-              Why Clients Choose{' '}
-              <span className="gradient-text">Haze Tech</span>
+              {t('about.valuesTitle1')}{' '}
+              <span className="gradient-text">{t('about.valuesTitle2')}</span>
             </h2>
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {values.map((val) => {
+            {VALUE_CARDS.map((val) => {
               const Icon = val.icon
               return (
                 <motion.div
-                  key={val.title}
+                  key={val.key}
                   variants={itemVariants}
                   whileHover={{
                     y: -6,
@@ -205,10 +178,10 @@ export default function About() {
                     <Icon size={20} style={{ color: val.accent }} aria-hidden="true" />
                   </div>
                   <h3 className="font-display font-bold text-text-main text-base mb-3">
-                    {val.title}
+                    {t(`about.values.${val.key}.title`)}
                   </h3>
                   <p className="text-muted text-sm leading-relaxed">
-                    {val.description}
+                    {t(`about.values.${val.key}.description`)}
                   </p>
                 </motion.div>
               )

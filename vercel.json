@@ -1,15 +1,131 @@
 {
   "rewrites": [
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
+      "source": "/services/ai-automation",
+      "destination": "/services/ai-automation/index.html"
+    },
+    {
+      "source": "/services/social-media",
+      "destination": "/services/social-media/index.html"
+    },
+    {
+      "source": "/services/web-development",
+      "destination": "/services/web-development/index.html"
+    },
+    {
+      "source": "/es",
+      "destination": "/es/index.html"
+    },
+    {
+      "source": "/es/services/ai-automation",
+      "destination": "/es/services/ai-automation/index.html"
+    },
+    {
+      "source": "/es/services/social-media",
+      "destination": "/es/services/social-media/index.html"
+    },
+    {
+      "source": "/es/services/web-development",
+      "destination": "/es/services/web-development/index.html"
+    },
+    {
+      "source": "/pt",
+      "destination": "/pt/index.html"
+    },
+    {
+      "source": "/pt/services/ai-automation",
+      "destination": "/pt/services/ai-automation/index.html"
+    },
+    {
+      "source": "/pt/services/social-media",
+      "destination": "/pt/services/social-media/index.html"
+    },
+    {
+      "source": "/pt/services/web-development",
+      "destination": "/pt/services/web-development/index.html"
+    },
+    {
+      "source": "/fr",
+      "destination": "/fr/index.html"
+    },
+    {
+      "source": "/fr/services/ai-automation",
+      "destination": "/fr/services/ai-automation/index.html"
+    },
+    {
+      "source": "/fr/services/social-media",
+      "destination": "/fr/services/social-media/index.html"
+    },
+    {
+      "source": "/fr/services/web-development",
+      "destination": "/fr/services/web-development/index.html"
+    },
+    {
+      "source": "/de",
+      "destination": "/de/index.html"
+    },
+    {
+      "source": "/de/services/ai-automation",
+      "destination": "/de/services/ai-automation/index.html"
+    },
+    {
+      "source": "/de/services/social-media",
+      "destination": "/de/services/social-media/index.html"
+    },
+    {
+      "source": "/de/services/web-development",
+      "destination": "/de/services/web-development/index.html"
+    },
+    {
+      "source": "/pricing",
+      "destination": "/pricing/index.html"
+    },
+    {
+      "source": "/blog",
+      "destination": "/blog/index.html"
+    },
+    {
+      "source": "/audit",
+      "destination": "/audit/index.html"
+    },
+    {
+      "source": "/free-social-audit",
+      "destination": "/free-social-audit/index.html"
+    },
+    {
+      "source": "/affiliate",
+      "destination": "/affiliate/index.html"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/app.html"
+    }
   ],
   "functions": {
-    "api/website.js": { "maxDuration": 60 }
+    "api/website.js": {
+      "maxDuration": 60
+    }
   },
   "crons": [
-    { "path": "/api/website?action=cron-notify-status", "schedule": "*/5 * * * *" },
-    { "path": "/api/website?action=cron-admin-digest", "schedule": "0 13 * * *" },
-    { "path": "/api/website?action=cron-email-autoresponder", "schedule": "*/5 * * * *" },
-    { "path": "/api/website?action=cron-brand-kit-resume", "schedule": "*/5 * * * *" }
+    {
+      "path": "/api/website?action=cron-notify-status",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/website?action=cron-admin-digest",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/website?action=cron-email-autoresponder",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/website?action=cron-brand-kit-resume",
+      "schedule": "*/5 * * * *"
+    }
   ]
 }

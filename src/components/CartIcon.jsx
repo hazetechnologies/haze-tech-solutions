@@ -1,16 +1,18 @@
 import { Link } from 'react-router-dom'
 import { ShoppingCart } from 'lucide-react'
 import { useCart } from '../lib/cart'
+import { useI18n } from '../i18n'
 
 // Small cart-status pill used by Navbar + PortalLayout.
 // `variant` controls color treatment so the same icon fits dark Navbar + dark portal sidebar.
 export default function CartIcon({ variant = 'public' }) {
   const { count } = useCart()
+  const { path } = useI18n()
   const isPortal = variant === 'portal'
 
   return (
     <Link
-      to="/cart"
+      to={path('/cart')}
       aria-label={`Shopping cart, ${count} item${count === 1 ? '' : 's'}`}
       style={{
         position: 'relative',

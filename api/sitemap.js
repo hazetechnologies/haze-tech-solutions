@@ -7,17 +7,21 @@
 //
 // Wired up by a vercel.json rewrite: /sitemap.xml -> /api/sitemap (declared
 // BEFORE the SPA catch-all so it wins).
+//
+// Multilingual: every route in LOCALIZED_ROUTES is emitted once per locale,
+// each carrying the full xhtml:link hreflang cluster. Google requires the
+// cluster to be reciprocal — every version must list every version, itself
+// included — so it is generated from one list rather than hand-maintained.
 import { createClient } from '@supabase/supabase-js'
 import { siteUrl } from './_lib/stripe.js'
-
-const STATIC_ROUTES = [
-  { path: '/', priority: '1.0', changefreq: 'weekly' },
-  { path: '/pricing', priority: '0.9', changefreq: 'monthly' },
-  { path: '/blog', priority: '0.8', changefreq: 'weekly' },
-  { path: '/affiliate', priority: '0.6', changefreq: 'monthly' },
-  { path: '/audit', priority: '0.6', changefreq: 'monthly' },
-  { path: '/free-social-audit', priority: '0.6', changefreq: 'monthly' },
-]
+import {
+  LOCALES,
+  LOCALE_CODES,
+  DEFAULT_LOCALE,
+  LOCALIZED_ROUTES,
+  ENGLISH_ONLY_ROUTES,
+  absoluteUrl,
+} from '../src/i18n/config.js'
 
 function adminClient() {
   return createClient(
@@ -39,14 +43,41 @@ export default async function handler(req, res) {
   const base = siteUrl().replace(/\/+$/, '')
   const now = new Date().toISOString()
 
-  const entries = STATIC_ROUTES.map((r) => ({
-    loc: `${base}${r.path === '/' ? '' : r.path}`,
-    lastmod: now,
-    changefreq: r.changefreq,
-    priority: r.priority,
-  }))
+  const entries = []
+
+  // Translated pages: one <url> per locale, each listing the whole cluster.
+  for (const route of LOCALIZED_ROUTES) {
+    const alternates = [
+      ...LOCALE_CODES.map((code) => ({
+        hreflang: LOCALES[code].hreflang,
+        href: absoluteUrl(route.path, code, base),
+      })),
+      { hreflang: 'x-default', href: absoluteUrl(route.path, DEFAULT_LOCALE, base) },
+    ]
+    for (const code of LOCALE_CODES) {
+      entries.push({
+        loc: absoluteUrl(route.path, code, base),
+        lastmod: now,
+        changefreq: route.changefreq,
+        priority: route.priority,
+        alternates,
+      })
+    }
+  }
+
+  for (const r of ENGLISH_ONLY_ROUTES) {
+    entries.push({
+      loc: `${base}${r.path}`,
+      lastmod: now,
+      changefreq: r.changefreq,
+      priority: r.priority,
+      alternates: [],
+    })
+  }
 
   // A DB hiccup must never break the sitemap — degrade to the static routes.
+  // Blog posts are published in English only, so they get no hreflang cluster:
+  // claiming a translation that does not exist is worse than claiming none.
   try {
     const sb = adminClient()
     const { data, error } = await sb
@@ -64,6 +95,7 @@ export default async function handler(req, res) {
           lastmod: p.updated_at ? new Date(p.updated_at).toISOString() : now,
           changefreq: 'monthly',
           priority: '0.7',
+          alternates: [],
         })
       }
     }
@@ -73,13 +105,23 @@ export default async function handler(req, res) {
 
   const xml =
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" ' +
+    'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' +
     entries
-      .map(
-        (e) =>
+      .map((e) => {
+        const alts = (e.alternates || [])
+          .map(
+            (a) =>
+              `    <xhtml:link rel="alternate" hreflang="${xmlEscape(a.hreflang)}" href="${xmlEscape(a.href)}" />\n`,
+          )
+          .join('')
+        return (
           `  <url>\n    <loc>${xmlEscape(e.loc)}</loc>\n    <lastmod>${e.lastmod}</lastmod>\n` +
-          `    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`,
-      )
+          `    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n` +
+          alts +
+          '  </url>'
+        )
+      })
       .join('\n') +
     '\n</urlset>\n'
 

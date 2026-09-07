@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { TrendingUp, Users, BarChart3, ArrowUpRight, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useI18n } from '../i18n'
 
 const SERVICE_META = {
   'AI Automation': { color: '#00CFFF', icon: TrendingUp },
@@ -31,6 +32,7 @@ const cardVariants = {
 }
 
 export default function Portfolio() {
+  const { t } = useI18n()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -82,17 +84,16 @@ export default function Portfolio() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <span className="section-label">Case Studies</span>
+          <span className="section-label">{t('portfolio.label')}</span>
           <h2
             className="font-display font-black mt-4 mb-4 text-text-main"
             style={{ fontSize: 'clamp(2rem, 5vw, 3.25rem)', lineHeight: 1.1 }}
           >
-            Real Businesses.{' '}
-            <span className="gradient-text">Real Results.</span>
+            {t('portfolio.title1')}{' '}
+            <span className="gradient-text">{t('portfolio.title2')}</span>
           </h2>
           <p className="text-muted text-lg max-w-xl mx-auto">
-            Here's what happens when small businesses get enterprise-grade tools
-            working for them around the clock.
+            {t('portfolio.lead')}
           </p>
         </motion.div>
 
@@ -244,7 +245,7 @@ export default function Portfolio() {
           transition={{ delay: 0.4 }}
         >
           <p className="text-muted text-sm mb-4">
-            Ready to become our next success story?
+            {t('portfolio.ctaLead')}
           </p>
           <motion.button
             onClick={() => {
@@ -255,7 +256,7 @@ export default function Portfolio() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
           >
-            Start Your Project
+            {t('portfolio.ctaButton')}
             <ArrowUpRight size={16} aria-hidden="true" />
           </motion.button>
         </motion.div>

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import logoIcon from '../assets/logo/haze-logo-icon.png'
+import { useI18n } from '../i18n'
+import LanguageSwitcher from './LanguageSwitcher'
 
 // Simple inline social icons to avoid extra deps
 const InstagramIcon = () => (
@@ -27,18 +29,19 @@ const XIcon = () => (
 )
 
 const navLinks = [
-  { label: 'Home', href: '#home' },
-  { label: 'Services', href: '#services' },
-  { label: 'Portfolio', href: '#portfolio' },
-  { label: 'About', href: '#about' },
-  { label: 'Contact', href: '#contact' },
+  { key: 'home', href: '#home' },
+  { key: 'services', href: '#services' },
+  { key: 'portfolio', href: '#portfolio' },
+  { key: 'about', href: '#about' },
+  { key: 'contact', href: '#contact' },
 ]
 
+// The last entry scrolls to #contact rather than #services.
 const serviceLinks = [
-  'AI Automation',
-  'Social Media Marketing',
-  'Website Development',
-  'Free Audit',
+  { key: 'services.items.ai-automation.title', target: '#services' },
+  { key: 'services.items.social-media.title', target: '#services' },
+  { key: 'services.items.web-development.title', target: '#services' },
+  { key: 'footer.freeAudit', target: '#contact' },
 ]
 
 const socialLinks = [
@@ -53,6 +56,7 @@ const handleScroll = (href) => {
 }
 
 export default function Footer() {
+  const { t } = useI18n()
   const [nlEmail, setNlEmail] = useState('')
   const [nlStatus, setNlStatus] = useState('idle') // idle | loading | success | error
 
@@ -116,8 +120,7 @@ export default function Footer() {
             </motion.div>
 
             <p className="text-muted text-sm leading-relaxed max-w-xs mb-6">
-              Built to Scale. Wired to Win. — AI automation, social media marketing,
-              and website development for small businesses and startups ready to grow.
+              {t('footer.blurb')}
             </p>
 
             {/* Social icons */}
@@ -142,17 +145,17 @@ export default function Footer() {
           {/* Navigation column */}
           <div>
             <h3 className="font-display font-bold text-text-main text-sm mb-5 tracking-wide">
-              Navigation
+              {t('footer.navigation')}
             </h3>
             <ul className="space-y-3 list-none p-0 m-0">
               {navLinks.map((link) => (
-                <li key={link.label}>
+                <li key={link.key}>
                   <button
                     onClick={() => handleScroll(link.href)}
                     className="text-muted text-sm hover:text-primary transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
                     style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                   >
-                    {link.label}
+                    {t(`nav.${link.key}`)}
                   </button>
                 </li>
               ))}
@@ -162,7 +165,7 @@ export default function Footer() {
                   className="text-muted text-sm hover:text-primary transition-colors duration-200 no-underline"
                   style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >
-                  Partner Program
+                  {t('footer.partnerProgram')}
                 </a>
               </li>
             </ul>
@@ -171,19 +174,17 @@ export default function Footer() {
           {/* Services column */}
           <div>
             <h3 className="font-display font-bold text-text-main text-sm mb-5 tracking-wide">
-              Services
+              {t('footer.services')}
             </h3>
             <ul className="space-y-3 list-none p-0 m-0">
               {serviceLinks.map((svc) => (
-                <li key={svc}>
+                <li key={svc.key}>
                   <button
-                    onClick={() =>
-                      handleScroll(svc === 'Free Audit' ? '#contact' : '#services')
-                    }
+                    onClick={() => handleScroll(svc.target)}
                     className="text-muted text-sm hover:text-primary transition-colors duration-200 bg-transparent border-none cursor-pointer p-0 text-left"
                     style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                   >
-                    {svc}
+                    {t(svc.key)}
                   </button>
                 </li>
               ))}
@@ -200,15 +201,15 @@ export default function Footer() {
             <div className="flex flex-col md:flex-row items-center gap-6">
               <div className="flex-1">
                 <h3 className="font-display font-bold text-text-main text-base mb-2">
-                  Stay in the Loop
+                  {t('footer.newsletterTitle')}
                 </h3>
                 <p className="text-muted text-sm m-0">
-                  Get AI automation tips, marketing insights, and exclusive offers straight to your inbox.
+                  {t('footer.newsletterBody')}
                 </p>
               </div>
               {nlStatus === 'success' ? (
                 <p className="text-sm font-medium" style={{ color: '#22c55e' }}>
-                  You're subscribed!
+                  {t('footer.subscribed')}
                 </p>
               ) : (
                 <form onSubmit={handleSubscribe} className="flex gap-3 w-full md:w-auto">
@@ -216,7 +217,7 @@ export default function Footer() {
                     type="email"
                     value={nlEmail}
                     onChange={(e) => setNlEmail(e.target.value)}
-                    placeholder="you@email.com"
+                    placeholder={t('footer.emailPlaceholder')}
                     required
                     className="flex-1 md:w-64"
                     style={{
@@ -238,12 +239,12 @@ export default function Footer() {
                     whileTap={{ scale: 0.97 }}
                     style={nlStatus === 'loading' ? { opacity: 0.6 } : {}}
                   >
-                    {nlStatus === 'loading' ? 'Joining...' : 'Subscribe'}
+                    {nlStatus === 'loading' ? t('footer.joining') : t('footer.subscribe')}
                   </motion.button>
                 </form>
               )}
               {nlStatus === 'error' && (
-                <p className="text-sm" style={{ color: '#ef4444' }}>Something went wrong. Try again.</p>
+                <p className="text-sm" style={{ color: '#ef4444' }}>{t('footer.subscribeError')}</p>
               )}
             </div>
           </div>
@@ -258,19 +259,23 @@ export default function Footer() {
         />
 
         {/* Bottom row */}
+        <div className="flex justify-center mb-6">
+          <LanguageSwitcher variant="inline" />
+        </div>
+
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted">
           <p>
-            © {new Date().getFullYear()} Haze Tech Solutions. All rights reserved.
+            © {new Date().getFullYear()} Haze Tech Solutions. {t('footer.rights')}
           </p>
           <p className="flex items-center gap-1">
-            Built with{' '}
+            {t('footer.builtWithPre')}{' '}
             <span
               className="gradient-text font-medium"
               style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
             >
-              AI & ambition
+              {t('footer.builtWithMid')}
             </span>{' '}
-            in the USA
+            {t('footer.builtWithPost')}
           </p>
         </div>
       </div>

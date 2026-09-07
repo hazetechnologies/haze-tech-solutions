@@ -4,8 +4,10 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { ArrowLeft, Calendar, ArrowRight } from 'lucide-react'
 import { BLOG_CATEGORIES } from '../lib/blogCategories'
+import { useI18n } from '../i18n'
 
 export default function BlogPage() {
+  const { t, path } = useI18n()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeCat, setActiveCat] = useState('All')
@@ -35,8 +37,8 @@ export default function BlogPage() {
         borderBottom: '1px solid rgba(0,207,255,0.1)',
         padding: '1rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#94A3B8', textDecoration: 'none', fontSize: '0.9rem' }}>
-          <ArrowLeft size={16} /> Back to Home
+        <Link to={path('/')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#94A3B8', textDecoration: 'none', fontSize: '0.9rem' }}>
+          <ArrowLeft size={16} /> {t('blogPage.backHome')}
         </Link>
         <span style={{ fontFamily: 'Orbitron, sans-serif', color: '#00CFFF', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '1px' }}>
           BLOG
@@ -50,10 +52,10 @@ export default function BlogPage() {
           animate={{ opacity: 1, y: 0 }}
           style={{ fontFamily: 'Orbitron, sans-serif', fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 900, margin: '0 0 1rem' }}
         >
-          Insights & <span style={{ background: 'linear-gradient(135deg, #00CFFF, #FF6B00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Updates</span>
+          {t('blogPage.title1')} <span style={{ background: 'linear-gradient(135deg, #00CFFF, #FF6B00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{t('blogPage.title2')}</span>
         </motion.h1>
         <p style={{ color: '#8BA8C4', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>
-          AI automation tips, marketing strategies, and business growth insights from the Haze Tech team.
+          {t('blogPage.lead')}
         </p>
       </div>
 
@@ -67,7 +69,7 @@ export default function BlogPage() {
           </div>
         ) : posts.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '4rem 0' }}>
-            <p style={{ color: '#8BA8C4', fontSize: '1rem' }}>No posts yet. Check back soon!</p>
+            <p style={{ color: '#8BA8C4', fontSize: '1rem' }}>{t('blogPage.empty')}</p>
           </div>
         ) : (
           <>
