@@ -8,6 +8,7 @@ import {
   localizePath,
   absoluteUrl,
   LOCALIZED_ROUTES,
+  ENGLISH_ONLY_ROUTES,
 } from './config'
 import en from './locales/en'
 import es from './locales/es'
@@ -25,6 +26,12 @@ function get(obj, path) {
     cur = cur[part]
   }
   return cur
+}
+
+/** Always reads the English dictionary, whatever locale the URL is in. */
+function enOnly(key) {
+  const v = get(DICTS[DEFAULT_LOCALE], key)
+  return v !== undefined ? v : key
 }
 
 const I18nContext = createContext(null)
@@ -114,9 +121,13 @@ function upsertMeta(selector, attrs) {
  * `routeKey` indexes the `seo` block of the dictionaries; `routePath` is the
  * locale-free path the alternates should point at (defaults to the current one).
  */
-export function Seo({ routeKey, routePath }) {
-  const { locale, t, routePath: current } = useI18n()
+export function Seo({ routeKey, routePath, englishOnly = false }) {
+  const { locale: activeLocale, t: activeT, routePath: current } = useI18n()
   const target = routePath || current
+  // An English-only page takes its head from English whatever the URL prefix is,
+  // and publishes no alternates.
+  const locale = englishOnly ? DEFAULT_LOCALE : activeLocale
+  const t = englishOnly ? (key) => enOnly(key) : activeT
 
   useEffect(() => {
     const title = t(`seo.${routeKey}.title`)
@@ -141,6 +152,7 @@ export function Seo({ routeKey, routePath }) {
     document.head
       .querySelectorAll('link[rel="alternate"][hreflang], link[data-i18n-alt]')
       .forEach((n) => n.remove())
+    if (englishOnly) return
     for (const code of LOCALE_CODES) {
       const link = document.createElement('link')
       link.setAttribute('rel', 'alternate')
@@ -155,7 +167,7 @@ export function Seo({ routeKey, routePath }) {
     xd.setAttribute('href', absoluteUrl(target, DEFAULT_LOCALE))
     xd.setAttribute('data-i18n-alt', '')
     document.head.appendChild(xd)
-  }, [locale, routeKey, target, t])
+  }, [locale, routeKey, target, t, englishOnly])
 
   return null
 }
@@ -209,6 +221,8 @@ export function SeoRouter() {
   const { routePath } = useI18n()
   const entry = LOCALIZED_ROUTES.find((r) => r.path === routePath)
   if (entry) return <Seo routeKey={entry.key} routePath={entry.path} />
+  const english = ENGLISH_ONLY_ROUTES.find((r) => r.path === routePath)
+  if (english) return <Seo routeKey={english.key} routePath={english.path} englishOnly />
   return <CanonicalToEnglish routePath={routePath} />
 }
 

@@ -19,19 +19,9 @@ import {
   LOCALE_CODES,
   DEFAULT_LOCALE,
   LOCALIZED_ROUTES,
+  ENGLISH_ONLY_ROUTES,
   absoluteUrl,
 } from '../src/i18n/config.js'
-
-// Routes that exist only in English: transactional, or listing DB content that
-// has no translations. They keep their sitemap entry — dropping /audit and
-// /free-social-audit while also canonicalising them would be two independent
-// de-indexing signals on the site's two lead-gen pages.
-const ENGLISH_ONLY_ROUTES = [
-  { path: '/blog', priority: '0.8', changefreq: 'weekly' },
-  { path: '/affiliate', priority: '0.6', changefreq: 'monthly' },
-  { path: '/audit', priority: '0.6', changefreq: 'monthly' },
-  { path: '/free-social-audit', priority: '0.6', changefreq: 'monthly' },
-]
 
 function adminClient() {
   return createClient(

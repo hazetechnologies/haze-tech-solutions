@@ -36,28 +36,33 @@ Agency platform. Vite + React 19 + Supabase, deployed on Vercel.
 
 - Copy lives in `src/i18n/locales/*.js`; `useI18n()` gives `t`, `tl` (arrays)
   and `path()` (locale-aware internal links). Missing keys fall back to English.
-- Translated pages are enumerated **once** in `LOCALIZED_ROUTES`
-  (`src/i18n/config.js`). That single list drives the router prefixes, the
-  hreflang cluster, the sitemap, and the static shells. Currently the homepage,
-  the three service pages and `/pricing`.
-- `npm run build` emits one static HTML shell per locale x route into `dist/`
-  (correct `lang`, title, description, canonical, hreflang) — a client-only
-  translation is worth nothing to search.
+- Two route lists in `src/i18n/config.js` drive everything — router prefixes,
+  hreflang, sitemap, static shells and the build guard:
+  - `LOCALIZED_ROUTES` — fully translated. Homepage + the 3 service pages.
+    Get a per-locale shell and a reciprocal hreflang cluster.
+  - `ENGLISH_ONLY_ROUTES` — chrome translated, substance not (plan names,
+    blog posts and feature bullets are DB rows with no locale column).
+    Indexed in English only: self-canonical, real English `<title>`, NO
+    hreflang. Translating the `products`/`plans` rows is what would promote
+    `/pricing` back to `LOCALIZED_ROUTES`.
+- Everything else (blog posts, `/cart`, admin, portal, 404) canonicalises to
+  its English URL and publishes no hreflang.
 - **`dist/index.html` is the English HOMEPAGE shell, not a generic fallback.**
-  The SPA catch-all points at `dist/app.html` (same bundle, empty head). Serving
-  index.html there stamps `canonical=<site root>` + the homepage hreflang onto
-  every blog post, `/audit`, `/cart` and every 404 — it de-indexes the blog.
-  The build fails if the catch-all is not last or does not target `app.html`.
-- Anything NOT in `LOCALIZED_ROUTES` gets an English canonical and no hreflang
-  (`SeoRouter` -> `CanonicalToEnglish`). That covers `/blog`, blog posts,
-  `/audit`, `/free-social-audit` and `/cart`, whose bodies are English or come
-  from the DB. `/blog` is deliberately excluded: `blog_posts` has no locale
-  column, so five localized `/blog` URLs would be five near-duplicates.
-- Adding a locale or a translated route means: update `LOCALES` /
-  `LOCALIZED_ROUTES`, add the dictionary, then regenerate the `vercel.json`
-  rewrites. The build error lists exactly what is missing, stale, or misaimed.
-- Use `path()` for EVERY internal link in a component that renders on a
-  localized page, or the visitor silently falls back to English mid-session.
+  The SPA catch-all serves `dist/app.html` (same bundle, page-specific tags
+  stripped). Serving index.html there stamps `canonical=<site root>` + the
+  homepage hreflang onto every blog post — it de-indexes the blog.
+- `npm run build` fails if `vercel.json` or `robots.txt` drift from those
+  lists. The guard was defeated 8 ways in review before it held: it now checks
+  exact rewrite set, exact destinations, duplicate sources, allowlisted extras,
+  catch-all position and target, files on disk, and the locale Disallow rules.
+- **Link rule:** use `path()` for internal links on a translated page, EXCEPT
+  `/blog`, `/blog/:slug` and `/affiliate`. Prefixing blog post links multiplies
+  every post by 5 crawlable duplicate URLs of identical English content.
+- **Long-string layout:** German and French run far longer than English and
+  broke the hero and CTA rows. `scrollWidth === clientWidth` does NOT catch it
+  — `overflow-hidden` hides the overflow while still clipping the text. Measure
+  `getBoundingClientRect().right > innerWidth` per element instead, and look at
+  a screenshot.
 
 ## Conventions
 

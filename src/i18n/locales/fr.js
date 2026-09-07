@@ -37,6 +37,11 @@ export default {
       description:
         "Une analyse gratuite de votre présence sociale : ce qui fonctionne, ce qui vous coûte de la portée et les changements les plus rapides à faire cette semaine.",
     },
+    affiliate: {
+      title: "Programme d'Affiliation et de Partenariat — Haze Tech Solutions",
+      description:
+        "Gagnez une commission récurrente en recommandant des petites entreprises pour l'automatisation par IA, la gestion des réseaux sociaux et le développement web. Adhésion gratuite.",
+    },
     blog: {
       title: 'Blog — Automatisation par IA et Marketing | Haze Tech Solutions',
       description:

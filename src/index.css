@@ -91,6 +91,20 @@ body {
   align-items: center;
   gap: 0.5rem;
   white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Long localized labels (German especially) cannot stay on one line at phone
+   widths: "Kostenlose Website-Analyse erhalten" overflowed a 390px viewport by
+   22px with its right corner clipped. Let them wrap instead of overflow. */
+@media (max-width: 640px) {
+  .btn-primary,
+  .btn-secondary {
+    white-space: normal;
+    text-align: center;
+    padding-left: 1.1rem;
+    padding-right: 1.1rem;
+  }
 }
 
 .btn-primary:hover {

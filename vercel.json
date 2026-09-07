@@ -17,10 +17,6 @@
       "destination": "/services/web-development/index.html"
     },
     {
-      "source": "/pricing",
-      "destination": "/pricing/index.html"
-    },
-    {
       "source": "/es",
       "destination": "/es/index.html"
     },
@@ -35,10 +31,6 @@
     {
       "source": "/es/services/web-development",
       "destination": "/es/services/web-development/index.html"
-    },
-    {
-      "source": "/es/pricing",
-      "destination": "/es/pricing/index.html"
     },
     {
       "source": "/pt",
@@ -57,10 +49,6 @@
       "destination": "/pt/services/web-development/index.html"
     },
     {
-      "source": "/pt/pricing",
-      "destination": "/pt/pricing/index.html"
-    },
-    {
       "source": "/fr",
       "destination": "/fr/index.html"
     },
@@ -75,10 +63,6 @@
     {
       "source": "/fr/services/web-development",
       "destination": "/fr/services/web-development/index.html"
-    },
-    {
-      "source": "/fr/pricing",
-      "destination": "/fr/pricing/index.html"
     },
     {
       "source": "/de",
@@ -97,8 +81,24 @@
       "destination": "/de/services/web-development/index.html"
     },
     {
-      "source": "/de/pricing",
-      "destination": "/de/pricing/index.html"
+      "source": "/pricing",
+      "destination": "/pricing/index.html"
+    },
+    {
+      "source": "/blog",
+      "destination": "/blog/index.html"
+    },
+    {
+      "source": "/audit",
+      "destination": "/audit/index.html"
+    },
+    {
+      "source": "/free-social-audit",
+      "destination": "/free-social-audit/index.html"
+    },
+    {
+      "source": "/affiliate",
+      "destination": "/affiliate/index.html"
     },
     {
       "source": "/((?!api/).*)",

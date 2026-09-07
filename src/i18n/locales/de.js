@@ -37,6 +37,11 @@ export default {
       description:
         'Eine kostenlose Auswertung Ihrer Social-Media-Präsenz: was funktioniert, was Reichweite kostet und welche Änderungen sich diese Woche am schnellsten umsetzen lassen.',
     },
+    affiliate: {
+      title: 'Partner- und Affiliate-Programm — Haze Tech Solutions',
+      description:
+        'Verdienen Sie wiederkehrende Provisionen, indem Sie kleine Unternehmen für KI-Automatisierung, Social-Media-Betreuung und Webentwicklung empfehlen. Die Teilnahme ist kostenlos.',
+    },
     blog: {
       title: 'Blog — KI-Automatisierung und Marketing | Haze Tech Solutions',
       description:

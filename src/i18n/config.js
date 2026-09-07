@@ -40,11 +40,27 @@ export const LOCALIZED_ROUTES = [
   { path: '/services/ai-automation', key: 'serviceAiAutomation', priority: '0.9', changefreq: 'monthly' },
   { path: '/services/social-media', key: 'serviceSocialMedia', priority: '0.9', changefreq: 'monthly' },
   { path: '/services/web-development', key: 'serviceWebDevelopment', priority: '0.9', changefreq: 'monthly' },
+]
+
+/**
+ * Public pages that are indexed in ENGLISH ONLY: their chrome is translated, but
+ * their substance is not, so they get a self-canonical English URL, a real
+ * English <title>/description, and NO hreflang cluster.
+ *
+ * Why /pricing and /blog are here rather than in LOCALIZED_ROUTES: plan names,
+ * feature bullets and blog posts all come from the database, which has no locale
+ * column. A vision review of the rendered German pricing page showed every plan
+ * card still in English ("Everything in Starter, plus", "Kaufen Monthly") under
+ * a German heading. Declaring that a German page — the way an earlier revision
+ * did — is exactly the "announce a translation that does not exist" mistake.
+ * Translating the products/plans rows is what would move them back up.
+ */
+export const ENGLISH_ONLY_ROUTES = [
   { path: '/pricing', key: 'pricing', priority: '0.9', changefreq: 'monthly' },
-  // NOTE: /blog is deliberately NOT here. Its chrome is translated but the posts
-  // come from blog_posts with no locale column, so five localized /blog URLs
-  // would be five near-duplicates of the same English list, declared to Google
-  // as translations of each other.
+  { path: '/blog', key: 'blog', priority: '0.8', changefreq: 'weekly' },
+  { path: '/audit', key: 'audit', priority: '0.6', changefreq: 'monthly' },
+  { path: '/free-social-audit', key: 'freeSocialAudit', priority: '0.6', changefreq: 'monthly' },
+  { path: '/affiliate', key: 'affiliate', priority: '0.6', changefreq: 'monthly' },
 ]
 
 /**

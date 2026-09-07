@@ -111,7 +111,13 @@ export default function Hero() {
       </motion.div>
 
       {/* ── Main content ── */}
-      <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
+      {/* w-full + min-w-0: the parent section is a flex container, and a flex item
+          defaults to min-width:auto, so it refuses to shrink below its content.
+          The long German headline ("Gemacht zum Gewinnen.") forced this box to
+          1024px inside a 768px viewport and the section's overflow-hidden then
+          clipped the text at both edges — measured at [-128..896] on a 768
+          viewport, and confirmed visually. */}
+      <div className="relative z-10 w-full min-w-0 max-w-5xl mx-auto px-6 text-center">
         <motion.div
           variants={containerVariants}
           initial="hidden"
@@ -128,7 +134,7 @@ export default function Hero() {
           <motion.h1
             variants={itemVariants}
             className="font-display font-black leading-none mb-6"
-            style={{ fontSize: 'clamp(2.8rem, 8vw, 6rem)' }}
+            style={{ fontSize: 'clamp(2.8rem, 8vw, 6rem)', overflowWrap: 'break-word' }}
           >
             <span className="gradient-text block">{t('hero.title1')}</span>
             <span className="text-text-main block">{t('hero.title2')}</span>
@@ -142,10 +148,13 @@ export default function Hero() {
             {t('hero.subtitle')}
           </motion.p>
 
-          {/* CTA Buttons */}
+          {/* CTA Buttons.
+              flex-wrap: four CTAs never fit one row at 768. They used to be
+              clipped invisibly by the section's overflow-hidden inside an
+              oversized box; once the box was constrained they had to wrap. */}
           <motion.div
             variants={itemVariants}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+            className="flex flex-col sm:flex-row flex-wrap gap-4 justify-center items-center"
           >
             <motion.div
               whileHover={{ scale: 1.06, boxShadow: '0 0 30px rgba(0,212,255,0.5)' }}

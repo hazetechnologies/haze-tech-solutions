@@ -17,7 +17,7 @@ const NAV_LINKS = [
   { key: 'pricing', href: '/pricing', isRoute: true },
   { key: 'portfolio', href: '#portfolio' },
   { key: 'about', href: '#about' },
-  { key: 'blog', href: '/blog', isRoute: true },
+  { key: 'blog', href: '/blog', isRoute: true, localized: false },
   { key: 'affiliates', href: '/affiliate', isRoute: true, localized: false },
   { key: 'contact', href: '#contact' },
 ]
@@ -46,7 +46,7 @@ export default function Navbar() {
   // Close menu on resize to desktop
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 768) setMenuOpen(false)
+      if (window.innerWidth >= 1024) setMenuOpen(false)
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
@@ -94,7 +94,7 @@ export default function Navbar() {
         </motion.a>
 
         {/* Desktop Nav */}
-        <ul className="hidden md:flex items-center gap-8 list-none m-0 p-0">
+        <ul className="hidden lg:flex items-center gap-8 list-none m-0 p-0">
           {navLinks.map((link) => (
             <li key={link.key}>
               {link.isRoute ? (
@@ -124,11 +124,11 @@ export default function Navbar() {
 
         {/* CTA + Hamburger */}
         <div className="flex items-center gap-3">
-          <div className="hidden md:inline-flex"><LanguageSwitcher compact /></div>
+          <div className="hidden lg:inline-flex"><LanguageSwitcher compact /></div>
           <CartIcon variant="public" />
           <motion.button
             onClick={() => { trackCta('navbar-client-login', 'navbar'); navigate('/portal/login') }}
-            className="hidden md:inline-flex text-sm"
+            className="hidden lg:inline-flex text-sm"
             style={{
               background: 'transparent',
               border: '1px solid rgba(0, 207, 255, 0.3)',
@@ -149,7 +149,7 @@ export default function Navbar() {
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden p-2 text-muted hover:text-primary transition-colors"
+            className="lg:hidden p-2 text-muted hover:text-primary transition-colors"
             onClick={() => setMenuOpen((v) => !v)}
             aria-label={menuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
             aria-expanded={menuOpen}

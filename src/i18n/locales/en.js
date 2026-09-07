@@ -38,6 +38,11 @@ export default {
       description:
         'A free review of your social presence: what is working, what is costing you reach, and the fastest changes you can make this week.',
     },
+    affiliate: {
+      title: 'Affiliate & Partner Program — Haze Tech Solutions',
+      description:
+        'Earn recurring commission referring small businesses to AI automation, social media management and web development. Free to join.',
+    },
     blog: {
       title: 'Blog — AI Automation & Marketing Insights | Haze Tech Solutions',
       description:

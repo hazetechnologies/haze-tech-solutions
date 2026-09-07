@@ -24,7 +24,7 @@ const cardVariants = {
 // "Latest from the Blog" — the 3 newest published posts, rendered at the bottom
 // of the homepage. Hidden entirely while empty (same convention as Portfolio).
 export default function LatestBlog() {
-  const { t, path } = useI18n()
+  const { t } = useI18n()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -102,7 +102,7 @@ export default function LatestBlog() {
               style={{ background: 'rgba(4, 13, 26, 0.6)', transition: 'all 0.3s ease' }}
             >
               <Link
-                to={path(`/blog/${post.slug}`)}
+                to={`/blog/${post.slug}`}
                 aria-label={`Read: ${post.title}`}
                 className="flex flex-col flex-1"
                 style={{ textDecoration: 'none', color: 'inherit' }}
@@ -155,7 +155,7 @@ export default function LatestBlog() {
           viewport={{ once: true }}
           transition={{ delay: 0.4 }}
         >
-          <Link to={path('/blog')} className="btn-primary inline-flex items-center gap-2">
+          <Link to="/blog" className="btn-primary inline-flex items-center gap-2">
             {t('latestBlog.viewAll')}
             <ArrowUpRight size={16} aria-hidden="true" />
           </Link>

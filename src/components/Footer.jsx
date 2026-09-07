@@ -56,7 +56,7 @@ const handleScroll = (href) => {
 }
 
 export default function Footer() {
-  const { t, path } = useI18n()
+  const { t } = useI18n()
   const [nlEmail, setNlEmail] = useState('')
   const [nlStatus, setNlStatus] = useState('idle') // idle | loading | success | error
 

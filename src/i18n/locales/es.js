@@ -37,6 +37,11 @@ export default {
       description:
         'Una revisión gratuita de tu presencia en redes: qué está funcionando, qué te está costando alcance y los cambios más rápidos que puedes hacer esta semana.',
     },
+    affiliate: {
+      title: 'Programa de Afiliados y Socios — Haze Tech Solutions',
+      description:
+        'Gana comisiones recurrentes recomendando a pequeñas empresas nuestros servicios de automatización con IA, redes sociales y desarrollo web. Unirse es gratis.',
+    },
     blog: {
       title: 'Blog — Automatización con IA y Marketing | Haze Tech Solutions',
       description:
