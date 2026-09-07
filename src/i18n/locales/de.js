@@ -193,6 +193,24 @@ export default {
     send: 'Nachricht senden',
     sending: 'Wird gesendet…',
     respond: 'Wir antworten innerhalb von 24 Stunden',
+    sectionAria: 'Kontakt aufnehmen',
+    formAria: 'Kontaktformular',
+    sentTitle: 'Nachricht gesendet!',
+    sentBody: 'Wir sehen uns Ihre Angaben an und melden uns innerhalb von 24 Stunden. Schauen Sie in Ihr Postfach.',
+    sendAnother: 'Weitere Nachricht senden',
+    errorBanner: 'Etwas ist schiefgelaufen. Bitte erneut versuchen oder schreiben Sie uns direkt.',
+    aiPanelTitle: 'Details zur KI-Automatisierung',
+    websiteLabel: 'Website-Adresse',
+    industryLabel: 'Branche',
+    industryPlaceholder: 'z. B. Immobilien, E-Commerce, Gesundheitswesen',
+    goalsLabel: 'Was möchten Sie erreichen?',
+    goalsPlaceholder: 'z. B. Zeit bei Nachfassaktionen sparen, Rechnungsstellung automatisieren, manuelle Dateneingabe reduzieren...',
+    tasksLabel: 'Welche wiederkehrenden Aufgaben sollen automatisiert werden?',
+    tasksPlaceholder: 'z. B. Nachfass-E-Mails von Hand schreiben, Daten zwischen Tabellen kopieren, Termine planen...',
+    paidLabel: 'Wie erhalten Sie Zahlungen?',
+    paidPlaceholder: 'z. B. Rechnungen über QuickBooks, Stripe-Checkout, manuelle Überweisungen...',
+    payoutLabel: 'Wie bezahlen Sie Lieferanten und Mitarbeitende?',
+    payoutPlaceholder: 'z. B. Lohnabrechnung über Gusto, manuelle Schecks, Venmo, Überweisung...',
   },
 
   footer: {
@@ -306,5 +324,13 @@ export default {
     title2: 'Neuigkeiten',
     lead: 'Tipps zur KI-Automatisierung, Marketingstrategien und Wachstumsimpulse vom Haze-Tech-Team.',
     empty: 'Noch keine Beiträge. Schauen Sie bald wieder vorbei!',
+  },
+
+  latestBlog: {
+    label: 'Einblicke',
+    title1: 'Neues aus dem',
+    title2: 'Blog',
+    lead: 'Praxisnahe Leitfäden zu Web, KI und Marketing — geschrieben für Unternehmerinnen und Unternehmer, nicht für Entwickler.',
+    viewAll: 'Alle Beiträge ansehen',
   },
 }

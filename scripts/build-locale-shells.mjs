@@ -13,13 +13,16 @@
 // rewrite, so /es/pricing gets Spanish HTML with no JavaScript required, and
 // the app then hydrates over it.
 //
-// Routes NOT listed in LOCALIZED_ROUTES (blog posts, /audit/:id, admin, portal)
-// keep falling through to the catch-all English shell — they are either gated,
-// dynamic, or own their <head> already.
+// Routes NOT listed in LOCALIZED_ROUTES (blog posts, /audit, /cart, admin,
+// portal) fall through to app.html — a copy of Vite's own output with an empty
+// head. They must NOT be served dist/index.html: that is the English homepage
+// shell, and serving it as the fallback stamped `canonical=<site root>` and the
+// homepage hreflang cluster onto every blog post on the site.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -27,6 +30,7 @@ import {
   LOCALE_CODES,
   DEFAULT_LOCALE,
   LOCALIZED_ROUTES,
+  SPA_FALLBACK_FILE,
   localizePath,
   absoluteUrl,
 } from '../src/i18n/config.js'
@@ -42,6 +46,7 @@ const DICTS = { en, es, pt, fr, de }
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = path.join(root, 'dist')
 const baseFile = path.join(distDir, 'index.html')
+const fallbackFile = path.join(distDir, SPA_FALLBACK_FILE.replace(/^\//, ''))
 
 function escapeAttr(s) {
   return String(s)
@@ -94,7 +99,7 @@ function buildHead(html, { locale, route }) {
   out = upsert(
     out,
     /<meta property="og:locale" content="[^"]*"\s*\/?>/,
-    `<meta property="og:locale" content="${htmlLang.replace('-', '_')}" />`,
+    `<meta property="og:locale" content="${LOCALES[locale].ogLocale}" />`,
   )
   out = upsert(
     out,
@@ -118,26 +123,65 @@ function buildHead(html, { locale, route }) {
 }
 
 /**
- * vercel.json must carry an explicit rewrite for every shell we emit.
+ * vercel.json must match, exactly, the shells we just wrote.
  *
- * `vite preview` proved this matters: its SPA fallback shadowed all 30 static
- * shells and served the English index.html for /es/pricing. Vercel checks the
- * filesystem before rewrites and would probably resolve them anyway — but
- * "probably" is not a foundation for the whole SEO story, so the rules are
- * explicit and this guard fails the build if the route list and vercel.json
- * ever drift apart.
+ * An earlier version of this guard only checked that each emitted path appeared
+ * as *some* rewrite source. Review defeated it three ways without it noticing:
+ * moving the catch-all to the front (shadowing all 30 shells), pointing every
+ * destination at the same file, and deleting a locale (leaving six rewrites
+ * aimed at files a clean build no longer emits — a 404 on Vercel, while those
+ * URLs stay in the sitemap and in every remaining page's hreflang cluster).
+ *
+ * So it now checks source->destination pairs both ways, that each destination
+ * exists on disk, and that the catch-all is last and points at the neutral
+ * fallback rather than the homepage shell.
  */
 async function assertRewrites(expectedPaths) {
   const vercel = JSON.parse(await readFile(path.join(root, 'vercel.json'), 'utf8'))
-  const sources = new Set((vercel.rewrites || []).map((r) => r.source))
-  const missing = expectedPaths.filter((p) => p !== '/' && !sources.has(p))
-  if (missing.length) {
+  const rewrites = vercel.rewrites || []
+  const problems = []
+
+  const shellPaths = expectedPaths.filter((p) => p !== '/')
+  const bySource = new Map(rewrites.map((r) => [r.source, r.destination]))
+
+  for (const p of shellPaths) {
+    const want = `${p}/index.html`
+    if (!bySource.has(p)) problems.push(`missing rewrite for shell ${p}`)
+    else if (bySource.get(p) !== want) {
+      problems.push(`rewrite ${p} -> ${bySource.get(p)} (expected ${want})`)
+    }
+  }
+
+  // The reverse direction: a rewrite pointing at a shell we no longer emit
+  // would 404 in production.
+  const expected = new Set(shellPaths)
+  for (const r of rewrites) {
+    if (!/\/index\.html$/.test(r.destination || '')) continue
+    if (!expected.has(r.source)) {
+      problems.push(`stale rewrite ${r.source} -> ${r.destination} (no shell is emitted for it)`)
+      continue
+    }
+    const onDisk = path.join(distDir, r.destination.replace(/^\//, ''))
+    if (!existsSync(onDisk)) problems.push(`rewrite ${r.source} points at missing file ${r.destination}`)
+  }
+
+  const last = rewrites[rewrites.length - 1]
+  if (!last || !last.source.startsWith('/((?!api/)')) {
+    problems.push('the SPA catch-all must be the LAST rewrite, or it shadows every shell')
+  } else if (last.destination !== SPA_FALLBACK_FILE) {
+    problems.push(
+      `the SPA catch-all points at ${last.destination}; it must be ${SPA_FALLBACK_FILE}. ` +
+        'Serving /index.html there gives every unlisted URL the homepage canonical and hreflang.',
+    )
+  }
+
+  if (!existsSync(fallbackFile)) problems.push(`${SPA_FALLBACK_FILE} was not written to dist`)
+
+  if (problems.length) {
     throw new Error(
-      [
-        `vercel.json is missing rewrites for ${missing.length} locale shell(s):`,
-        ...missing.map((p) => `  ${p}`),
-        'Regenerate them after changing LOCALIZED_ROUTES or LOCALES.',
-      ].join('\n'),
+      ['vercel.json does not match the generated shells:', ...problems.map((p) => `  ${p}`)].join(
+        String.fromCharCode(10),
+      ),
     )
   }
 }
@@ -147,6 +191,14 @@ async function main() {
     throw new Error(`dist/index.html not found — run \`vite build\` first (looked in ${distDir})`)
   }
   const base = await readFile(baseFile, 'utf8')
+
+  // The neutral SPA fallback, written from Vite's own output BEFORE index.html
+  // is replaced by the English homepage shell. Any canonical/hreflang is
+  // stripped so that /blog/<post>, /audit, /cart and 404s inherit nothing.
+  const neutral = base
+    .replace(/\s*<link rel="canonical" href="[^"]*"\s*\/?>/g, '')
+    .replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*"\s*\/?>/g, '')
+  await writeFile(fallbackFile, neutral, 'utf8')
 
   const emitted = []
   let written = 0
@@ -173,8 +225,8 @@ async function main() {
 
   console.log(
     `[locale-shells] wrote ${written} static shells ` +
-      `(${LOCALE_CODES.length} locales × ${LOCALIZED_ROUTES.length} routes), ` +
-      'vercel.json rewrites verified',
+      `(${LOCALE_CODES.length} locales × ${LOCALIZED_ROUTES.length} routes) ` +
+      `+ neutral ${SPA_FALLBACK_FILE}, vercel.json verified`,
   )
 }
 

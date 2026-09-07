@@ -91,7 +91,7 @@ export default function BlogPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
               >
-                <Link to={`/blog/${post.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Link to={path(`/blog/${post.slug}`)} style={{ textDecoration: 'none', color: 'inherit' }}>
                   <div style={{
                     background: 'rgba(0,207,255,0.03)',
                     border: '1px solid rgba(0,207,255,0.1)',

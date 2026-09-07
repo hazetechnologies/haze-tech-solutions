@@ -193,6 +193,24 @@ export default {
     send: 'Envoyer le Message',
     sending: 'Envoi…',
     respond: 'Nous répondons sous 24 heures',
+    sectionAria: 'Nous contacter',
+    formAria: 'Formulaire de contact',
+    sentTitle: 'Message envoyé !',
+    sentBody: 'Nous examinons vos informations et revenons vers vous sous 24 heures. Surveillez votre boîte de réception.',
+    sendAnother: 'Envoyer un autre message',
+    errorBanner: 'Une erreur est survenue. Réessayez ou écrivez-nous directement.',
+    aiPanelTitle: "Détails de l'automatisation par IA",
+    websiteLabel: 'URL de votre site',
+    industryLabel: 'Secteur',
+    industryPlaceholder: 'ex. immobilier, e-commerce, santé',
+    goalsLabel: 'Quels sont vos objectifs ?',
+    goalsPlaceholder: 'ex. gagner du temps sur les relances, automatiser la facturation, réduire la saisie manuelle...',
+    tasksLabel: 'Quelles tâches répétitives souhaitez-vous automatiser ?',
+    tasksPlaceholder: 'ex. envoyer les relances à la main, recopier des données entre tableurs, planifier des rendez-vous...',
+    paidLabel: 'Comment votre entreprise est-elle payée ?',
+    paidPlaceholder: 'ex. factures via QuickBooks, paiement Stripe, virements manuels...',
+    payoutLabel: 'Comment payez-vous fournisseurs et salariés ?',
+    payoutPlaceholder: 'ex. paie via Gusto, chèques manuels, Venmo, virement...',
   },
 
   footer: {
@@ -306,5 +324,13 @@ export default {
     title2: 'Actualités',
     lead: "Conseils d'automatisation par IA, stratégies marketing et pistes de croissance par l'équipe Haze Tech.",
     empty: 'Aucun article pour le moment. Revenez bientôt !',
+  },
+
+  latestBlog: {
+    label: 'Analyses',
+    title1: 'Les derniers articles du',
+    title2: 'Blog',
+    lead: 'Des guides pratiques sur le web, l\'IA et le marketing, écrits pour des dirigeants, pas pour des ingénieurs.',
+    viewAll: 'Voir tous les articles',
   },
 }

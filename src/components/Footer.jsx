@@ -149,7 +149,7 @@ export default function Footer() {
             </h3>
             <ul className="space-y-3 list-none p-0 m-0">
               {navLinks.map((link) => (
-                <li key={link.label}>
+                <li key={link.key}>
                   <button
                     onClick={() => handleScroll(link.href)}
                     className="text-muted text-sm hover:text-primary transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
@@ -161,7 +161,7 @@ export default function Footer() {
               ))}
               <li>
                 <a
-                  href={path('/affiliate')}
+                  href="/affiliate"
                   className="text-muted text-sm hover:text-primary transition-colors duration-200 no-underline"
                   style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >

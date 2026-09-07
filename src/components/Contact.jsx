@@ -144,7 +144,7 @@ export default function Contact() {
       id="contact"
       className="relative py-28 px-6 overflow-hidden"
       style={{ background: '#071526' }}
-      aria-label="Contact us"
+      aria-label={t('contact.sectionAria')}
     >
       {/* Border top */}
       <div
@@ -213,18 +213,17 @@ export default function Contact() {
                   <CheckCircle size={56} style={{ color: '#22c55e' }} aria-hidden="true" />
                 </motion.div>
                 <h3 className="font-display font-bold text-text-main text-2xl mb-3">
-                  Message Sent!
+                  {t('contact.sentTitle')}
                 </h3>
                 <p className="text-muted">
-                  We'll review your details and get back to you within 24 hours.
-                  Check your inbox — something good is coming.
+                  {t('contact.sentBody')}
                 </p>
                 <button
                   onClick={() => setStatus('idle')}
                   className="mt-6 text-sm text-primary hover:text-white transition-colors"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >
-                  Send another message
+                  {t('contact.sendAnother')}
                 </button>
               </motion.div>
             ) : (
@@ -236,7 +235,7 @@ export default function Contact() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="space-y-5"
-                aria-label="Contact form"
+                aria-label={t('contact.formAria')}
               >
                 {/* Name + Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -357,13 +356,13 @@ export default function Contact() {
                         }}
                       >
                         <p style={{ fontSize: '0.8rem', color: '#00CFFF', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', margin: '0 0 0.75rem' }}>
-                          AI Automation Details
+                          {t('contact.aiPanelTitle')}
                         </p>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                           <div>
                             <label htmlFor="website" className="block text-sm font-medium text-muted mb-2">
-                              Website URL
+                              {t('contact.websiteLabel')}
                             </label>
                             <input
                               id="website" type="url" name="website"
@@ -374,12 +373,12 @@ export default function Contact() {
                           </div>
                           <div>
                             <label htmlFor="industry" className="block text-sm font-medium text-muted mb-2">
-                              Industry
+                              {t('contact.industryLabel')}
                             </label>
                             <input
                               id="industry" type="text" name="industry"
                               value={form.industry} onChange={handleChange}
-                              placeholder="e.g. Real Estate, E-commerce, Healthcare"
+                              placeholder={t('contact.industryPlaceholder')}
                               style={inputBase}
                             />
                           </div>
@@ -387,12 +386,12 @@ export default function Contact() {
 
                         <div>
                           <label htmlFor="goals" className="block text-sm font-medium text-muted mb-2">
-                            What are your goals?
+                            {t('contact.goalsLabel')}
                           </label>
                           <textarea
                             id="goals" name="goals"
                             value={form.goals} onChange={handleChange}
-                            placeholder="e.g. Save time on follow-ups, automate invoicing, reduce manual data entry..."
+                            placeholder={t('contact.goalsPlaceholder')}
                             rows={2}
                             style={{ ...inputBase, resize: 'vertical' }}
                           />
@@ -400,12 +399,12 @@ export default function Contact() {
 
                         <div>
                           <label htmlFor="repetitive_task" className="block text-sm font-medium text-muted mb-2">
-                            What repetitive tasks do you want automated? <span className="text-primary">*</span>
+                            {t('contact.tasksLabel')} <span className="text-primary">*</span>
                           </label>
                           <textarea
                             id="repetitive_task" name="repetitive_task"
                             value={form.repetitive_task} onChange={handleChange}
-                            placeholder="e.g. Manually sending follow-up emails, copying data between spreadsheets, scheduling appointments..."
+                            placeholder={t('contact.tasksPlaceholder')}
                             rows={3}
                             style={{ ...inputBase, resize: 'vertical' }}
                           />
@@ -413,12 +412,12 @@ export default function Contact() {
 
                         <div>
                           <label htmlFor="payment_process" className="block text-sm font-medium text-muted mb-2">
-                            How does your business get paid?
+                            {t('contact.paidLabel')}
                           </label>
                           <textarea
                             id="payment_process" name="payment_process"
                             value={form.payment_process} onChange={handleChange}
-                            placeholder="e.g. Invoices via QuickBooks, Stripe checkout, manual bank transfers..."
+                            placeholder={t('contact.paidPlaceholder')}
                             rows={2}
                             style={{ ...inputBase, resize: 'vertical' }}
                           />
@@ -426,12 +425,12 @@ export default function Contact() {
 
                         <div>
                           <label htmlFor="vendor_process" className="block text-sm font-medium text-muted mb-2">
-                            How do you pay vendors and employees?
+                            {t('contact.payoutLabel')}
                           </label>
                           <textarea
                             id="vendor_process" name="vendor_process"
                             value={form.vendor_process} onChange={handleChange}
-                            placeholder="e.g. Gusto payroll, manual checks, Venmo, direct deposit..."
+                            placeholder={t('contact.payoutPlaceholder')}
                             rows={2}
                             style={{ ...inputBase, resize: 'vertical' }}
                           />
@@ -474,7 +473,7 @@ export default function Contact() {
                   >
                     <AlertCircle size={16} style={{ color: '#ef4444' }} aria-hidden="true" />
                     <span className="text-sm text-red-400">
-                      Something went wrong. Please try again or email us directly.
+                      {t('contact.errorBanner')}
                     </span>
                   </motion.div>
                 )}

@@ -18,7 +18,7 @@ const NAV_LINKS = [
   { key: 'portfolio', href: '#portfolio' },
   { key: 'about', href: '#about' },
   { key: 'blog', href: '/blog', isRoute: true },
-  { key: 'affiliates', href: '/affiliate', isRoute: true },
+  { key: 'affiliates', href: '/affiliate', isRoute: true, localized: false },
   { key: 'contact', href: '#contact' },
 ]
 
@@ -31,7 +31,9 @@ export default function Navbar() {
   const navLinks = NAV_LINKS.map((l) => ({
     ...l,
     label: t(`nav.${l.key}`),
-    to: l.isRoute ? path(l.href) : l.href,
+    // /affiliate is not mounted under the locale tree, so a prefixed link would
+    // only bounce through StripLocaleRedirect back to the English page.
+    to: l.isRoute ? (l.localized === false ? l.href : path(l.href)) : l.href,
   }))
 
   // Detect scroll to add stronger glass effect
@@ -94,7 +96,7 @@ export default function Navbar() {
         {/* Desktop Nav */}
         <ul className="hidden md:flex items-center gap-8 list-none m-0 p-0">
           {navLinks.map((link) => (
-            <li key={link.label}>
+            <li key={link.key}>
               {link.isRoute ? (
                 // Real <a href> (not a button): a JS-only onClick is invisible to
                 // crawlers, which left /blog undiscoverable by Googlebot. The
@@ -175,7 +177,7 @@ export default function Navbar() {
             <ul className="flex flex-col px-6 py-4 gap-1 list-none m-0">
               {navLinks.map((link, i) => (
                 <motion.li
-                  key={link.label}
+                  key={link.key}
                   initial={{ opacity: 0, x: -16 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.06 }}

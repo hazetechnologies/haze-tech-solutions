@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowUpRight, Calendar } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useI18n } from '../i18n'
 
 const ACCENT = '#00CFFF'
 
@@ -23,6 +24,7 @@ const cardVariants = {
 // "Latest from the Blog" — the 3 newest published posts, rendered at the bottom
 // of the homepage. Hidden entirely while empty (same convention as Portfolio).
 export default function LatestBlog() {
+  const { t, path } = useI18n()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -69,15 +71,15 @@ export default function LatestBlog() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <span className="section-label">Insights</span>
+          <span className="section-label">{t('latestBlog.label')}</span>
           <h2
             className="font-display font-black mt-4 mb-4 text-text-main"
             style={{ fontSize: 'clamp(2rem, 5vw, 3.25rem)', lineHeight: 1.1 }}
           >
-            Latest from the <span className="gradient-text">Blog</span>
+            {t('latestBlog.title1')} <span className="gradient-text">{t('latestBlog.title2')}</span>
           </h2>
           <p className="text-muted text-lg max-w-xl mx-auto">
-            Practical guides on web, AI, and marketing — written for business owners, not engineers.
+            {t('latestBlog.lead')}
           </p>
         </motion.div>
 
@@ -100,7 +102,7 @@ export default function LatestBlog() {
               style={{ background: 'rgba(4, 13, 26, 0.6)', transition: 'all 0.3s ease' }}
             >
               <Link
-                to={`/blog/${post.slug}`}
+                to={path(`/blog/${post.slug}`)}
                 aria-label={`Read: ${post.title}`}
                 className="flex flex-col flex-1"
                 style={{ textDecoration: 'none', color: 'inherit' }}
@@ -153,8 +155,8 @@ export default function LatestBlog() {
           viewport={{ once: true }}
           transition={{ delay: 0.4 }}
         >
-          <Link to="/blog" className="btn-primary inline-flex items-center gap-2">
-            View all posts
+          <Link to={path('/blog')} className="btn-primary inline-flex items-center gap-2">
+            {t('latestBlog.viewAll')}
             <ArrowUpRight size={16} aria-hidden="true" />
           </Link>
         </motion.div>

@@ -10,12 +10,16 @@
 
 export const DEFAULT_LOCALE = 'en'
 
+// hreflang stays generic (`pt`, not `pt-BR`): a region-locked code would leave
+// visitors in Portugal, Angola and Mozambique matching no member of the cluster
+// and falling through to the English x-default. ogLocale is separate because
+// Open Graph requires language_TERRITORY and rejects a bare language code.
 export const LOCALES = {
-  en: { native: 'English',   english: 'English',    hreflang: 'en',    htmlLang: 'en' },
-  es: { native: 'Español',   english: 'Spanish',    hreflang: 'es',    htmlLang: 'es' },
-  pt: { native: 'Português', english: 'Portuguese', hreflang: 'pt-BR', htmlLang: 'pt-BR' },
-  fr: { native: 'Français',  english: 'French',     hreflang: 'fr',    htmlLang: 'fr' },
-  de: { native: 'Deutsch',   english: 'German',     hreflang: 'de',    htmlLang: 'de' },
+  en: { native: 'English',   english: 'English',    hreflang: 'en', htmlLang: 'en', ogLocale: 'en_US' },
+  es: { native: 'Español',   english: 'Spanish',    hreflang: 'es', htmlLang: 'es', ogLocale: 'es_ES' },
+  pt: { native: 'Português', english: 'Portuguese', hreflang: 'pt', htmlLang: 'pt', ogLocale: 'pt_BR' },
+  fr: { native: 'Français',  english: 'French',     hreflang: 'fr', htmlLang: 'fr', ogLocale: 'fr_FR' },
+  de: { native: 'Deutsch',   english: 'German',     hreflang: 'de', htmlLang: 'de', ogLocale: 'de_DE' },
 }
 
 export const LOCALE_CODES = Object.keys(LOCALES)
@@ -37,20 +41,22 @@ export const LOCALIZED_ROUTES = [
   { path: '/services/social-media', key: 'serviceSocialMedia', priority: '0.9', changefreq: 'monthly' },
   { path: '/services/web-development', key: 'serviceWebDevelopment', priority: '0.9', changefreq: 'monthly' },
   { path: '/pricing', key: 'pricing', priority: '0.9', changefreq: 'monthly' },
-  { path: '/blog', key: 'blog', priority: '0.8', changefreq: 'weekly' },
+  // NOTE: /blog is deliberately NOT here. Its chrome is translated but the posts
+  // come from blog_posts with no locale column, so five localized /blog URLs
+  // would be five near-duplicates of the same English list, declared to Google
+  // as translations of each other.
 ]
 
 /**
- * Public pages that a locale-prefixed visitor can still reach (they are linked
- * from the translated nav and CTAs) but whose bodies are NOT translated —
- * long conversion forms and the cart.
+ * The file the SPA catch-all rewrite serves. It is a copy of Vite's own
+ * index.html with a deliberately EMPTY head — no canonical, no hreflang.
  *
- * They deliberately get no hreflang cluster and no sitemap entry: announcing a
- * translation that does not exist invites Google to index near-duplicates. What
- * they DO get is a canonical pointing at the English original, because the
- * fallback shell would otherwise canonicalise /es/audit to the home page.
+ * dist/index.html cannot do this job: it is the English homepage shell, so
+ * pointing the catch-all at it made /blog/<post>, /audit, /cart, /affiliate and
+ * every 404 declare `canonical=https://www.hazetechsolutions.com/` plus the
+ * homepage's hreflang cluster — which would have de-indexed the entire blog.
  */
-export const UNTRANSLATED_LOCALIZED_ROUTES = ['/audit', '/free-social-audit', '/cart']
+export const SPA_FALLBACK_FILE = '/app.html'
 
 const LOCALE_PREFIX_RE = new RegExp(`^/(${PREFIXED_LOCALES.join('|')})(?=/|$)`)
 

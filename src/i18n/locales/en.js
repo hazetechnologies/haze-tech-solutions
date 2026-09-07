@@ -194,6 +194,24 @@ export default {
     send: 'Send Message',
     sending: 'Sending…',
     respond: 'We respond within 24 hours',
+    sectionAria: 'Contact us',
+    formAria: 'Contact form',
+    sentTitle: 'Message Sent!',
+    sentBody: "We'll review your details and get back to you within 24 hours. Check your inbox — something good is coming.",
+    sendAnother: 'Send another message',
+    errorBanner: 'Something went wrong. Please try again or email us directly.',
+    aiPanelTitle: 'AI Automation Details',
+    websiteLabel: 'Website URL',
+    industryLabel: 'Industry',
+    industryPlaceholder: 'e.g. Real Estate, E-commerce, Healthcare',
+    goalsLabel: 'What are your goals?',
+    goalsPlaceholder: 'e.g. Save time on follow-ups, automate invoicing, reduce manual data entry...',
+    tasksLabel: 'What repetitive tasks do you want automated?',
+    tasksPlaceholder: 'e.g. Manually sending follow-up emails, copying data between spreadsheets, scheduling appointments...',
+    paidLabel: 'How does your business get paid?',
+    paidPlaceholder: 'e.g. Invoices via QuickBooks, Stripe checkout, manual bank transfers...',
+    payoutLabel: 'How do you pay vendors and employees?',
+    payoutPlaceholder: 'e.g. Gusto payroll, manual checks, Venmo, direct deposit...',
   },
 
   footer: {
@@ -307,5 +325,13 @@ export default {
     title2: 'Updates',
     lead: 'AI automation tips, marketing strategies, and business growth insights from the Haze Tech team.',
     empty: 'No posts yet. Check back soon!',
+  },
+
+  latestBlog: {
+    label: 'Insights',
+    title1: 'Latest from the',
+    title2: 'Blog',
+    lead: 'Practical guides on web, AI, and marketing — written for business owners, not engineers.',
+    viewAll: 'View all posts',
   },
 }

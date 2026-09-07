@@ -8,7 +8,6 @@ import {
   localizePath,
   absoluteUrl,
   LOCALIZED_ROUTES,
-  UNTRANSLATED_LOCALIZED_ROUTES,
 } from './config'
 import en from './locales/en'
 import es from './locales/es'
@@ -131,7 +130,7 @@ export function Seo({ routeKey, routePath }) {
     upsertMeta('meta[property="og:locale"]', {
       tag: 'meta',
       property: 'og:locale',
-      content: (LOCALES[locale]?.htmlLang || 'en').replace('-', '_'),
+      content: LOCALES[locale]?.ogLocale || 'en_US',
     })
     upsertMeta('link[rel="canonical"]', { tag: 'link', rel: 'canonical', href: absoluteUrl(target, locale) })
 
@@ -170,9 +169,20 @@ export function Seo({ routeKey, routePath }) {
  * its values win — one mechanism, no title flicker between two owners.
  */
 /**
- * Points an untranslated page's canonical at its English original and clears
- * any hreflang the fallback shell shipped. Without this, /es/audit inherits the
- * English HOME shell's head and canonicalises itself to the wrong page.
+ * Every route that is NOT a translated page: point the canonical at the English
+ * original and clear any hreflang.
+ *
+ * Two failures this prevents, both found in review:
+ *  - /es/audit and /es/blog/<post> render English bodies. Self-canonicalising
+ *    them would ask Google to index five copies of the same English page.
+ *  - <Seo> writes into a shared <head> and has no unmount cleanup, so a
+ *    client-side hop from /pricing to /cart used to leave the pricing canonical
+ *    and its six alternates behind. Running on *every* non-translated route is
+ *    what makes that self-correcting.
+ *
+ * Note it deliberately does NOT skip English. /audit is the page the localized
+ * ones are being pointed at; leaving it with a stale canonical would break the
+ * exact target this is protecting.
  */
 function CanonicalToEnglish({ routePath }) {
   useEffect(() => {
@@ -187,21 +197,19 @@ function CanonicalToEnglish({ routePath }) {
 }
 
 /**
- * Mounted once, inside the Router: applies <Seo> to any route listed in
- * LOCALIZED_ROUTES and stays out of the way everywhere else (blog posts,
- * admin, portal), so pages that manage their own <title> keep it.
+ * Mounted once, inside the Router. Translated routes get the full <Seo>;
+ * everything else gets an English canonical and no hreflang.
  *
- * It sits above the page components in the tree, so its effect runs last and
- * its values win — one mechanism, no title flicker between two owners.
+ * Effect ordering: React flushes effects child-first, so this component (a
+ * sibling ABOVE <Routes>) runs BEFORE the page's own effects — a page that sets
+ * its own document.title wins, which is what BlogPost and CartPage rely on.
+ * Canonical/hreflang have no other writer, so they are safe here.
  */
 export function SeoRouter() {
-  const { locale, routePath } = useI18n()
+  const { routePath } = useI18n()
   const entry = LOCALIZED_ROUTES.find((r) => r.path === routePath)
   if (entry) return <Seo routeKey={entry.key} routePath={entry.path} />
-  if (locale !== DEFAULT_LOCALE && UNTRANSLATED_LOCALIZED_ROUTES.includes(routePath)) {
-    return <CanonicalToEnglish routePath={routePath} />
-  }
-  return null
+  return <CanonicalToEnglish routePath={routePath} />
 }
 
 export { LOCALES, LOCALE_CODES, DEFAULT_LOCALE, localizePath, splitLocale }

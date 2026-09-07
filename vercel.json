@@ -21,10 +21,6 @@
       "destination": "/pricing/index.html"
     },
     {
-      "source": "/blog",
-      "destination": "/blog/index.html"
-    },
-    {
       "source": "/es",
       "destination": "/es/index.html"
     },
@@ -43,10 +39,6 @@
     {
       "source": "/es/pricing",
       "destination": "/es/pricing/index.html"
-    },
-    {
-      "source": "/es/blog",
-      "destination": "/es/blog/index.html"
     },
     {
       "source": "/pt",
@@ -69,10 +61,6 @@
       "destination": "/pt/pricing/index.html"
     },
     {
-      "source": "/pt/blog",
-      "destination": "/pt/blog/index.html"
-    },
-    {
       "source": "/fr",
       "destination": "/fr/index.html"
     },
@@ -91,10 +79,6 @@
     {
       "source": "/fr/pricing",
       "destination": "/fr/pricing/index.html"
-    },
-    {
-      "source": "/fr/blog",
-      "destination": "/fr/blog/index.html"
     },
     {
       "source": "/de",
@@ -117,12 +101,8 @@
       "destination": "/de/pricing/index.html"
     },
     {
-      "source": "/de/blog",
-      "destination": "/de/blog/index.html"
-    },
-    {
       "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "destination": "/app.html"
     }
   ],
   "functions": {

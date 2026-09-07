@@ -193,6 +193,24 @@ export default {
     send: 'Enviar Mensaje',
     sending: 'Enviando…',
     respond: 'Respondemos en menos de 24 horas',
+    sectionAria: 'Contáctanos',
+    formAria: 'Formulario de contacto',
+    sentTitle: '¡Mensaje enviado!',
+    sentBody: 'Revisaremos tus datos y te responderemos en menos de 24 horas. Revisa tu bandeja de entrada: algo bueno viene en camino.',
+    sendAnother: 'Enviar otro mensaje',
+    errorBanner: 'Algo salió mal. Inténtalo de nuevo o escríbenos directamente.',
+    aiPanelTitle: 'Detalles de automatización con IA',
+    websiteLabel: 'URL de tu sitio web',
+    industryLabel: 'Sector',
+    industryPlaceholder: 'p. ej. Bienes raíces, comercio electrónico, salud',
+    goalsLabel: '¿Cuáles son tus objetivos?',
+    goalsPlaceholder: 'p. ej. ahorrar tiempo en seguimientos, automatizar la facturación, reducir la captura manual de datos...',
+    tasksLabel: '¿Qué tareas repetitivas quieres automatizar?',
+    tasksPlaceholder: 'p. ej. enviar correos de seguimiento a mano, copiar datos entre hojas de cálculo, agendar citas...',
+    paidLabel: '¿Cómo recibe pagos tu negocio?',
+    paidPlaceholder: 'p. ej. facturas con QuickBooks, pagos con Stripe, transferencias bancarias manuales...',
+    payoutLabel: '¿Cómo pagas a proveedores y empleados?',
+    payoutPlaceholder: 'p. ej. nómina con Gusto, cheques manuales, Venmo, depósito directo...',
   },
 
   footer: {
@@ -306,5 +324,13 @@ export default {
     title2: 'Novedades',
     lead: 'Consejos de automatización con IA, estrategias de marketing e ideas de crecimiento del equipo de Haze Tech.',
     empty: 'Aún no hay publicaciones. ¡Vuelve pronto!',
+  },
+
+  latestBlog: {
+    label: 'Ideas',
+    title1: 'Lo último del',
+    title2: 'Blog',
+    lead: 'Guías prácticas sobre web, IA y marketing, escritas para dueños de negocios, no para ingenieros.',
+    viewAll: 'Ver todas las publicaciones',
   },
 }

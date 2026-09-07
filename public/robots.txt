@@ -2,9 +2,20 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /portal
-# same gated areas under the language prefixes (/es/admin, /de/portal, ...)
-Disallow: /*/admin
-Disallow: /*/portal
+# The same gated areas under each language prefix. Enumerated rather than
+# wildcarded: `Disallow: /*/admin` is a prefix match and would also block a post
+# at /blog/admin-automation-guide.
+Disallow: /es/admin
+Disallow: /es/portal
+Disallow: /pt/admin
+Disallow: /pt/portal
+Disallow: /fr/admin
+Disallow: /fr/portal
+Disallow: /de/admin
+Disallow: /de/portal
+
+# The neutral SPA fallback shell - reachable directly, but not a page.
+Disallow: /app.html
 
 Sitemap: https://www.hazetechsolutions.com/sitemap.xml
 Sitemap: https://hazeseo.com/api/sitemap/23e99fde386ea0a102e40201adfaa05edb16741317dee0b8

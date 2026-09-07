@@ -32,23 +32,32 @@ Agency platform. Vite + React 19 + Supabase, deployed on Vercel.
 - The `api/_lib/*.test.js` files are **Deno** tests (`deno test api/_lib/`),
   not Node. There is no `npm test` — don't go looking for one.
 
-## Multilingual (en / es / pt-BR / fr / de)
+## Multilingual (en / es / pt / fr / de)
 
 - Copy lives in `src/i18n/locales/*.js`; `useI18n()` gives `t`, `tl` (arrays)
   and `path()` (locale-aware internal links). Missing keys fall back to English.
 - Translated pages are enumerated **once** in `LOCALIZED_ROUTES`
   (`src/i18n/config.js`). That single list drives the router prefixes, the
-  hreflang cluster, the sitemap, and the static shells.
+  hreflang cluster, the sitemap, and the static shells. Currently the homepage,
+  the three service pages and `/pricing`.
 - `npm run build` emits one static HTML shell per locale x route into `dist/`
   (correct `lang`, title, description, canonical, hreflang) — a client-only
-  translation is worth nothing to search. The build **fails** if `vercel.json`
-  lacks a rewrite for a shell it just wrote.
+  translation is worth nothing to search.
+- **`dist/index.html` is the English HOMEPAGE shell, not a generic fallback.**
+  The SPA catch-all points at `dist/app.html` (same bundle, empty head). Serving
+  index.html there stamps `canonical=<site root>` + the homepage hreflang onto
+  every blog post, `/audit`, `/cart` and every 404 — it de-indexes the blog.
+  The build fails if the catch-all is not last or does not target `app.html`.
+- Anything NOT in `LOCALIZED_ROUTES` gets an English canonical and no hreflang
+  (`SeoRouter` -> `CanonicalToEnglish`). That covers `/blog`, blog posts,
+  `/audit`, `/free-social-audit` and `/cart`, whose bodies are English or come
+  from the DB. `/blog` is deliberately excluded: `blog_posts` has no locale
+  column, so five localized `/blog` URLs would be five near-duplicates.
 - Adding a locale or a translated route means: update `LOCALES` /
   `LOCALIZED_ROUTES`, add the dictionary, then regenerate the `vercel.json`
-  rewrites (the build error lists exactly which are missing).
-- Pages in `UNTRANSLATED_LOCALIZED_ROUTES` (`/audit`, `/free-social-audit`,
-  `/cart`) stay reachable under a prefix but get **no** hreflang and a canonical
-  pointing at the English original.
+  rewrites. The build error lists exactly what is missing, stale, or misaimed.
+- Use `path()` for EVERY internal link in a component that renders on a
+  localized page, or the visitor silently falls back to English mid-session.
 
 ## Conventions
 

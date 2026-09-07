@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Globe, Check } from 'lucide-react'
 import { useI18n, LOCALES, LOCALE_CODES, localizePath } from '../i18n'
 
@@ -17,6 +17,10 @@ import { useI18n, LOCALES, LOCALE_CODES, localizePath } from '../i18n'
 export default function LanguageSwitcher({ compact = false, variant = 'dropdown' }) {
   const { locale, routePath, t } = useI18n()
   const navigate = useNavigate()
+  // Carry the query string and fragment across the switch: dropping them lost
+  // UTM attribution and dumped the visitor at the top of the page.
+  const { search, hash } = useLocation()
+  const target = (code) => `${localizePath(routePath, code)}${search}${hash}`
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -38,7 +42,7 @@ export default function LanguageSwitcher({ compact = false, variant = 'dropdown'
     e.preventDefault()
     setOpen(false)
     try { localStorage.setItem('htsLocale', code) } catch { /* private mode */ }
-    navigate(localizePath(routePath, code))
+    navigate(target(code))
   }
 
   // Inline variant: every language is a plain, always-present <a> in the
@@ -55,7 +59,7 @@ export default function LanguageSwitcher({ compact = false, variant = 'dropdown'
             <span key={code} style={{ display: 'inline-flex', alignItems: 'center' }}>
               {i > 0 && <span aria-hidden="true" style={{ color: '#334155', margin: '0 8px' }}>·</span>}
               <a
-                href={localizePath(routePath, code)}
+                href={target(code)}
                 hrefLang={LOCALES[code].hreflang}
                 onClick={(e) => go(e, code)}
                 aria-current={active ? 'true' : undefined}
@@ -128,7 +132,7 @@ export default function LanguageSwitcher({ compact = false, variant = 'dropdown'
             return (
               <li key={code} role="option" aria-selected={active}>
                 <a
-                  href={localizePath(routePath, code)}
+                  href={target(code)}
                   hrefLang={LOCALES[code].hreflang}
                   onClick={(e) => go(e, code)}
                   style={{
