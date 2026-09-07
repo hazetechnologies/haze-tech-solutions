@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider } from './lib/AuthContext'
 import ProtectedRoute from './lib/ProtectedRoute'
 import PortalProtectedRoute from './lib/PortalProtectedRoute'
@@ -55,6 +55,8 @@ import useTelemetryIdentity from './hooks/useTelemetryIdentity'
 import useGaPageviews from './hooks/useGaPageviews'
 import useAffiliateRef from './hooks/useAffiliateRef'
 import AffiliateReferralLanding from './pages/affiliate/AffiliateReferralLanding'
+import { I18nProvider, SeoRouter } from './i18n'
+import { PREFIXED_LOCALES, splitLocale } from './i18n/config'
 
 function TelemetryIdentityMount() {
   useTelemetryIdentity()
@@ -73,12 +75,43 @@ function AffiliateRefMount() {
   return null
 }
 
+// A localized URL that does not name a translated page (e.g. /es/admin/leads)
+// redirects to the un-prefixed route rather than 404-ing, so a shared link with
+// a stray locale prefix still lands somewhere real.
+function StripLocaleRedirect() {
+  const { pathname, search, hash } = useLocation()
+  const { rest } = splitLocale(pathname)
+  return <Navigate to={`${rest}${search}${hash}`} replace />
+}
+
+// Public marketing routes, mounted once per language under its own prefix.
+// Keep this list in sync with LOCALIZED_ROUTES in src/i18n/config.js — that is
+// what the sitemap and the static per-locale HTML shells are generated from.
+function localizedRoutes() {
+  return PREFIXED_LOCALES.map((lang) => (
+    <Route key={lang} path={`/${lang}`}>
+      <Route index element={<MainSite />} />
+      <Route path="audit" element={<AuditPage />} />
+      <Route path="audit/:id" element={<AuditResults />} />
+      <Route path="free-social-audit" element={<FreeSocialAudit />} />
+      <Route path="blog" element={<BlogPage />} />
+      <Route path="blog/:slug" element={<BlogPost />} />
+      <Route path="pricing" element={<PricingPage />} />
+      <Route path="services/:slug" element={<ServicePage />} />
+      <Route path="cart" element={<CartPage />} />
+      <Route path="*" element={<StripLocaleRedirect />} />
+    </Route>
+  ))
+}
+
 export default function App() {
   return (
     <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryFallback resetError={resetError} />}>
       <AuthProvider>
         <TelemetryIdentityMount />
         <BrowserRouter>
+          <I18nProvider>
+          <SeoRouter />
           <GaPageviewMount />
           <AffiliateRefMount />
           <Routes>
@@ -97,6 +130,9 @@ export default function App() {
           <Route path="/cart"    element={<CartPage />} />
           <Route path="/affiliate" element={<AffiliateDashboard />} />
           <Route path="/affiliate/confirm" element={<AffiliateConfirm />} />
+
+          {/* Same public pages, one crawlable URL tree per language */}
+          {localizedRoutes()}
 
           {/* Admin login */}
           <Route path="/admin/login" element={<AdminLogin />} />
@@ -148,6 +184,7 @@ export default function App() {
             <Route path="social"               element={<PortalSocial />} />
           </Route>
           </Routes>
+          </I18nProvider>
         </BrowserRouter>
       </AuthProvider>
     </Sentry.ErrorBoundary>

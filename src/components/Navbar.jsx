@@ -5,22 +5,34 @@ import { useNavigate } from 'react-router-dom'
 import logoIcon from '../assets/logo/haze-logo-icon.png'
 import { trackCta } from '../lib/telemetry'
 import CartIcon from './CartIcon'
+import LanguageSwitcher from './LanguageSwitcher'
+import { useI18n } from '../i18n'
 
-const navLinks = [
-  { label: 'Home', href: '#home' },
-  { label: 'Services', href: '#services' },
-  { label: 'Pricing', href: '/pricing', isRoute: true },
-  { label: 'Portfolio', href: '#portfolio' },
-  { label: 'About', href: '#about' },
-  { label: 'Blog', href: '/blog', isRoute: true },
-  { label: 'Affiliates', href: '/affiliate', isRoute: true },
-  { label: 'Contact', href: '#contact' },
+// `key` (not the rendered label) is what feeds trackCta, so analytics stays
+// comparable across languages instead of splitting into navbar-inicio /
+// navbar-accueil / navbar-start.
+const NAV_LINKS = [
+  { key: 'home', href: '#home' },
+  { key: 'services', href: '#services' },
+  { key: 'pricing', href: '/pricing', isRoute: true },
+  { key: 'portfolio', href: '#portfolio' },
+  { key: 'about', href: '#about' },
+  { key: 'blog', href: '/blog', isRoute: true },
+  { key: 'affiliates', href: '/affiliate', isRoute: true },
+  { key: 'contact', href: '#contact' },
 ]
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const navigate = useNavigate()
+  const { t, path } = useI18n()
+
+  const navLinks = NAV_LINKS.map((l) => ({
+    ...l,
+    label: t(`nav.${l.key}`),
+    to: l.isRoute ? path(l.href) : l.href,
+  }))
 
   // Detect scroll to add stronger glass effect
   useEffect(() => {
@@ -64,7 +76,7 @@ export default function Navbar() {
       <nav
         className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between"
         role="navigation"
-        aria-label="Main navigation"
+        aria-label={t('nav.mainNav')}
       >
         {/* Logo */}
         <motion.a
@@ -88,8 +100,8 @@ export default function Navbar() {
                 // crawlers, which left /blog undiscoverable by Googlebot. The
                 // onClick still does client-side SPA navigation.
                 <a
-                  href={link.href}
-                  onClick={(e) => { e.preventDefault(); trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar'); navigate(link.href) }}
+                  href={link.to}
+                  onClick={(e) => { e.preventDefault(); trackCta(`navbar-${link.key}`, 'navbar'); navigate(link.to) }}
                   className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0 no-underline"
                   style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >
@@ -97,7 +109,7 @@ export default function Navbar() {
                 </a>
               ) : (
                 <button
-                  onClick={() => { trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar'); handleNavClick(link.href) }}
+                  onClick={() => { trackCta(`navbar-${link.key}`, 'navbar'); handleNavClick(link.href) }}
                   className="text-muted hover:text-text-main text-sm font-body font-medium transition-colors duration-200 bg-transparent border-none cursor-pointer p-0"
                   style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 >
@@ -110,6 +122,7 @@ export default function Navbar() {
 
         {/* CTA + Hamburger */}
         <div className="flex items-center gap-3">
+          <div className="hidden md:inline-flex"><LanguageSwitcher compact /></div>
           <CartIcon variant="public" />
           <motion.button
             onClick={() => { trackCta('navbar-client-login', 'navbar'); navigate('/portal/login') }}
@@ -127,16 +140,16 @@ export default function Navbar() {
             }}
             whileHover={{ scale: 1.05, borderColor: '#00CFFF' }}
             whileTap={{ scale: 0.97 }}
-            aria-label="Client portal login"
+            aria-label={t('nav.portalLogin')}
           >
-            Client Login
+            {t('nav.clientLogin')}
           </motion.button>
 
           {/* Mobile hamburger */}
           <button
             className="md:hidden p-2 text-muted hover:text-primary transition-colors"
             onClick={() => setMenuOpen((v) => !v)}
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-label={menuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
             aria-expanded={menuOpen}
           >
             {menuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -168,8 +181,8 @@ export default function Navbar() {
                   transition={{ delay: i * 0.06 }}
                 >
                   <a
-                    href={link.isRoute ? link.href : undefined}
-                    onClick={(e) => { if (link.isRoute) e.preventDefault(); trackCta(`navbar-${link.label.toLowerCase()}`, 'navbar-mobile'); link.isRoute ? navigate(link.href) : handleNavClick(link.href); setMenuOpen(false) }}
+                    href={link.isRoute ? link.to : undefined}
+                    onClick={(e) => { if (link.isRoute) e.preventDefault(); trackCta(`navbar-${link.key}`, 'navbar-mobile'); link.isRoute ? navigate(link.to) : handleNavClick(link.href); setMenuOpen(false) }}
                     className="block w-full text-left py-3 px-2 text-text-main font-medium border-b border-white/5 last:border-0 bg-transparent cursor-pointer hover:text-primary transition-colors no-underline"
                     style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                   >
@@ -200,8 +213,11 @@ export default function Navbar() {
                     textAlign: 'center',
                   }}
                 >
-                  Client Login
+                  {t('nav.clientLogin')}
                 </button>
+                <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 4 }}>
+                  <LanguageSwitcher />
+                </div>
               </motion.li>
             </ul>
           </motion.div>

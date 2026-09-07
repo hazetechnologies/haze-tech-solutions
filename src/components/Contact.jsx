@@ -4,6 +4,7 @@ import emailjs from '@emailjs/browser'
 import { Send, CheckCircle, AlertCircle, Mail, Clock } from 'lucide-react'
 import { identifyLead, trackEvent, trackLead } from '../lib/telemetry'
 import { getRefCode } from '../lib/affiliateRef'
+import { useI18n } from '../i18n'
 
 // EmailJS credentials
 const SERVICE_ID = 'service_4uzwhit'
@@ -25,6 +26,7 @@ const INITIAL_FORM = {
 }
 
 export default function Contact() {
+  const { t } = useI18n()
   const [form, setForm] = useState(INITIAL_FORM)
   const [status, setStatus] = useState('idle') // idle | loading | success | error
   const [errorMsg, setErrorMsg] = useState('')
@@ -172,17 +174,16 @@ export default function Contact() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <span className="section-label">Get Started</span>
+          <span className="section-label">{t('contact.label')}</span>
           <h2
             className="font-display font-black mt-4 mb-4 text-text-main"
             style={{ fontSize: 'clamp(2rem, 5vw, 3.25rem)', lineHeight: 1.1 }}
           >
-            Ready to Automate{' '}
-            <span className="gradient-text">Your Growth?</span>
+            {t('contact.title1')}{' '}
+            <span className="gradient-text">{t('contact.title2')}</span>
           </h2>
           <p className="text-muted text-lg max-w-lg mx-auto">
-            Tell us about your business and we'll show you exactly where AI automation,
-            better marketing, or a new website could make the biggest difference.
+            {t('contact.lead')}
           </p>
         </motion.div>
 
@@ -244,7 +245,7 @@ export default function Contact() {
                       htmlFor="name"
                       className="block text-sm font-medium text-muted mb-2"
                     >
-                      Full Name <span className="text-primary" aria-hidden="true">*</span>
+                      {t('contact.nameLabel')} <span className="text-primary" aria-hidden="true">*</span>
                     </label>
                     <input
                       id="name"
@@ -252,7 +253,7 @@ export default function Contact() {
                       name="name"
                       value={form.name}
                       onChange={handleChange}
-                      placeholder="Jane Smith"
+                      placeholder={t('contact.namePlaceholder')}
                       required
                       style={inputBase}
                       aria-required="true"
@@ -263,7 +264,7 @@ export default function Contact() {
                       htmlFor="email"
                       className="block text-sm font-medium text-muted mb-2"
                     >
-                      Email Address <span className="text-primary" aria-hidden="true">*</span>
+                      {t('contact.emailLabel')} <span className="text-primary" aria-hidden="true">*</span>
                     </label>
                     <input
                       id="email"
@@ -271,7 +272,7 @@ export default function Contact() {
                       name="email"
                       value={form.email}
                       onChange={handleChange}
-                      placeholder="jane@company.com"
+                      placeholder={t('contact.emailPlaceholder')}
                       required
                       style={inputBase}
                       aria-required="true"
@@ -286,7 +287,7 @@ export default function Contact() {
                       htmlFor="business"
                       className="block text-sm font-medium text-muted mb-2"
                     >
-                      Business Name <span className="text-primary" aria-hidden="true">*</span>
+                      {t('contact.businessLabel')} <span className="text-primary" aria-hidden="true">*</span>
                     </label>
                     <input
                       id="business"
@@ -294,7 +295,7 @@ export default function Contact() {
                       name="business"
                       value={form.business}
                       onChange={handleChange}
-                      placeholder="Acme Co."
+                      placeholder={t('contact.businessPlaceholder')}
                       required
                       style={inputBase}
                       aria-required="true"
@@ -305,7 +306,7 @@ export default function Contact() {
                       htmlFor="service"
                       className="block text-sm font-medium text-muted mb-2"
                     >
-                      Service of Interest <span className="text-primary" aria-hidden="true">*</span>
+                      {t('contact.serviceLabel')} <span className="text-primary" aria-hidden="true">*</span>
                     </label>
                     <select
                       id="service"
@@ -317,19 +318,19 @@ export default function Contact() {
                       aria-required="true"
                     >
                       <option value="" disabled style={{ background: '#071526' }}>
-                        Select a service…
+                        {t('contact.servicePlaceholder')}
                       </option>
                       <option value="AI Automation" style={{ background: '#071526' }}>
-                        AI Automation
+                        {t('contact.serviceOptionAi')}
                       </option>
                       <option value="Social Media Marketing" style={{ background: '#071526' }}>
-                        Social Media Marketing
+                        {t('contact.serviceOptionSocial')}
                       </option>
                       <option value="Website Development" style={{ background: '#071526' }}>
-                        Website Development
+                        {t('contact.serviceOptionWeb')}
                       </option>
                       <option value="All Three" style={{ background: '#071526' }}>
-                        All Three — Full Package
+                        {t('contact.serviceOptionAll')}
                       </option>
                     </select>
                   </div>
@@ -446,14 +447,14 @@ export default function Contact() {
                     htmlFor="message"
                     className="block text-sm font-medium text-muted mb-2"
                   >
-                    Tell Us About Your Business
+                    {t('contact.messageLabel')}
                   </label>
                   <textarea
                     id="message"
                     name="message"
                     value={form.message}
                     onChange={handleChange}
-                    placeholder="What are you working on? What's your biggest challenge right now?"
+                    placeholder={t('contact.messagePlaceholder')}
                     rows={5}
                     style={{ ...inputBase, resize: 'vertical', minHeight: 120 }}
                   />
@@ -510,11 +511,11 @@ export default function Contact() {
                           strokeLinecap="round"
                         />
                       </svg>
-                      Sending…
+                      {t('contact.sending')}
                     </>
                   ) : (
                     <>
-                      Send Message
+                      {t('contact.send')}
                       <Send size={15} aria-hidden="true" />
                     </>
                   )}
@@ -544,7 +545,7 @@ export default function Contact() {
           </div>
           <div className="flex items-center gap-2">
             <Clock size={15} style={{ color: '#FF6B00' }} aria-hidden="true" />
-            <span>We respond within 24 hours</span>
+            <span>{t('contact.respond')}</span>
           </div>
         </motion.div>
       </div>

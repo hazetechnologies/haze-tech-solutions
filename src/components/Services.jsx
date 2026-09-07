@@ -2,53 +2,31 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Bot, TrendingUp, Globe, Check, ArrowRight } from 'lucide-react'
 import { trackCta } from '../lib/telemetry'
+import { useI18n } from '../i18n'
 
-const services = [
+// Visual config only — every string comes from the active locale dictionary
+// (services.items.<slug>) so all five languages share one layout.
+const SERVICE_CARDS = [
   {
     icon: Bot,
-    title: 'AI Automation',
     slug: 'ai-automation',
-    tagline: 'Work smarter, not harder.',
     accent: '#00CFFF',
     glowColor: 'rgba(0, 207, 255, 0.25)',
     borderHover: 'rgba(0, 207, 255, 0.4)',
-    bullets: [
-      'Custom workflow design & deployment',
-      'AI agent configuration & training',
-      'Process bottleneck analysis',
-      'CRM & third-party tool integrations',
-    ],
   },
   {
     icon: TrendingUp,
-    title: 'Social Media Marketing',
     slug: 'social-media',
-    tagline: 'Grow your audience on autopilot.',
     accent: '#FF6B00',
     glowColor: 'rgba(255, 107, 0, 0.25)',
     borderHover: 'rgba(255, 107, 0, 0.4)',
-    bullets: [
-      'Content strategy & editorial calendar',
-      'Scheduled posting automation',
-      'Analytics & growth reporting',
-      'Brand voice development',
-    ],
-    cta: { label: 'Get a Free Social Audit', to: '/free-social-audit' },
   },
   {
     icon: Globe,
-    title: 'Website Development',
     slug: 'web-development',
-    tagline: 'Sites built to convert.',
     accent: '#00CFFF',
     glowColor: 'rgba(0, 207, 255, 0.15)',
     borderHover: 'rgba(255, 107, 0, 0.4)',
-    bullets: [
-      'Conversion-focused UI/UX design',
-      'Mobile-first responsive builds',
-      'SEO-optimized structure & markup',
-      'CMS integration & training',
-    ],
   },
 ]
 
@@ -63,6 +41,8 @@ const cardVariants = {
 }
 
 export default function Services() {
+  const { t, tl, path } = useI18n()
+
   return (
     <section
       id="services"
@@ -86,17 +66,16 @@ export default function Services() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <span className="section-label">What We Do</span>
+          <span className="section-label">{t('services.label')}</span>
           <h2
             className="font-display font-black mt-4 mb-4 text-text-main"
             style={{ fontSize: 'clamp(2rem, 5vw, 3.25rem)', lineHeight: 1.1 }}
           >
-            Three Pillars.{' '}
-            <span className="gradient-text">One Agency.</span>
+            {t('services.title1')}{' '}
+            <span className="gradient-text">{t('services.title2')}</span>
           </h2>
           <p className="text-muted text-lg max-w-xl mx-auto">
-            We combine AI-powered tools with expert strategy to help your business
-            operate faster, look better, and grow consistently.
+            {t('services.lead')}
           </p>
         </motion.div>
 
@@ -108,11 +87,14 @@ export default function Services() {
           whileInView="visible"
           viewport={{ once: true, margin: '-80px' }}
         >
-          {services.map((service) => {
+          {SERVICE_CARDS.map((service) => {
             const Icon = service.icon
+            const title = t(`services.items.${service.slug}.title`)
+            const tagline = t(`services.items.${service.slug}.tagline`)
+            const bullets = tl(`services.items.${service.slug}.bullets`)
             return (
               <motion.article
-                key={service.title}
+                key={service.slug}
                 variants={cardVariants}
                 whileHover={{
                   y: -8,
@@ -138,15 +120,15 @@ export default function Services() {
 
                 {/* Title & tagline */}
                 <h3 className="font-display font-bold text-lg text-text-main mb-1">
-                  {service.title}
+                  {title}
                 </h3>
                 <p className="text-sm mb-6" style={{ color: service.accent }}>
-                  {service.tagline}
+                  {tagline}
                 </p>
 
                 {/* Bullet list */}
                 <ul className="space-y-3 flex-1">
-                  {service.bullets.map((bullet) => (
+                  {bullets.map((bullet) => (
                     <li key={bullet} className="flex items-start gap-3">
                       <Check
                         size={15}
@@ -161,12 +143,12 @@ export default function Services() {
 
                 {/* Link to the full service page (with a 2-minute explainer video) */}
                 <Link
-                  to={`/services/${service.slug}`}
+                  to={path(`/services/${service.slug}`)}
                   onClick={() => trackCta(`services-${service.slug}-learnmore`, 'services')}
                   className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-all"
                   style={{ color: service.accent, textDecoration: 'none', letterSpacing: '0.01em' }}
                 >
-                  Watch the 2-min overview
+                  {t('services.watch')}
                   <ArrowRight size={14} aria-hidden="true" />
                 </Link>
 
@@ -190,7 +172,7 @@ export default function Services() {
           viewport={{ once: true }}
           transition={{ delay: 0.4, duration: 0.6 }}
         >
-          <p className="text-muted mb-4 text-sm">Ready to start?</p>
+          <p className="text-muted mb-4 text-sm">{t('services.ready')}</p>
           <div style={{ display: 'inline-flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px' }}>
             <motion.div
               whileHover={{ scale: 1.05 }}
@@ -198,12 +180,12 @@ export default function Services() {
               style={{ display: 'inline-flex' }}
             >
               <Link
-                to="/pricing"
+                to={path('/pricing')}
                 onClick={() => trackCta('services-view-pricing', 'services')}
                 className="btn-primary"
                 style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
               >
-                View Pricing
+                {t('services.viewPricing')}
               </Link>
             </motion.div>
             <motion.button
@@ -228,7 +210,7 @@ export default function Services() {
               whileHover={{ scale: 1.05, color: '#F1F5F9' }}
               whileTap={{ scale: 0.97 }}
             >
-              Or book a consultation
+              {t('services.orBook')}
             </motion.button>
           </div>
         </motion.div>
