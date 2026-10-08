@@ -21,10 +21,12 @@ import { trackedClaude, extractText } from './_lib/tracked-claude.js'
 import { buildBlogPrompt, parseBlogGeneration } from './_lib/blog-generate.js'
 import { isSafePublicUrl, htmlToText, buildAutofillPrompt, parseBrandAutofill } from './_lib/brand-autofill.js'
 import { r2Configured, buildBlogImageKey, uploadBuffer, slugifyForKey } from './_lib/r2.js'
+// Imported, not restated: this list drifting out of sync with the portal
+// picker is what made the flagship template unselectable for ~3 months.
+import { isValidTemplateId } from '../src/lib/websiteTemplates.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const VALID_TEMPLATES = ['service-business','local-business','creative-portfolio','saas-landing','travel-agency']
 const APPROVABLE_LOGO_KEYS = ['logo_option_1', 'logo_option_2', 'logo_option_3']
 
 export default async function handler(req, res) {
@@ -766,7 +768,7 @@ async function intake(req, res) {
   const body = req.body || {}
   const { project_id, template_id, domain, business_description, services, pages, color_style_prefs, use_brand_kit } = body
   if (!project_id) return res.status(400).json({ error: 'bad_request', message: 'project_id required' })
-  if (!VALID_TEMPLATES.includes(template_id)) {
+  if (!isValidTemplateId(template_id)) {
     return res.status(400).json({ error: 'bad_request', message: 'Invalid template_id' })
   }
   if (!domain || !business_description) {
