@@ -2,15 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-
-const TEMPLATES = [
-  { id: 'scroll-motion',       name: 'Scroll & Motion',     blurb: 'Premium animated one-page site — scroll-driven reveals, parallax motion, and 3D hover. Designed to turn heads.' },
-  { id: 'service-business',    name: 'Service Business',    blurb: 'For trades, consulting, and local services. Strong CTAs, simple bookings.' },
-  { id: 'local-business',      name: 'Local Business',      blurb: 'Maps, hours, location-first. Great for restaurants and shops.' },
-  { id: 'creative-portfolio',  name: 'Creative Portfolio',  blurb: 'Image-led, project showcase, gallery. For designers and creators.' },
-  { id: 'saas-landing',        name: 'SaaS / Product Landing', blurb: 'Hero + features + pricing. Built for software products.' },
-  { id: 'travel-agency',       name: 'Travel Agency',       blurb: 'Destinations, packages, booking — for travel and tour operators.' },
-]
+import { WEBSITE_TEMPLATES as TEMPLATES } from '../../lib/websiteTemplates'
 
 const PAGES_AVAILABLE = ['Home','About','Services','Contact','Blog','Portfolio','FAQ','Pricing']
 
