@@ -25,7 +25,23 @@ Agency platform. Vite + React 19 + Supabase, deployed on Vercel.
   *new* errors in files you touched. Don't fix the backlog unless asked.
 - `npm run build` is the reliable gate; a chunk-size warning is expected.
 - The `api/_lib/*.test.js` files are **Deno** tests (`deno test api/_lib/`),
-  not Node. There is no `npm test` — don't go looking for one.
+  not Node. There is no `npm test` — don't go looking for one. The edge
+  functions have Deno tests too: `deno test supabase/functions/<fn>/`. Both
+  must run under a BARE `deno test` with no permission flags — a test that
+  needs `--allow-read` breaks the documented invocation, so import what you
+  need instead of reading it off disk.
+
+## Website templates
+
+`src/lib/websiteTemplates.js` is the ONE list of website-builder templates.
+The portal picker renders it and `api/website.js` validates `?action=intake`
+against it. Adding a template = one entry there + a `template-<id>` GitHub
+template repo in the hazetechnologies org whose `content.json` matches
+`AiContent` in `supabase/functions/generate-website-scaffold/types.ts`.
+
+Do not restate the id list anywhere else. It was previously hardcoded in four
+places; PR #98 updated one of them, and the flagship template answered
+`400 Invalid template_id` for about three months.
 
 ## Conventions
 
