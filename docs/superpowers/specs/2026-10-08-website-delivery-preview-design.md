@@ -159,6 +159,25 @@ A change request stores the client's note. Two ways to service it:
 
 Build (1) now; (2) follows the contract work.
 
+## Unverified: the Vercel API surface
+
+No Vercel token exists yet, so **not one call in `api/_lib/vercel.js` has ever
+been executed.** The endpoint versions (`/v9/projects`, `/v11/projects`,
+`/v6/deployments`, `/v10/.../domains`) and the response shapes this code reads
+are taken from Vercel's documentation, not from a live response. The pure
+helpers around them are tested; the HTTP layer is not, and cannot be until a
+token is saved.
+
+First run with a real token is therefore a verification step, not a formality,
+and the first client site must not be the thing it is verified on.
+
+**The preview URL must come from the API, never be constructed.**
+`<project>.vercel.app` is a global namespace and project names are derived from
+`slugify(client.name)`, so `acme-website` may already belong to someone else.
+`resolvePreviewUrl` returns `{ url, confirmed }` and a project only reaches
+`preview_ready` when `confirmed` is true — an unconfirmed guess is held back
+rather than emailed to a client who would land on a 404 or a stranger's site.
+
 ## Failure behaviour
 
 - No Vercel token → `vercel_not_configured`, project stays at `done`. No
@@ -171,7 +190,11 @@ Build (1) now; (2) follows the contract work.
 - Domain already attached elsewhere → surfaced to the operator, not the client.
 - `deploy` called twice → reuses the existing `vercel_project_id` rather than
   creating a duplicate project. The action is idempotent on the project, and
-  re-running it triggers a fresh deployment.
+  re-running it triggers a fresh deployment. Two *concurrent* calls both miss
+  on the read and both create; the loser catches the conflict and re-reads,
+  because check-then-create is a race and the project it wanted now exists.
+- Vercel reports no production alias → the project stays out of
+  `preview_ready`. A guessed URL is never presented to a client.
 
 ## Build order
 

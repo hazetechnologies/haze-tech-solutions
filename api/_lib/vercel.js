@@ -64,22 +64,62 @@ async function call(path, { token, teamId }, init = {}) {
  * build the same repo is how a client ends up reviewing the wrong URL.
  */
 export async function ensureProject(repoName, cfg) {
+  const get = () => call(`/v9/projects/${encodeURIComponent(repoName)}`, cfg)
+
   try {
-    const existing = await call(`/v9/projects/${encodeURIComponent(repoName)}`, cfg)
-    if (existing?.id) return { id: existing.id, created: false, name: existing.name }
+    const existing = await get()
+    if (existing?.id) return describeProject(existing, false)
   } catch (err) {
     if (err.status !== 404) throw err
   }
 
-  const created = await call('/v11/projects', cfg, {
-    method: 'POST',
-    body: JSON.stringify({
-      name: repoName,
-      gitRepository: { type: 'github', repo: `${GH_ORG}/${repoName}` },
-    }),
-  })
-  if (!created?.id) throw new Error('vercel create project returned no id')
-  return { id: created.id, created: true, name: created.name }
+  try {
+    const created = await call('/v11/projects', cfg, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: repoName,
+        gitRepository: { type: 'github', repo: `${GH_ORG}/${repoName}` },
+      }),
+    })
+    if (!created?.id) throw new Error('vercel create project returned no id')
+    return describeProject(created, true)
+  } catch (err) {
+    // Check-then-create is a race: two deploy clicks both 404 on the GET and
+    // both POST, and the loser gets a conflict. Re-read rather than failing —
+    // the project it wanted now exists, which is the outcome it asked for.
+    if (err.status === 409 || /already (exists|in use)/i.test(err.message)) {
+      const existing = await get()
+      if (existing?.id) return describeProject(existing, false)
+    }
+    throw err
+  }
+}
+
+/**
+ * Pull the production alias out of a project payload.
+ *
+ * `<name>.vercel.app` is NOT guaranteed: that subdomain is global, and project
+ * names here come from slugify(client.name), so `acme-website` is very likely
+ * already taken by someone else's project. Vercel then assigns a different
+ * alias. Constructing the URL instead of reading it would email a client a link
+ * that 404s — or one that loads a stranger's site. Always prefer what the API
+ * reports; the constructed form is a labelled last resort, never authoritative.
+ */
+function describeProject(project, created) {
+  const aliases = []
+  const prodAlias = project?.targets?.production?.alias
+  if (Array.isArray(prodAlias)) aliases.push(...prodAlias)
+  if (Array.isArray(project?.alias)) {
+    aliases.push(...project.alias.map((a) => (typeof a === 'string' ? a : a?.domain)).filter(Boolean))
+  }
+  const preferred = aliases.find((a) => typeof a === 'string' && a.endsWith('.vercel.app')) || aliases[0] || null
+  return {
+    id: project.id,
+    name: project.name,
+    created,
+    productionUrl: preferred ? `https://${preferred}` : null,
+    aliasFromApi: Boolean(preferred),
+  }
 }
 
 /** Most recent deployment for a project, or null before the first build. */
@@ -100,13 +140,30 @@ export async function latestDeployment(projectId, cfg) {
 }
 
 /**
- * The URL a client reviews. Vercel's per-deployment URLs are immutable and
- * change on every build, so the stable production alias is what belongs in the
- * portal and in an email — a link that rots between the send and the click is
- * worse than no link.
+ * Last-resort guess at the production URL, used ONLY when the API reported no
+ * alias at all. `<name>.vercel.app` is a global namespace, so this can point at
+ * a project that is not ours. Callers must treat a guessed URL as unconfirmed
+ * and must not put it in front of a client as a finished preview — see
+ * resolvePreviewUrl.
  */
-export function productionUrl(projectName) {
+export function guessProductionUrl(projectName) {
   return `https://${projectName}.vercel.app`
+}
+
+/**
+ * The URL a client reviews. Per-deployment URLs are immutable and change every
+ * build, so the stable production alias is what belongs in the portal and in an
+ * email — a link that rots between the send and the click is worse than none.
+ *
+ * Returns { url, confirmed }. `confirmed: false` means the alias came from a
+ * guess, and the caller should keep the project out of preview_ready rather
+ * than send it.
+ */
+export function resolvePreviewUrl(project) {
+  if (project?.productionUrl && project.aliasFromApi) {
+    return { url: project.productionUrl, confirmed: true }
+  }
+  return { url: guessProductionUrl(project?.name || ''), confirmed: false }
 }
 
 export async function attachDomain(projectId, domain, cfg) {

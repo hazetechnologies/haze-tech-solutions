@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
-import { withTeam, productionUrl, deploymentOutcome } from './vercel.js'
+import { withTeam, guessProductionUrl, resolvePreviewUrl, deploymentOutcome } from './vercel.js'
 
 Deno.test('withTeam appends teamId with the right separator', () => {
   assertEquals(withTeam('/v11/projects', 'team_abc'), 'https://api.vercel.com/v11/projects?teamId=team_abc')
@@ -19,8 +19,35 @@ Deno.test('withTeam encodes a team id that needs it', () => {
   assertEquals(withTeam('/x', 'a b/c'), 'https://api.vercel.com/x?teamId=a%20b%2Fc')
 })
 
-Deno.test('productionUrl is the stable alias, not a per-build url', () => {
-  assertEquals(productionUrl('acme-website'), 'https://acme-website.vercel.app')
+Deno.test('a guessed url is never reported as confirmed', () => {
+  // <name>.vercel.app is a GLOBAL namespace and project names come from
+  // slugify(client.name), so 'acme-website' may well belong to someone else.
+  // Emailing a client a guessed link can send them to a stranger's site.
+  assertEquals(guessProductionUrl('acme-website'), 'https://acme-website.vercel.app')
+
+  const guessed = resolvePreviewUrl({ name: 'acme-website', productionUrl: null, aliasFromApi: false })
+  assertEquals(guessed.confirmed, false)
+  assertEquals(guessed.url, 'https://acme-website.vercel.app')
+})
+
+Deno.test('an alias reported by the API is confirmed and wins', () => {
+  const real = resolvePreviewUrl({
+    name: 'acme-website',
+    productionUrl: 'https://acme-website-hazetech.vercel.app',
+    aliasFromApi: true,
+  })
+  assertEquals(real.confirmed, true)
+  assertEquals(real.url, 'https://acme-website-hazetech.vercel.app')
+})
+
+Deno.test('a url present but not from the API is still unconfirmed', () => {
+  // Guards against a caller hand-setting productionUrl and bypassing the gate.
+  const spoofed = resolvePreviewUrl({
+    name: 'acme-website',
+    productionUrl: 'https://whatever.vercel.app',
+    aliasFromApi: false,
+  })
+  assertEquals(spoofed.confirmed, false)
 })
 
 // The one that actually protects a client: anything short of READY must not be
