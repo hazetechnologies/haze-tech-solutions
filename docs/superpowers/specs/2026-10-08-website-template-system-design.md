@@ -53,16 +53,53 @@ A generator that writes copy cannot deliver any of them. So the contract has to
 carry two kinds of slot, and the funnel has to know where assets come from.
 That is the real work; the templates are downstream of it.
 
+### The delivery gap — a blocking dependency, not a future nicety
+
+These templates are the product clients buy. Live prices: **Website — Starter
+$1,500, Growth $3,500, Pro $7,500**, the Website + Social bundle at **$14,000**,
+and Website Maintenance at **$99 / $199 / $399 per month**.
+
+What a client receives today, at any of those prices:
+
+- No deploy step exists anywhere in the funnel.
+- No repo transfer, collaborator invite or handover logic exists — the repo is
+  created `private` in the `hazetechnologies` org and stays there.
+- `PortalDashboard.jsx:152`, the terminal state the client sees:
+  **"Ready — your dev team has your files."**
+
+So the funnel's final word to someone who paid $7,500 is that somebody else has
+their files. They never see the site.
+
+This was filed as out of scope in the first draft. That was wrong. An Atrium
+interior the client cannot open is worth exactly what no site is worth, and
+every concept in this line raises the gap between what is promised and what is
+handed over. **The deploy + preview + approve loop is a prerequisite for
+shipping the experiential line, not a follow-up to it.** The brand-kit flow
+already has that shape; the website flow never got one.
+
+**Read on ownership:** the maintenance products ($99–$399/mo recurring) only
+make sense if Haze Tech hosts and maintains the site. So delivery means *deploy
+under Haze Tech hosting and give the client a live URL*, with the repo staying
+in the org — not a repo handover. Correct this if the intent is to hand repos
+over, because it changes the deploy target and the whole upgrade path.
+
+### Price tiers decide which concepts are deliverable
+
+A library-scene 3D interior cannot be built and supported for $1,500. The
+experiential line maps to **Pro ($7,500)** and the **$14,000 bundle**, or needs
+a tier above them. Starter and Growth keep the existing Vite templates.
+
+Margin follows from this too: on a fixed-price build, an uncapped metered asset
+rung eats the job. That is the reason `generate` stops at `awaiting_assets` for
+an operator to release, rather than being a cost control bolted on later.
+
 ### Also found, recorded, out of scope
 
 - **`pages` is collected and discarded.** The intake offers Blog, Portfolio,
   FAQ and Pricing and passes them into the prompt; nothing renders a second
   page. The form sells what the build cannot deliver.
-- **Nothing is ever seen.** No template thumbnails, no deploy step, no preview.
-  The only output is a private GitHub repo URL. This matters more as the
-  catalogue grows: ten templates chosen from a text blurb is worse than six.
-  The brand-kit flow already has the preview→approve→revise shape the website
-  flow never got. It deserves its own spec.
+- **Template thumbnails.** The picker is text blurbs. Needed before the
+  catalogue passes ~10, cheap once a deploy exists to screenshot from.
 
 ## Decision 1 — the experiential line is built on Next.js App Router
 
@@ -208,6 +245,8 @@ say so rather than presenting twelve equal-looking cards.
 
 ## Build order
 
+0. **Deploy + preview.** Prerequisite, own spec. Without it the client cannot
+   see anything we build here, at any price tier.
 1. **Contract layer** — copy slots + asset slots + the sourcing ladder +
    `awaiting_assets`, with the missing-`template.json` fallback. Nothing
    visible changes and the six existing templates keep working.
