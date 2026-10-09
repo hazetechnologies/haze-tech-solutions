@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Mail, Key, CreditCard, Zap, BarChart3 } from 'lucide-react'
+import { Save, Eye, EyeOff, RefreshCw, AlertCircle, CheckCircle, Mail, Key, CreditCard, Zap, BarChart3, Globe } from 'lucide-react'
 
 const MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (Best quality)' },
@@ -349,6 +349,48 @@ export default function Settings() {
             Next: head to <a href="/admin/products" style={{ color: '#00D4FF' }}>Products &amp; Subscriptions</a> and paste a <code style={{ color: '#94A3B8' }}>price_…</code> ID into each plan you want to bill (Edit → Stripe Price ID). Create the Products + Prices in <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener noreferrer" style={{ color: '#00D4FF' }}>Stripe</a> first.
             <br/>
             <span style={{ color: '#475569' }}>Bulk alternative: <code style={{ color: '#94A3B8' }}>node scripts/sync-stripe-catalog.mjs</code> auto-creates and links them in one shot.</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Website hosting (Vercel) */}
+      <div style={styles.card}>
+        <div style={styles.cardHeader}>
+          <div style={{ ...styles.cardIcon, background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.2)' }}>
+            <Globe size={18} color="#00D4FF" />
+          </div>
+          <div>
+            <h3 style={styles.cardTitle}>Website Hosting (Vercel)</h3>
+            <p style={styles.cardDesc}>Deploys generated client sites so clients can preview and approve them</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div>
+            <label style={styles.label}>Vercel API Token</label>
+            <p style={styles.fieldDesc}>From vercel.com/account/tokens. Scope it to the Haze Tech team, not your personal account.</p>
+            <input
+              type="password"
+              value={settings.vercel_api_token || ''}
+              onChange={e => set('vercel_api_token', e.target.value)}
+              placeholder="vercel_..."
+              style={styles.input}
+            />
+          </div>
+          <div>
+            <label style={styles.label}>Vercel Team ID</label>
+            <p style={styles.fieldDesc}>From vercel.com/teams/&lt;team&gt;/settings (team_…). Leave blank only if the token is a personal one.</p>
+            <input
+              type="text"
+              value={settings.vercel_team_id || ''}
+              onChange={e => set('vercel_team_id', e.target.value)}
+              placeholder="team_..."
+              style={styles.input}
+            />
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: 0, lineHeight: 1.5 }}>
+            Until a token is saved here, generated client sites stop at <code style={{ color: '#94A3B8' }}>done</code> — the repo is
+            created but nothing deploys, so the client never gets a preview link. Nothing else breaks without it.
           </p>
         </div>
       </div>
