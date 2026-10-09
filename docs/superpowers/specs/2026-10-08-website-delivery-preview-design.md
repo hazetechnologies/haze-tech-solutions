@@ -36,9 +36,35 @@ maintain if Haze Tech hosts. So:
 stays in the org.** Maintenance is the recurring line on a site we operate, not
 a support contract on code someone else holds.
 
-This is a business decision encoded in the architecture — if the intent is to
-hand repos over at the end of a build, the deploy target, the domain flow and
-the upgrade path all change, and this spec needs reworking before it is built.
+This is not a new decision. It is already what the published products say, and
+the evidence is in the live product rows:
+
+- **Website — Starter ($1,500)** lists *"Custom domain wired up + Vercel
+  deploy"* as a feature. A managed deploy is the sold deliverable. (It is also
+  a feature the funnel does not currently perform — see the gap above.)
+- **No website product mentions source code, a repository, or code ownership
+  in any bullet.** Nothing was ever sold that a handover would satisfy.
+- Every maintenance tier reads *"Monthly retainer for sites built on
+  Website — X"* and lists uptime monitoring, monthly Lighthouse reports and
+  4/8/16 hours of edits. All of that presumes we operate the site.
+- **Growth wires the client's contact form into the Haze Tech leads table**
+  ("same place audit submissions land") and its CMS "into your admin". The
+  generated site is a client of this platform, not a standalone artifact.
+  Handing over the repo hands over something that stops working when it leaves.
+
+The repo also contains the template itself. Handing it over hands over the
+`template-<id>` source — and, for the experiential line, the 3D scene library
+that is the differentiator.
+
+**What the client owns outright, and should be told so plainly:** their domain,
+their content and copy, their brand kit, and their leads. The domain must live
+in the client's own registrar account pointed at our hosting — never held by
+us. That single rule is what separates a hosting model from hostage-taking.
+
+**Exit path.** A no-handover model is only fair with a way out. The clean one
+is a paid **static export**: the rendered site as HTML/CSS/JS that the client
+can host anywhere, which satisfies "do I own my site" without shipping the
+template source. Price it deliberately; it is a product, not a favour.
 
 Operating cost follows the same logic: N client sites are N Vercel projects on
 the team, consuming build minutes and bandwidth. That cost is what the
