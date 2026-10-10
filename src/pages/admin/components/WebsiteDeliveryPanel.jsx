@@ -199,11 +199,19 @@ export default function WebsiteDeliveryPanel({ project, onRefresh }) {
           ))}
           {open.length > 0 && (
             <>
-              <button onClick={() => post('resolve-changes', {}, 'resolve')} disabled={working === 'resolve'} style={btnGhost}>
-                <Check size={13} /> {working === 'resolve' ? 'Closing…' : `Mark done & tell the client`}
-              </button>
+              {/* Hidden while a build runs: the operator probably started that
+                  build for these requests, and the watcher closes them itself
+                  on success. Closing them by hand now would email the client
+                  that their change shipped before it had. */}
+              {!isDeploying && (
+                <button onClick={() => post('resolve-changes', {}, 'resolve')} disabled={working === 'resolve'} style={btnGhost}>
+                  <Check size={13} /> {working === 'resolve' ? 'Closing…' : 'Mark done & tell the client'}
+                </button>
+              )}
               <p style={{ ...muted, marginTop: 8 }}>
-                A Redeploy of a live site closes these automatically and emails the client. Use this button when the work went out another way — a direct push to the repo builds on Vercel without going through here, so nothing would close it.
+                {isDeploying
+                  ? 'The running build closes these itself if it succeeds.'
+                  : 'A Redeploy of a live site closes these automatically and emails the client. Use this button when the work went out another way — a direct push to the repo builds on Vercel without going through here, so nothing would close it.'}
               </p>
             </>
           )}

@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
-import { withTeam, guessProductionUrl, resolvePreviewUrl, deploymentOutcome, describeProject } from './vercel.js'
+import { withTeam, guessProductionUrl, resolvePreviewUrl, deploymentOutcome, describeProject, gitSourceFor } from './vercel.js'
 
 Deno.test('withTeam appends teamId with the right separator', () => {
   assertEquals(withTeam('/v11/projects', 'team_abc'), 'https://api.vercel.com/v11/projects?teamId=team_abc')
@@ -99,4 +99,40 @@ Deno.test('describeProject reports no url rather than inventing one', () => {
 Deno.test('describeProject ignores malformed alias entries', () => {
   const d = describeProject({ id: 'prj_4', name: 'acme-website', alias: [null, {}, 'acme.com'] }, false)
   assertEquals(d.productionUrl, 'https://acme.com')
+})
+
+// gitSource is how the deployment API is told WHICH repo to build. Getting it
+// wrong means every publish reaches `deploying` and then fails.
+Deno.test('a resolved repoId identifies the repo numerically', () => {
+  const g = gitSourceFor({ repoId: 918273, org: 'hazetechnologies', repo: 'acme-website' })
+  assertEquals(g.type, 'github')
+  assertEquals(g.repoId, 918273)
+  assertEquals(g.ref, 'main')
+  // org/repo must not be mixed in alongside repoId.
+  assertEquals(g.org, undefined)
+  assertEquals(g.repo, undefined)
+})
+
+Deno.test('without a repoId it falls back to org and repo', () => {
+  const g = gitSourceFor({ repoId: null, org: 'hazetechnologies', repo: 'acme-website', ref: 'master' })
+  assertEquals(g.repoId, undefined)
+  assertEquals(g.org, 'hazetechnologies')
+  assertEquals(g.repo, 'acme-website')
+  assertEquals(g.ref, 'master')
+})
+
+Deno.test('a non-numeric repoId is not trusted as one', () => {
+  // A string id from an unexpected payload shape would be sent as the wrong
+  // type; fall back rather than construct a request that cannot work.
+  for (const bad of ['918273', undefined, null, {}, 0, -1, 1.5, NaN]) {
+    const g = gitSourceFor({ repoId: bad, org: 'o', repo: 'r' })
+    assertEquals(g.repo, 'r', `expected fallback for ${JSON.stringify(bad)}`)
+  }
+})
+
+Deno.test('describeProject reads repoId off the git link', () => {
+  const d = describeProject({ id: 'p', name: 'acme-website', link: { type: 'github', repoId: 42, org: 'o', repo: 'r' } }, false)
+  assertEquals(d.repoId, 42)
+  assertEquals(describeProject({ id: 'p', name: 'n' }, false).repoId, null)
+  assertEquals(describeProject({ id: 'p', name: 'n', link: { repoId: '42' } }, false).repoId, null)
 })

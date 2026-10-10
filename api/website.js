@@ -1114,7 +1114,7 @@ async function deploySite(req, res) {
   }
 
   try {
-    const dep = await triggerDeployment(vp.id, project.repo_name, cfg)
+    const dep = await triggerDeployment(vp.id, project.repo_name, cfg, { repoId: vp.repoId })
     // Record WHICH deployment this is. Polling the project's newest deployment
     // instead would read whatever Vercel happens to list first — a build from a
     // git push, or on a redeploy the previous one already sitting at READY,
@@ -1354,17 +1354,39 @@ async function resolveChanges(req, res) {
   if (!ctx) return
   const { adminClient, project } = ctx
 
+  // Not while a build is running. The operator may have started the redeploy
+  // FOR these requests; closing them now would email the client that their
+  // change shipped, and a build that then fails would make that a lie. The
+  // deploy watcher resolves them itself when it succeeds.
+  if (project.status === 'deploying') {
+    return res.status(409).json({
+      error: 'wrong_status',
+      message: 'A build is running. It closes these itself if it succeeds — wait for it to finish.',
+    })
+  }
+
   const ids = Array.isArray(req.body?.revision_ids) ? req.body.revision_ids.map(String) : null
   const resolved = await resolveOpenRevisions(adminClient, project.id, { ids })
   if (resolved === 0) {
     return res.status(200).json({ project_id: project.id, resolved: 0, message: 'Nothing was open.' })
   }
 
+  // Pre-launch, the project is sitting in `changes_requested` and the portal is
+  // telling the client we are still working. The email we are about to send
+  // says the opposite, so the status has to move back to the reviewable state
+  // or the two contradict each other.
+  let status = project.status
+  if (project.status === 'changes_requested' && project.preview_url) {
+    if (await casStatus(adminClient, project, 'changes_requested', {
+      status: 'preview_ready', notified_status: 'preview_ready', progress_message: null,
+    })) status = 'preview_ready'
+  }
+
   // Clicking this IS the operator saying the work is done, so the client is
   // told. Staying silent would leave them waiting on something already shipped.
   await emitNotification(adminClient, 'website.changes_published',
     notifyPayload(project, { liveUrl: project.live_url, previewUrl: project.preview_url, count: resolved }))
-  return res.status(200).json({ project_id: project.id, resolved })
+  return res.status(200).json({ project_id: project.id, resolved, status })
 }
 
 // POST ?action=attach-domain — admin. Body: { project_id, domain }.

@@ -82,7 +82,15 @@ export async function ensureProject(repoName, cfg) {
       }),
     })
     if (!created?.id) throw new Error('vercel create project returned no id')
-    return describeProject(created, true)
+    const desc = describeProject(created, true)
+    // The create response does not always carry the resolved git link. repoId
+    // is what identifies the repo to the deployment API, so re-read once rather
+    // than fall back to a form that may be rejected.
+    if (desc.repoId == null) {
+      const reread = await fetchProject(created.id, cfg).catch(() => null)
+      if (reread?.repoId != null) return { ...desc, repoId: reread.repoId }
+    }
+    return desc
   } catch (err) {
     // Check-then-create is a race: two deploy clicks both 404 on the GET and
     // both POST, and the loser gets a conflict. Re-read rather than failing —
@@ -119,7 +127,29 @@ export function describeProject(project, created) {
     created,
     productionUrl: preferred ? `https://${preferred}` : null,
     aliasFromApi: Boolean(preferred),
+    // Vercel resolves the linked GitHub repo when the project is created and
+    // reports its numeric id here. Reading it off the project means we can
+    // identify the repo to the deployment API without a GitHub PAT — which the
+    // serverless environment does not have (the PAT is a Supabase edge-function
+    // secret), and which these private repos would otherwise require.
+    repoId: Number.isInteger(project?.link?.repoId) && project.link.repoId > 0 ? project.link.repoId : null,
   }
+}
+
+/**
+ * Which `gitSource` form to send when creating a deployment.
+ *
+ * Vercel's create-deployment API identifies a GitHub repo by numeric `repoId`.
+ * The org/repo form is the fallback for the case where the project payload did
+ * not carry an id — better to send the request and get a clear error than to
+ * refuse to deploy at all. Pure, so the choice is testable without a token.
+ */
+export function gitSourceFor({ repoId, org, repo, ref = 'main' }) {
+  // A positive integer, specifically: GitHub ids start at 1, so 0 is not one,
+  // and a string id from an unexpected payload shape would be sent as the wrong
+  // type. Falling back beats constructing a request that cannot work.
+  if (Number.isInteger(repoId) && repoId > 0) return { type: 'github', repoId, ref }
+  return { type: 'github', org, repo, ref }
 }
 
 /**
@@ -148,14 +178,14 @@ export async function fetchProject(idOrName, cfg) {
  * builds, which is why `deploy` refuses to run while a project is already in
  * the `deploying` state.
  */
-export async function triggerDeployment(projectId, repoName, cfg, { ref = 'main' } = {}) {
+export async function triggerDeployment(projectId, repoName, cfg, { ref = 'main', repoId = null } = {}) {
   const d = await call('/v13/deployments', cfg, {
     method: 'POST',
     body: JSON.stringify({
       name: repoName,
       project: projectId,
       target: 'production',
-      gitSource: { type: 'github', org: GH_ORG, repo: repoName, ref },
+      gitSource: gitSourceFor({ repoId, org: GH_ORG, repo: repoName, ref }),
     }),
   })
   return {

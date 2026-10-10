@@ -268,6 +268,15 @@ Two edges that bit on review and are now pinned:
   sites get "your change is live", pre-launch gets "ready to see" and points at
   the preview.
 
+`resolve-changes` is **refused while a build is running**, and its button is
+hidden. The operator most likely started that build *for* these requests, and
+closing them by hand would email the client that their change shipped — which a
+failing build turns into a lie. The watcher closes them itself on success.
+
+Pre-launch, resolving also moves `changes_requested` back to `preview_ready`.
+Otherwise the email says "take another look" while the portal still says the
+team is working on it.
+
 `resolve-changes` (admin) is the escape hatch for work that went out another
 way. **A direct push to the linked repo builds on Vercel without our code
 running at all**, so nothing would close those requests and the operator's queue
@@ -309,6 +318,15 @@ an existing repo with no new push would sit at zero deployments — from the
 outside indistinguishable from a broken deploy. The build is therefore requested
 explicitly via `POST /v13/deployments`. That request shape is from the docs and
 has never been executed.
+
+Its `gitSource` identifies the repo by **numeric `repoId`**, read off the Vercel
+project's own `link.repoId`. That matters for a reason beyond correctness: the
+serverless environment has no GitHub PAT — it is a Supabase edge-function
+secret — and these repos are private, so there is no other way to resolve the
+id without adding a credential. `ensureProject` re-reads the project once if the
+create response did not carry the link. `gitSourceFor` falls back to the
+`org`/`repo` form when no id is available, so a missing link produces a clear
+API error rather than a refusal to deploy.
 
 **Polling is bound to the deployment that was started, not to "latest".**
 `deploy` stores `vercel_deployment_id` and the poller reads that one.
