@@ -21,6 +21,14 @@ import { trackedClaude, extractText } from './_lib/tracked-claude.js'
 import { buildBlogPrompt, parseBlogGeneration } from './_lib/blog-generate.js'
 import { isSafePublicUrl, htmlToText, buildAutofillPrompt, parseBrandAutofill } from './_lib/brand-autofill.js'
 import { r2Configured, buildBlogImageKey, uploadBuffer, slugifyForKey } from './_lib/r2.js'
+import {
+  vercelConfig, ensureProject, fetchProject, triggerDeployment, latestDeployment,
+  resolvePreviewUrl, attachDomain, projectDomain, deploymentOutcome,
+} from './_lib/vercel.js'
+import {
+  canDeployFrom, canApproveFrom, canRequestChangesFrom, canAttachDomainFrom,
+  nextFromDeployment, normalizeDomain, normalizeNote,
+} from './_lib/website-delivery.js'
 // Imported, not restated: this list drifting out of sync with the portal
 // picker is what made the flagship template unselectable for ~3 months.
 import { isValidTemplateId } from '../src/lib/websiteTemplates.js'
@@ -39,6 +47,11 @@ export default async function handler(req, res) {
     case 'status':              return req.method === 'GET'  ? status(req, res)           : methodNotAllowed(res, 'GET')
     case 'public-config':       return req.method === 'GET'  ? publicConfig(req, res)     : methodNotAllowed(res, 'GET')
     case 'approve-logo':        return req.method === 'POST' ? approveLogo(req, res)      : methodNotAllowed(res, 'POST')
+    case 'deploy':              return req.method === 'POST' ? deploySite(req, res)        : methodNotAllowed(res, 'POST')
+    case 'deploy-status':       return req.method === 'GET'  ? deployStatus(req, res)      : methodNotAllowed(res, 'GET')
+    case 'approve-site':        return req.method === 'POST' ? approveSite(req, res)       : methodNotAllowed(res, 'POST')
+    case 'request-changes':     return req.method === 'POST' ? requestChanges(req, res)    : methodNotAllowed(res, 'POST')
+    case 'attach-domain':       return req.method === 'POST' ? attachSiteDomain(req, res)  : methodNotAllowed(res, 'POST')
     case 'blog-generate':       return req.method === 'POST' ? blogGenerate(req, res)       : methodNotAllowed(res, 'POST')
     case 'blog-generate-cover': return req.method === 'POST' ? blogGenerateCover(req, res)  : methodNotAllowed(res, 'POST')
     case 'brand-autofill':      return req.method === 'POST' ? brandAutofill(req, res)      : methodNotAllowed(res, 'POST')
@@ -57,11 +70,13 @@ export default async function handler(req, res) {
     case 'portal-social':       return req.method === 'POST' ? portalSocial(req, res)     : methodNotAllowed(res, 'POST')
     case 'start-brand-kit-self': return req.method === 'POST' ? startBrandKitSelf(req, res) : methodNotAllowed(res, 'POST')
     case 'workflow-preview':    return req.method === 'GET'  ? workflowPreview(req, res)  : methodNotAllowed(res, 'GET')
+    case 'workflow-types':      return req.method === 'GET'  ? workflowTypes(req, res)    : methodNotAllowed(res, 'GET')
     case 'send-test-email':     return req.method === 'POST' ? sendTestEmail(req, res)    : methodNotAllowed(res, 'POST')
     case 'cron-notify-status':  return req.method === 'GET'  ? cronNotifyStatus(req, res) : methodNotAllowed(res, 'GET')
     case 'cron-admin-digest':   return req.method === 'GET'  ? cronAdminDigest(req, res)  : methodNotAllowed(res, 'GET')
     case 'cron-email-autoresponder': return req.method === 'GET'  ? cronEmailAutoresponder(req, res) : methodNotAllowed(res, 'GET')
     case 'cron-brand-kit-resume':    return req.method === 'GET'  ? cronBrandKitResume(req, res)    : methodNotAllowed(res, 'GET')
+    case 'cron-website-deploy-watch': return req.method === 'GET'  ? cronWebsiteDeployWatch(req, res) : methodNotAllowed(res, 'GET')
     case 'email-responder-run-now':  return req.method === 'POST' ? emailResponderRunNow(req, res)   : methodNotAllowed(res, 'POST')
     case 'request-portal-link': return req.method === 'POST' ? requestPortalLink(req, res) : methodNotAllowed(res, 'POST')
     case 'portal-reset':        return req.method === 'POST' ? portalReset(req, res)       : methodNotAllowed(res, 'POST')
@@ -449,7 +464,7 @@ async function getProject(req, res) {
 
   const { data, error } = await adminClient
     .from('website_projects')
-    .select('id, client_id, status, progress_message, repo_url, repo_name, error, ai_content, inputs, template_id, updated_at')
+    .select('id, client_id, status, progress_message, repo_url, repo_name, error, ai_content, inputs, template_id, updated_at, vercel_project_id, preview_url, live_url, approved_at, website_revisions(id, note, created_at, resolved_at)')
     .eq('client_id', client_id).maybeSingle()
   if (error) return res.status(500).json({ error: 'db_error', message: error.message })
   if (!data) return res.status(404).json({ error: 'not_found', message: 'No website project for this client' })
@@ -461,15 +476,34 @@ async function getProject(req, res) {
 // workflow: renders the registry templates with sample data so the admin can
 // see exactly what each recipient (client/admin) gets, including the email HTML.
 const PREVIEW_SAMPLE = {
-  client: { id: 'sample-client', name: 'Jane Doe', email: 'jane@example.com', company: 'Acme Co', product: 'Growth Plan', price: 499 },
+  client: { id: 'sample-client', name: 'Sample Client', email: 'client@example.com', company: 'Acme Co', product: 'Growth Plan', price: 499 },
   clientId: 'sample-client',
-  clientName: 'Jane Doe',
-  clientEmail: 'jane@example.com',
+  clientName: 'Sample Client',
+  clientEmail: 'client@example.com',
   source: 'admin',
   setPasswordUrl: 'https://www.hazetechsolutions.com/portal/accept-invite#sample-token',
   amount: '499.00',
   planName: 'Growth Plan',
   error: 'Example: scaffold step timed out',
+  // Delivery events. Without these the preview renders a button with no href,
+  // which looks like a broken template rather than a sample.
+  previewUrl: 'https://acme-website-sample.vercel.app',
+  liveUrl: 'https://acme.com',
+  note: 'Example: can the hero headline mention same-day callouts, and swap the second photo for one of the new van?',
+}
+
+// GET ?action=workflow-types — the registry's own event list.
+//
+// The admin Workflows page carries hand-written labels and descriptions the
+// registry does not have, so the catalogue there cannot simply be generated
+// from this. What it CAN do is check itself against this list and say so when
+// an event exists server-side with no row describing it. A hand-synced list
+// that nothing verifies is how this repo shipped a flagship template that
+// returned 400 for three months.
+async function workflowTypes(req, res) {
+  const ctx = await requireAdmin(req, res)
+  if (!ctx) return
+  return res.status(200).json({ types: Object.keys(REGISTRY) })
 }
 
 async function workflowPreview(req, res) {
@@ -868,12 +902,427 @@ async function status(req, res) {
 
   const { data, error } = await adminClient
     .from('website_projects')
-    .select('id, status, progress_message, repo_url, repo_name, error, ai_content, inputs, template_id, updated_at')
+    .select('id, client_id, status, progress_message, repo_url, repo_name, error, ai_content, inputs, template_id, updated_at, vercel_project_id, preview_url, live_url, approved_at, website_revisions(id, note, created_at, resolved_at)')
     .eq('id', id).maybeSingle()
   if (error) return res.status(500).json({ error: 'db_error', message: error.message })
   if (!data) return res.status(404).json({ error: 'not_found', message: 'Project not found' })
 
   return res.status(200).json(data)
+}
+
+// ─── Website delivery: deploy → preview → approve → live ────────────────────
+//
+// What this closes: the funnel used to end at "status: done, repo created", and
+// the client was told "your dev team has your files". These five actions are
+// what turn a generated repo into something the person who paid for it can
+// look at, ask changes on, approve, and finally point their domain at.
+//
+// Shape notes that matter:
+//  • Every status write is a compare-and-swap on the status we read. Two
+//    callers (the admin UI polling and the cron polling) WILL race, and the
+//    loser must not also email the client.
+//  • `notified_status` is written alongside each status change. The 5-minute
+//    cron-notify-status watcher emits events for transitions it finds; these
+//    actions emit their own, immediately. Keeping notified_status in step means
+//    the watcher sees no pending transition, so a client can never be emailed
+//    the same thing twice — and that holds even if someone later adds one of
+//    these statuses to STATUS_EVENTS.
+
+const WEBSITE_PROJECT_FIELDS =
+  'id, client_id, status, repo_name, repo_url, vercel_project_id, preview_url, live_url, approved_at, updated_at, clients!inner(name, email, user_id)'
+
+/**
+ * Load a website project for a caller who may be the owning client OR an admin,
+ * the same dual-audience rule as approve-logo. Writes the error response and
+ * returns null on any failure — callers `return` immediately on null.
+ *
+ * `adminOnly` fails closed when ADMIN_EMAILS is unset, matching requireAdmin:
+ * an empty allow-list must not read as "everyone is an admin".
+ */
+async function websiteProjectCtx(req, res, projectId, { adminOnly = false } = {}) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!SERVICE_ROLE_KEY) {
+    res.status(500).json({ error: 'config_error', message: 'Service role key not configured' })
+    return null
+  }
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  if (adminOnly && adminEmails.length === 0) {
+    res.status(500).json({ error: 'admin_allowlist_empty', message: 'ADMIN_EMAILS env var is not set' })
+    return null
+  }
+
+  const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')
+  if (!m) {
+    res.status(401).json({ error: 'unauthorized', message: 'Bearer token required' })
+    return null
+  }
+  let caller = null
+  try {
+    const { data } = await createClient(url, anonKey).auth.getUser(m[1].trim())
+    caller = data?.user || null
+  } catch (e) {
+    console.error('[website-delivery] getUser threw:', e?.message || e)
+  }
+  if (!caller) {
+    res.status(401).json({ error: 'unauthorized', message: 'Invalid token' })
+    return null
+  }
+
+  const isAdmin = adminEmails.includes((caller.email || '').trim().toLowerCase())
+  if (adminOnly && !isAdmin) {
+    res.status(403).json({ error: 'forbidden', message: 'Admin access required' })
+    return null
+  }
+
+  const id = (projectId || '').toString().trim()
+  if (!id) {
+    res.status(400).json({ error: 'bad_request', message: 'project_id required' })
+    return null
+  }
+
+  const adminClient = createClient(url, SERVICE_ROLE_KEY)
+  const { data: project, error } = await adminClient
+    .from('website_projects').select(WEBSITE_PROJECT_FIELDS).eq('id', id).maybeSingle()
+  if (error) {
+    res.status(500).json({ error: 'db_error', message: error.message })
+    return null
+  }
+  if (!project) {
+    res.status(404).json({ error: 'not_found', message: 'Project not found' })
+    return null
+  }
+  if (!isAdmin && project.clients?.user_id !== caller.id) {
+    res.status(403).json({ error: 'forbidden', message: 'Not your website project' })
+    return null
+  }
+  return { caller, isAdmin, adminClient, project }
+}
+
+function notifyPayload(project, extra = {}) {
+  return {
+    projectId: project.id,
+    clientId: project.client_id,
+    clientName: project.clients?.name,
+    clientEmail: project.clients?.email,
+    ...extra,
+  }
+}
+
+/**
+ * Compare-and-swap a project's status. Returns true only if THIS caller made
+ * the change, which is the gate on emitting a notification: a status change
+ * someone else already made must not be announced twice.
+ */
+async function casStatus(adminClient, project, fromStatus, patch) {
+  const { data: won, error } = await adminClient
+    .from('website_projects')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', project.id).eq('status', fromStatus)
+    .select('id')
+  if (error) {
+    console.error('[website-delivery] status CAS failed:', error.message)
+    return false
+  }
+  return Boolean(won && won.length)
+}
+
+/**
+ * Fail a project and tell the admin now rather than at the next cron tick.
+ * notified_status is set to 'failed' in the same write so the watcher does not
+ * send a second copy of the same bad news.
+ */
+async function failProject(adminClient, project, fromStatus, reason) {
+  const won = await casStatus(adminClient, project, fromStatus, {
+    status: 'failed', error: reason, notified_status: 'failed', progress_message: null,
+  })
+  if (won) await emitNotification(adminClient, 'website.failed', notifyPayload(project, { error: reason }))
+  return won
+}
+
+// POST ?action=deploy — admin. Creates (or reuses) the Vercel project for this
+// site's repo and asks for a production build.
+async function deploySite(req, res) {
+  const ctx = await websiteProjectCtx(req, res, req.body?.project_id, { adminOnly: true })
+  if (!ctx) return
+  const { adminClient, project } = ctx
+
+  if (!canDeployFrom(project.status)) {
+    return res.status(409).json({ error: 'wrong_status', message: `Cannot deploy from status: ${project.status}` })
+  }
+  if (!project.repo_name) {
+    return res.status(409).json({ error: 'no_repo', message: 'This project has no generated repo yet — generate the scaffold first.' })
+  }
+
+  // fresh: true so a token saved seconds ago in /admin/settings is picked up
+  // instead of a 60s-cached miss.
+  const cfg = await vercelConfig({ fresh: true })
+  if (!cfg.configured) {
+    return res.status(409).json({
+      error: 'vercel_not_configured',
+      message: 'Add a Vercel API token under Settings → Website Hosting before deploying.',
+    })
+  }
+
+  let vp
+  try {
+    vp = await ensureProject(project.repo_name, cfg)
+  } catch (e) {
+    await failProject(adminClient, project, project.status, `Vercel project setup failed: ${e?.message || e}`)
+    return res.status(502).json({ error: 'vercel_failed', message: e?.message || String(e) })
+  }
+
+  // Claim `deploying` BEFORE asking for the build. A second click then hits
+  // canDeployFrom('deploying') === false instead of queueing a second
+  // production build of the same repo.
+  const claimed = await casStatus(adminClient, project, project.status, {
+    status: 'deploying',
+    vercel_project_id: vp.id,
+    progress_message: 'Building on Vercel…',
+    error: null,
+    notified_status: 'deploying',
+  })
+  if (!claimed) {
+    return res.status(409).json({ error: 'conflict', message: 'This project changed while you were deploying — reload and try again.' })
+  }
+
+  try {
+    const dep = await triggerDeployment(vp.id, project.repo_name, cfg)
+    return res.status(200).json({ project_id: project.id, status: 'deploying', vercel_project_id: vp.id, deployment_id: dep.id })
+  } catch (e) {
+    // The build never started, so there is nothing to poll. Fail now rather than
+    // leaving the project in `deploying` for the cron to time out on.
+    await failProject(adminClient, project, 'deploying', `Could not start the Vercel build: ${e?.message || e}`)
+    return res.status(502).json({ error: 'deploy_failed', message: e?.message || String(e) })
+  }
+}
+
+/**
+ * Poll the current deployment and advance the project if it finished.
+ *
+ * Shared by ?action=deploy-status (an admin watching) and the cron (nobody
+ * watching). Both can run at once, so the status write is a CAS and the client
+ * email only goes out to whichever one won it.
+ */
+async function advanceDeployment(adminClient, project, cfg) {
+  if (project.status !== 'deploying') {
+    return { project_id: project.id, status: project.status, changed: false }
+  }
+  if (!project.vercel_project_id) {
+    await failProject(adminClient, project, 'deploying', 'No Vercel project is linked to this site.')
+    return { project_id: project.id, status: 'failed', changed: true }
+  }
+
+  let dep = null
+  try {
+    dep = await latestDeployment(project.vercel_project_id, cfg)
+  } catch (e) {
+    // A transient Vercel error must not fail a build that is probably fine.
+    // Stay in `deploying`; the next poll decides.
+    return { project_id: project.id, status: 'deploying', changed: false, message: `Could not reach Vercel: ${e?.message || e}` }
+  }
+
+  const outcome = deploymentOutcome(dep?.state)
+
+  // The production alias only exists once a build has gone live, so it is read
+  // after READY and never before.
+  let previewConfirmed = false
+  let previewUrl = null
+  if (outcome === 'ready') {
+    let vp = null
+    try {
+      vp = await fetchProject(project.vercel_project_id, cfg)
+    } catch (e) {
+      console.error('[website-delivery] project re-read failed:', e?.message || e)
+    }
+    const resolved = resolvePreviewUrl(vp || { name: project.repo_name })
+    previewConfirmed = resolved.confirmed
+    previewUrl = resolved.url
+  }
+
+  // Measured from the write that set `deploying`. Nothing below updates
+  // updated_at unless the status actually changes, so this clock does not reset
+  // on every poll — otherwise the stalled-alias timeout could never fire.
+  const deployingForMs = Date.now() - new Date(project.updated_at || Date.now()).getTime()
+  const next = nextFromDeployment({ outcome, previewConfirmed, deployingForMs })
+
+  if (next.status === 'preview_ready') {
+    const won = await casStatus(adminClient, project, 'deploying', {
+      status: 'preview_ready',
+      preview_url: previewUrl,
+      progress_message: null,
+      error: null,
+      notified_status: 'preview_ready',
+    })
+    if (won) await emitNotification(adminClient, 'website.preview_ready', notifyPayload(project, { previewUrl }))
+    return { project_id: project.id, status: 'preview_ready', preview_url: previewUrl, changed: won }
+  }
+
+  if (next.status === 'failed') {
+    const won = await failProject(adminClient, project, 'deploying', next.reason)
+    return { project_id: project.id, status: 'failed', error: next.reason, changed: won, inspector_url: dep?.inspectorUrl || null }
+  }
+
+  return {
+    project_id: project.id,
+    status: 'deploying',
+    changed: false,
+    message: next.reason || dep?.state || 'Queued on Vercel…',
+    inspector_url: dep?.inspectorUrl || null,
+  }
+}
+
+// GET ?action=deploy-status&id=<project_id> — admin polls the running build.
+async function deployStatus(req, res) {
+  const ctx = await websiteProjectCtx(req, res, req.query?.id, { adminOnly: true })
+  if (!ctx) return
+  const cfg = await vercelConfig()
+  if (!cfg.configured) {
+    return res.status(409).json({ error: 'vercel_not_configured', message: 'No Vercel API token is configured.' })
+  }
+  return res.status(200).json(await advanceDeployment(ctx.adminClient, ctx.project, cfg))
+}
+
+// POST ?action=approve-site — the client signs off on the preview. Callable by
+// the owning client (from their portal) or by an admin on their behalf, same as
+// approve-logo.
+async function approveSite(req, res) {
+  const ctx = await websiteProjectCtx(req, res, req.body?.project_id)
+  if (!ctx) return
+  const { adminClient, project, isAdmin } = ctx
+
+  if (!canApproveFrom(project.status)) {
+    return res.status(409).json({ error: 'wrong_status', message: `Nothing to approve — status is: ${project.status}` })
+  }
+
+  const now = new Date().toISOString()
+  const won = await casStatus(adminClient, project, project.status, {
+    status: 'approved', approved_at: now, notified_status: 'approved',
+    progress_message: null, error: null,
+  })
+  if (!won) {
+    return res.status(409).json({ error: 'conflict', message: 'This project just changed — reload and try again.' })
+  }
+
+  // Close out any open change requests: approving the site is the answer to all
+  // of them, and leaving them open would show the operator stale work.
+  await adminClient.from('website_revisions')
+    .update({ resolved_at: now }).eq('project_id', project.id).is('resolved_at', null)
+
+  await emitNotification(adminClient, 'website.approved', notifyPayload(project, { byAdmin: isAdmin }))
+  return res.status(200).json({ project_id: project.id, status: 'approved', approved_at: now })
+}
+
+// POST ?action=request-changes — the client asks for edits.
+// Body: { project_id, note }.
+async function requestChanges(req, res) {
+  const ctx = await websiteProjectCtx(req, res, req.body?.project_id)
+  if (!ctx) return
+  const { adminClient, project, caller } = ctx
+
+  const { note, error: noteErr } = normalizeNote(req.body?.note)
+  if (noteErr) return res.status(400).json({ error: 'bad_request', message: noteErr })
+
+  if (!canRequestChangesFrom(project.status)) {
+    return res.status(409).json({ error: 'wrong_status', message: `Changes can't be requested yet — status is: ${project.status}` })
+  }
+
+  // The note is recorded first. If the status write then loses a race, the
+  // request is still on file — losing a client's words is worse than a status
+  // that needs another click.
+  const { error: insErr } = await adminClient.from('website_revisions')
+    .insert({ project_id: project.id, note, requested_by: caller.id })
+  if (insErr) return res.status(500).json({ error: 'db_error', message: insErr.message })
+
+  await casStatus(adminClient, project, project.status, {
+    status: 'changes_requested', notified_status: 'changes_requested', progress_message: null,
+  })
+  await emitNotification(adminClient, 'website.changes_requested', notifyPayload(project, { note }))
+  return res.status(200).json({ project_id: project.id, status: 'changes_requested' })
+}
+
+// POST ?action=attach-domain — admin. Body: { project_id, domain }.
+//
+// Attaching a domain and a domain resolving are two different events: Vercel
+// accepts the domain immediately, but serves the site only once DNS points at
+// it. This action is therefore re-runnable — the first call returns the DNS
+// records to add, and a later call (after the operator has added them) finds the
+// domain verified and takes the site live.
+async function attachSiteDomain(req, res) {
+  const ctx = await websiteProjectCtx(req, res, req.body?.project_id, { adminOnly: true })
+  if (!ctx) return
+  const { adminClient, project } = ctx
+
+  const { domain, error: domErr } = normalizeDomain(req.body?.domain)
+  if (domErr) return res.status(400).json({ error: 'bad_request', message: domErr })
+
+  if (!canAttachDomainFrom(project.status)) {
+    return res.status(409).json({ error: 'wrong_status', message: `Attach a domain after the client approves — status is: ${project.status}` })
+  }
+  if (!project.vercel_project_id) {
+    return res.status(409).json({ error: 'not_deployed', message: 'This site has no Vercel project yet.' })
+  }
+
+  const cfg = await vercelConfig({ fresh: true })
+  if (!cfg.configured) {
+    return res.status(409).json({ error: 'vercel_not_configured', message: 'No Vercel API token is configured.' })
+  }
+
+  let state
+  try {
+    await attachDomain(project.vercel_project_id, domain, cfg)
+    state = await projectDomain(project.vercel_project_id, domain, cfg)
+  } catch (e) {
+    // A domain already in use on another project is the common case here. It is
+    // an operator problem, not a project failure, so the project keeps its
+    // status and the client is told nothing.
+    return res.status(502).json({ error: 'domain_attach_failed', message: e?.message || String(e) })
+  }
+
+  if (!state?.verified) {
+    // live_url stays unset on purpose: a stored URL shows up in the client's
+    // portal, and a link to a domain still pointing at their old host is worse
+    // than no link at all.
+    return res.status(200).json({
+      project_id: project.id, status: project.status, domain, verified: false,
+      verification: state?.verification || [],
+      message: 'Domain attached. Add the DNS records at the client’s registrar, then run this again to take the site live.',
+    })
+  }
+
+  const liveUrl = `https://${domain}`
+  const won = await casStatus(adminClient, project, project.status, {
+    status: 'live', live_url: liveUrl, notified_status: 'live', progress_message: null, error: null,
+  })
+  if (won) await emitNotification(adminClient, 'website.live', notifyPayload(project, { liveUrl }))
+  return res.status(200).json({ project_id: project.id, status: 'live', domain, verified: true, live_url: liveUrl })
+}
+
+// GET ?action=cron-website-deploy-watch — advance every running build.
+//
+// Why a cron and not just the admin UI poll: a Vercel build takes minutes, and
+// nobody is required to sit on the page while it runs. Without this, a build
+// that finished after the operator closed the tab would leave the project stuck
+// in `deploying` and the client never emailed.
+async function cronWebsiteDeployWatch(req, res) {
+  if (!requireCron(req, res)) return
+  const cfg = await vercelConfig()
+  if (!cfg.configured) return res.status(200).json({ ok: true, configured: false, advanced: 0 })
+
+  const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+  const { data: running } = await sb.from('website_projects')
+    .select(WEBSITE_PROJECT_FIELDS).eq('status', 'deploying').limit(20)
+
+  const results = []
+  for (const project of running || []) {
+    try {
+      const out = await advanceDeployment(sb, project, cfg)
+      if (out.changed) results.push({ id: project.id, status: out.status })
+    } catch (e) {
+      console.error('[cron-website-deploy-watch]', project.id, e?.message || e)
+    }
+  }
+  return res.status(200).json({ ok: true, configured: true, advanced: results.length, results })
 }
 
 // POST ?action=approve-logo — picks one of the 3 logo variants and triggers

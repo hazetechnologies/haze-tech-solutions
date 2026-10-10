@@ -105,7 +105,7 @@ export async function ensureProject(repoName, cfg) {
  * that 404s — or one that loads a stranger's site. Always prefer what the API
  * reports; the constructed form is a labelled last resort, never authoritative.
  */
-function describeProject(project, created) {
+export function describeProject(project, created) {
   const aliases = []
   const prodAlias = project?.targets?.production?.alias
   if (Array.isArray(prodAlias)) aliases.push(...prodAlias)
@@ -119,6 +119,49 @@ function describeProject(project, created) {
     created,
     productionUrl: preferred ? `https://${preferred}` : null,
     aliasFromApi: Boolean(preferred),
+  }
+}
+
+/**
+ * Re-read a project by id or name.
+ *
+ * Needed because a project created from a git repository has no production
+ * alias yet at create time — the alias only exists once the first build has
+ * gone live. The alias is what a client gets emailed, so it has to be read
+ * again later rather than remembered from the create response.
+ */
+export async function fetchProject(idOrName, cfg) {
+  const project = await call(`/v9/projects/${encodeURIComponent(idOrName)}`, cfg)
+  return project?.id ? describeProject(project, false) : null
+}
+
+/**
+ * Trigger a production build of the repo's default branch.
+ *
+ * Creating a Vercel project with `gitRepository` links the repo but does NOT
+ * build it — an existing repo with no new push sits there with zero
+ * deployments, which from the outside is indistinguishable from a broken
+ * deploy. So the build is asked for explicitly.
+ *
+ * Not idempotent, by design: calling this again is how a redeploy happens after
+ * the operator edits content.json. Two *concurrent* calls would queue two
+ * builds, which is why `deploy` refuses to run while a project is already in
+ * the `deploying` state.
+ */
+export async function triggerDeployment(projectId, repoName, cfg, { ref = 'main' } = {}) {
+  const d = await call('/v13/deployments', cfg, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: repoName,
+      project: projectId,
+      target: 'production',
+      gitSource: { type: 'github', org: GH_ORG, repo: repoName, ref },
+    }),
+  })
+  return {
+    id: d?.id || d?.uid || null,
+    state: d?.status || d?.readyState || d?.state || null,
+    inspectorUrl: d?.inspectorUrl || null,
   }
 }
 
@@ -166,11 +209,54 @@ export function resolvePreviewUrl(project) {
   return { url: guessProductionUrl(project?.name || ''), confirmed: false }
 }
 
+/**
+ * Add a domain to a project.
+ *
+ * Re-runnable: a domain already on THIS project is success, not an error. The
+ * operator will click this more than once, because attaching a domain and the
+ * domain actually resolving are two different events (see projectDomain) and
+ * the second one needs DNS they have to go and add.
+ *
+ * A domain attached to a *different* project still throws — that is a real
+ * conflict an operator has to resolve, and swallowing it would leave them
+ * waiting for DNS that can never verify.
+ */
 export async function attachDomain(projectId, domain, cfg) {
-  return call(`/v10/projects/${encodeURIComponent(projectId)}/domains`, cfg, {
-    method: 'POST',
-    body: JSON.stringify({ name: domain }),
-  })
+  try {
+    return await call(`/v10/projects/${encodeURIComponent(projectId)}/domains`, cfg, {
+      method: 'POST',
+      body: JSON.stringify({ name: domain }),
+    })
+  } catch (err) {
+    if (err.status === 409) {
+      const existing = await projectDomain(projectId, domain, cfg).catch(() => null)
+      if (existing) return existing  // already ours
+    }
+    throw err
+  }
+}
+
+/**
+ * Read one domain's state on a project.
+ *
+ * `verified` is the only thing that decides whether a client is told their site
+ * is live. A domain can be attached for days while its DNS still points
+ * somewhere else; presenting that as the live URL would send a client to
+ * whatever their old host is still serving.
+ */
+export async function projectDomain(projectId, domain, cfg) {
+  const d = await call(
+    `/v9/projects/${encodeURIComponent(projectId)}/domains/${encodeURIComponent(domain)}`,
+    cfg,
+  )
+  if (!d?.name) return null
+  return {
+    name: d.name,
+    verified: d.verified === true,
+    // The DNS records the operator has to add at the client's registrar. Shown
+    // verbatim in the admin UI — paraphrasing DNS instructions breaks them.
+    verification: Array.isArray(d.verification) ? d.verification : [],
+  }
 }
 
 /** Normalise a deployment state into what the funnel does next. */

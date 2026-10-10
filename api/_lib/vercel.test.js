@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
-import { withTeam, guessProductionUrl, resolvePreviewUrl, deploymentOutcome } from './vercel.js'
+import { withTeam, guessProductionUrl, resolvePreviewUrl, deploymentOutcome, describeProject } from './vercel.js'
 
 Deno.test('withTeam appends teamId with the right separator', () => {
   assertEquals(withTeam('/v11/projects', 'team_abc'), 'https://api.vercel.com/v11/projects?teamId=team_abc')
@@ -66,4 +66,37 @@ Deno.test('an unknown or missing state is pending, never ready', () => {
   for (const s of ['SOMETHING_NEW', '', null, undefined, 'ready', 'Ready']) {
     assertEquals(deploymentOutcome(s), 'pending', `${String(s)} must not be treated as ready`)
   }
+})
+
+// describeProject decides the URL a paying client gets emailed, so the alias
+// preference is pinned rather than left to whatever the API happens to return
+// first. See resolvePreviewUrl for why a constructed URL is never trusted.
+Deno.test('describeProject prefers the production alias over a bare alias list', () => {
+  const d = describeProject({
+    id: 'prj_1',
+    name: 'acme-website',
+    targets: { production: { alias: ['acme-website-git-main-hazetech.vercel.app'] } },
+    alias: [{ domain: 'acme.com' }],
+  }, false)
+  assertEquals(d.productionUrl, 'https://acme-website-git-main-hazetech.vercel.app')
+  assertEquals(d.aliasFromApi, true)
+})
+
+Deno.test('describeProject falls back to a custom domain when there is no vercel.app alias', () => {
+  const d = describeProject({ id: 'prj_2', name: 'acme-website', alias: ['acme.com'] }, false)
+  assertEquals(d.productionUrl, 'https://acme.com')
+  assertEquals(d.aliasFromApi, true)
+})
+
+Deno.test('describeProject reports no url rather than inventing one', () => {
+  // A freshly created project has no alias until its first build goes live.
+  const d = describeProject({ id: 'prj_3', name: 'acme-website' }, true)
+  assertEquals(d.productionUrl, null)
+  assertEquals(d.aliasFromApi, false)
+  assertEquals(resolvePreviewUrl(d).confirmed, false)
+})
+
+Deno.test('describeProject ignores malformed alias entries', () => {
+  const d = describeProject({ id: 'prj_4', name: 'acme-website', alias: [null, {}, 'acme.com'] }, false)
+  assertEquals(d.productionUrl, 'https://acme.com')
 })

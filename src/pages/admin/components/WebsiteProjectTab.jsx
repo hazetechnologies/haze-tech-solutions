@@ -2,6 +2,13 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import WebsiteDeliveryPanel from './WebsiteDeliveryPanel'
+
+// Statuses where there is a repo to publish, a build to watch, or a site to
+// point a domain at. 'failed' is included because a failed DEPLOY is retried
+// from the delivery panel, not by regenerating the scaffold.
+const DELIVERY_STATUSES = ['done', 'deploying', 'preview_ready', 'changes_requested', 'approved', 'live', 'failed']
+const hasDelivery = (p) => Boolean(p && DELIVERY_STATUSES.includes(p.status) && p.repo_name)
 
 export default function WebsiteProjectTab({ client }) {
   const [project, setProject] = useState(null)
@@ -165,9 +172,15 @@ export default function WebsiteProjectTab({ client }) {
         </div>
       )}
 
-      {project.status === 'done' && project.repo_url && (
+      {/* Deploy → preview → approve → live. Shown from `done` onward, which is
+          where the funnel used to stop. */}
+      {hasDelivery(project) && (
+        <WebsiteDeliveryPanel project={project} onRefresh={loadProject} />
+      )}
+
+      {project.repo_url && (
         <div>
-          <a href={project.repo_url} target="_blank" rel="noreferrer" style={btnPrimary}>
+          <a href={project.repo_url} target="_blank" rel="noreferrer" style={btnGhost}>
             <ExternalLink size={14} style={{ marginRight: 6 }} /> View on GitHub
           </a>
           {project.ai_content && (
@@ -182,9 +195,14 @@ export default function WebsiteProjectTab({ client }) {
       {project.status === 'failed' && (
         <>
           <p style={errStyle}>{project.error || 'Generation failed'}</p>
-          <button onClick={startScaffold} disabled={working} style={btnPrimary}>
-            <RefreshCw size={14} style={{ marginRight: 6 }} /> Retry
-          </button>
+          {/* Two different failures land here. Without a repo the scaffold never
+              finished, so the retry is Generate. With a repo it was the deploy
+              that failed, and the delivery panel above has the retry. */}
+          {!project.repo_name && (
+            <button onClick={startScaffold} disabled={working} style={btnPrimary}>
+              <RefreshCw size={14} style={{ marginRight: 6 }} /> Retry generation
+            </button>
+          )}
         </>
       )}
 
@@ -228,9 +246,20 @@ const h3 = { color:'#F1F5F9', fontSize: 14, fontWeight: 700, margin: 0 }
 const p = { color:'#CBD5E1', fontSize: 13 }
 const errStyle = { color:'#F87171', fontSize: 13 }
 const btnPrimary = { background:'#00CFFF', color:'#0F172A', border:'none', borderRadius: 8, padding:'8px 14px', fontWeight: 700, fontSize: 12, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center' }
-const badge = (s) => ({
-  background: s==='done' ? 'rgba(34,197,94,0.1)' : s==='failed' ? 'rgba(239,68,68,0.1)' : 'rgba(0,207,255,0.08)',
-  color:     s==='done' ? '#4ADE80'             : s==='failed' ? '#F87171'             : '#00CFFF',
-  border:`1px solid currentColor`,
-  borderRadius: 100, padding:'4px 10px', fontSize: 11, fontWeight: 700, textTransform:'uppercase', letterSpacing:'0.05em',
-})
+const btnGhost = { ...btnPrimary, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.12)', color:'#F1F5F9' }
+// `live` is the only green: 'done' used to read as finished, and it is not —
+// it means generated, nothing deployed, client has seen nothing.
+const GREEN = ['live']
+const AMBER = ['changes_requested']
+const badge = (s) => {
+  const [bg, fg] =
+    GREEN.includes(s) ? ['rgba(34,197,94,0.1)', '#4ADE80']
+    : AMBER.includes(s) ? ['rgba(245,158,11,0.1)', '#FCD34D']
+    : s === 'failed' ? ['rgba(239,68,68,0.1)', '#F87171']
+    : ['rgba(0,207,255,0.08)', '#00CFFF']
+  return {
+    background: bg, color: fg, border: '1px solid currentColor',
+    borderRadius: 100, padding: '4px 10px', fontSize: 11, fontWeight: 700,
+    textTransform: 'uppercase', letterSpacing: '0.05em',
+  }
+}

@@ -26,4 +26,17 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  // api/* is Vercel serverless (Node) and scripts/* is build tooling, not
+  // browser code. Linting them with only browser globals reported every single
+  // `process.env` read as `no-undef` — hundreds of false positives that buried
+  // the real findings and made "did my change add an error?" unanswerable.
+  {
+    files: ['api/**/*.js', 'scripts/**/*.{js,mjs}'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  // The _lib tests run under Deno (`deno test api/_lib/`), not Node.
+  {
+    files: ['api/**/*.test.js'],
+    languageOptions: { globals: { ...globals.node, Deno: 'readonly' } },
+  },
 ])
