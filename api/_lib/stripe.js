@@ -3,37 +3,15 @@
 // the admin_settings table first (so they can be rotated without a redeploy)
 // and fall back to env vars. Cached for 60s in-memory per cold-start.
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
 
-const SETTING_TTL_MS = 60_000
-const settingCache = new Map() // key -> { value, expiresAt }
+// getSetting moved to _lib/settings.js so that reading a credential no longer
+// drags the Stripe SDK in with it. Re-exported here because a dozen call sites
+// import it from this module.
+import { getSetting } from './settings.js'
+export { getSetting }
+
 let _stripe = null
 let _stripeKey = null
-
-function adminClient() {
-  return createClient(
-    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-  )
-}
-
-/**
- * Read a value from admin_settings (DB) with env-var fallback. Cached 60s.
- * Pass { fresh: true } to bypass the read cache (e.g. an admin action that runs
- * immediately after saving a setting); it still refreshes the cache afterwards.
- */
-export async function getSetting(key, envFallbackName, opts = {}) {
-  if (!opts.fresh) {
-    const cached = settingCache.get(key)
-    if (cached && cached.expiresAt > Date.now()) return cached.value
-  }
-
-  const { data } = await adminClient()
-    .from('admin_settings').select('value').eq('key', key).maybeSingle()
-  const value = data?.value || (envFallbackName ? process.env[envFallbackName] : null) || null
-  settingCache.set(key, { value, expiresAt: Date.now() + SETTING_TTL_MS })
-  return value
-}
 
 /** Get a Stripe client. Re-instantiates if the secret key has rotated. */
 export async function getStripe() {
