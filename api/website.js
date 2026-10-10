@@ -1067,6 +1067,29 @@ async function failProject(adminClient, project, fromStatus, reason) {
   return won
 }
 
+/**
+ * Record a deploy failure, keeping a live site live.
+ *
+ * Vercel does not take the previous production build down when a new one fails,
+ * so a site with a custom domain is still up. Marking it `failed` would hide
+ * the live link in the client's portal and block further change requests over a
+ * working site — and that is just as true of a transient error setting the
+ * project up as it is of a build that failed to compile.
+ *
+ * The admin is told either way. The client is told nothing when the site stays
+ * live, because nothing about their site changed.
+ */
+async function recordDeployFailure(adminClient, project, fromStatus, reason) {
+  if (project.live_url) {
+    const won = await casStatus(adminClient, project, fromStatus, {
+      status: 'live', error: reason, progress_message: null, notified_status: 'live',
+    })
+    if (won) await emitNotification(adminClient, 'website.failed', notifyPayload(project, { error: reason }))
+    return { won, status: 'live' }
+  }
+  return { won: await failProject(adminClient, project, fromStatus, reason), status: 'failed' }
+}
+
 // POST ?action=deploy — admin. Creates (or reuses) the Vercel project for this
 // site's repo and asks for a production build.
 async function deploySite(req, res) {
@@ -1095,8 +1118,8 @@ async function deploySite(req, res) {
   try {
     vp = await ensureProject(project.repo_name, cfg)
   } catch (e) {
-    await failProject(adminClient, project, project.status, `Vercel project setup failed: ${e?.message || e}`)
-    return res.status(502).json({ error: 'vercel_failed', message: e?.message || String(e) })
+    const out = await recordDeployFailure(adminClient, project, project.status, `Vercel project setup failed: ${e?.message || e}`)
+    return res.status(502).json({ error: 'vercel_failed', message: e?.message || String(e), status: out.status })
   }
 
   // Claim `deploying` BEFORE asking for the build. A second click then hits
@@ -1128,8 +1151,8 @@ async function deploySite(req, res) {
   } catch (e) {
     // The build never started, so there is nothing to poll. Fail now rather than
     // leaving the project in `deploying` for the cron to time out on.
-    await failProject(adminClient, project, 'deploying', `Could not start the Vercel build: ${e?.message || e}`)
-    return res.status(502).json({ error: 'deploy_failed', message: e?.message || String(e) })
+    const out = await recordDeployFailure(adminClient, project, 'deploying', `Could not start the Vercel build: ${e?.message || e}`)
+    return res.status(502).json({ error: 'deploy_failed', message: e?.message || String(e), status: out.status })
   }
 }
 
@@ -1187,16 +1210,12 @@ async function advanceDeployment(adminClient, project, cfg) {
   const hasLiveDomain = Boolean(project.live_url)
   const next = nextFromDeployment({ outcome, previewConfirmed, deployingForMs, hasLiveDomain })
 
-  if (next.failed && next.status === 'live') {
-    // The redeploy failed but the site is still up on its previous build.
-    // Record it, tell the admin, and leave the project `live` — nothing was
-    // published, so no change request was serviced and the client is told
-    // nothing. Their site did not change and did not break.
-    const won = await casStatus(adminClient, project, 'deploying', {
-      status: 'live', error: next.reason, progress_message: null, notified_status: 'live',
-    })
-    if (won) await emitNotification(adminClient, 'website.failed', notifyPayload(project, { error: next.reason }))
-    return { project_id: project.id, status: 'live', changed: won, error: next.reason, inspector_url: dep?.inspectorUrl || null }
+  if (next.failed) {
+    // Nothing was published, so no change request was serviced and the client
+    // is told nothing. recordDeployFailure decides whether that means `failed`
+    // or a live site that simply did not update.
+    const out = await recordDeployFailure(adminClient, project, 'deploying', next.reason)
+    return { project_id: project.id, status: out.status, changed: out.won, error: next.reason, inspector_url: dep?.inspectorUrl || null }
   }
 
   if (next.status === 'live') {
@@ -1234,11 +1253,6 @@ async function advanceDeployment(adminClient, project, cfg) {
     })
     if (won) await emitNotification(adminClient, 'website.preview_ready', notifyPayload(project, { previewUrl }))
     return { project_id: project.id, status: 'preview_ready', preview_url: previewUrl, changed: won }
-  }
-
-  if (next.status === 'failed') {
-    const won = await failProject(adminClient, project, 'deploying', next.reason)
-    return { project_id: project.id, status: 'failed', error: next.reason, changed: won, inspector_url: dep?.inspectorUrl || null }
   }
 
   return {
@@ -1365,28 +1379,37 @@ async function resolveChanges(req, res) {
     })
   }
 
+  // Pre-launch the project sits in `changes_requested`, where the portal tells
+  // the client we are still working. The email below says the opposite, so the
+  // status moves back to the reviewable state or the two contradict each other.
+  const target = project.status === 'changes_requested' && project.preview_url
+    ? 'preview_ready'
+    : project.status
+
+  // Claim the row at the status we read, BEFORE closing anything. The
+  // `deploying` check above is a check-then-act: a build starting in between
+  // would otherwise let this close requests that build may yet fail to ship,
+  // with the client already told they were done. A same-status CAS is a real
+  // claim — it matches nothing once another writer has moved the row.
+  const claimed = await casStatus(adminClient, project, project.status, {
+    status: target,
+    ...(target === project.status ? {} : { notified_status: target, progress_message: null }),
+  })
+  if (!claimed) {
+    return res.status(409).json({ error: 'conflict', message: 'This project just changed — reload and try again.' })
+  }
+
   const ids = Array.isArray(req.body?.revision_ids) ? req.body.revision_ids.map(String) : null
   const resolved = await resolveOpenRevisions(adminClient, project.id, { ids })
   if (resolved === 0) {
-    return res.status(200).json({ project_id: project.id, resolved: 0, message: 'Nothing was open.' })
-  }
-
-  // Pre-launch, the project is sitting in `changes_requested` and the portal is
-  // telling the client we are still working. The email we are about to send
-  // says the opposite, so the status has to move back to the reviewable state
-  // or the two contradict each other.
-  let status = project.status
-  if (project.status === 'changes_requested' && project.preview_url) {
-    if (await casStatus(adminClient, project, 'changes_requested', {
-      status: 'preview_ready', notified_status: 'preview_ready', progress_message: null,
-    })) status = 'preview_ready'
+    return res.status(200).json({ project_id: project.id, resolved: 0, status: target, message: 'Nothing was open.' })
   }
 
   // Clicking this IS the operator saying the work is done, so the client is
   // told. Staying silent would leave them waiting on something already shipped.
   await emitNotification(adminClient, 'website.changes_published',
     notifyPayload(project, { liveUrl: project.live_url, previewUrl: project.preview_url, count: resolved }))
-  return res.status(200).json({ project_id: project.id, resolved, status })
+  return res.status(200).json({ project_id: project.id, resolved, status: target })
 }
 
 // POST ?action=attach-domain — admin. Body: { project_id, domain }.
@@ -1439,11 +1462,20 @@ async function attachSiteDomain(req, res) {
   }
 
   const liveUrl = `https://${domain}`
+  // "Re-check" on an already-live project reaches the same CAS (live -> live),
+  // which succeeds. Without this the operator confirming DNS a second time
+  // would send the client another "your site is live" email.
+  const alreadyAnnounced = project.status === 'live' && project.live_url === liveUrl
   const won = await casStatus(adminClient, project, project.status, {
     status: 'live', live_url: liveUrl, notified_status: 'live', progress_message: null, error: null,
   })
-  if (won) await emitNotification(adminClient, 'website.live', notifyPayload(project, { liveUrl }))
-  return res.status(200).json({ project_id: project.id, status: 'live', domain, verified: true, live_url: liveUrl })
+  if (won && !alreadyAnnounced) {
+    await emitNotification(adminClient, 'website.live', notifyPayload(project, { liveUrl }))
+  }
+  return res.status(200).json({
+    project_id: project.id, status: 'live', domain, verified: true, live_url: liveUrl,
+    notified: Boolean(won && !alreadyAnnounced),
+  })
 }
 
 // GET ?action=cron-website-deploy-watch — advance every running build.

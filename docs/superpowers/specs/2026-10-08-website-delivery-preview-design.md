@@ -348,12 +348,30 @@ rather than emailed to a client who would land on a 404 or a stranger's site.
 
 - No Vercel token → `vercel_not_configured`, project stays at `done`. No
   regression against today's behaviour.
-- **A redeploy of a LIVE site fails → the project stays `live`.** Vercel does
+- **Any deploy failure on a LIVE site leaves the project `live`.** Vercel does
   not take the previous production build down, so the site is still up; nothing
   new was published. Marking it `failed` would hide the live link in the
   client's portal and block further change requests over a site that is working.
-  The error is recorded and the admin emailed; the client is told nothing,
-  because nothing about their site changed.
+  This covers the whole path, not just a failed build: a transient error
+  creating the Vercel project, or a rejected deployment request, is handled the
+  same way. One helper, `recordDeployFailure`, owns that decision so the three
+  failure sites cannot drift. The error is recorded and the admin emailed; the
+  client is told nothing, because nothing about their site changed.
+
+## Notifications must be idempotent, not just guarded
+
+The CAS stops two *racing* callers from both emailing. It does not stop one
+caller emailing twice, because a same-status CAS succeeds:
+
+- **`attach-domain` re-check.** Once a site is live, re-running it to confirm
+  DNS reaches a `live → live` CAS, which succeeds. Emitting on that would send
+  the client another launch email every time the operator checks. It emits only
+  when the status or the stored `live_url` actually changed.
+- **`resolve-changes` claims the row before closing anything.** The `deploying`
+  guard is a check-then-act, and a build starting in between would let it close
+  requests that build may yet fail to ship — with the client already told they
+  were done. A same-status CAS is a real claim: it matches nothing once another
+  writer has moved the row.
 - Vercel project creation fails → `failed` with the Vercel error, same as the
   scaffold's existing failure path.
 - Build fails on Vercel → `failed` carrying the deployment's error, with a link
