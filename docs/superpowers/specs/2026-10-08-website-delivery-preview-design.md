@@ -176,6 +176,7 @@ convention:
 | `approve-site` | client or admin | set `approved`, stamp `approved_at`, notify admin |
 | `request-changes` | client | insert a `website_revisions` row, set `changes_requested`, notify admin |
 | `attach-domain` | admin | add the client's domain, report its DNS records, and set `live` **only once Vercel reports it verified** |
+| `resolve-changes` | admin | close open change requests serviced outside our deploy path, and tell the client |
 | `cron-website-deploy-watch` | cron | advance any project stuck in `deploying` when nobody is watching |
 
 **`attach-domain` is re-runnable on purpose.** Attaching a domain and a domain
@@ -200,6 +201,7 @@ Extends the existing registry, which already carries `website.intake_requested`,
 | `website.changes_requested` | admin — carries the client's note |
 | `website.approved` | admin — ready to attach the domain |
 | `website.live` | client — the real URL |
+| `website.changes_published` | client — the change they asked for has shipped |
 
 `website.done`'s copy is rewritten. Telling a client their project "finished
 generating — reach out to your team" is the text version of the same gap.
@@ -233,6 +235,29 @@ The resolution is honesty rather than machinery:
   visibly does something.
 - The admin button reads **"Redeploy (updates the live site)"** once a domain is
   attached, instead of looking like a harmless preview refresh.
+
+So the lifecycle has two halves, and the discriminator is whether a custom
+domain is attached:
+
+```
+pre-launch:   done → deploying → preview_ready → approved → live
+post-launch:  live → deploying → live
+```
+
+A post-launch redeploy returns to `live` rather than `preview_ready` — there is
+no staging copy for a live site to be a preview *of*, and telling a client with
+a running website that it is "ready to review" is nonsense. Arriving back at
+`live` **resolves the open change requests**, because the build that just
+shipped is what the client's visitors now see, and emits
+`website.changes_published`: the only thing that tells a maintenance client
+their edit went out. A redeploy that serviced nothing stays silent — re-sending
+"your site is live" for routine rebuilds would train clients to ignore these.
+
+`resolve-changes` (admin) is the escape hatch for work that went out another
+way. **A direct push to the linked repo builds on Vercel without our code
+running at all**, so nothing would close those requests and the operator's queue
+would fill with work already done. One button, and the client is told, because
+clicking it is the operator saying it is finished.
 
 Revisit this if per-client staging is ever in scope. It is the right answer at a
 larger size; it is not the right first thing to build on an API surface where no

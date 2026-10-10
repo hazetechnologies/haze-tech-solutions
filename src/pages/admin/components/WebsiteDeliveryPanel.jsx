@@ -198,7 +198,14 @@ export default function WebsiteDeliveryPanel({ project, onRefresh }) {
             </div>
           ))}
           {open.length > 0 && (
-            <p style={muted}>Edit content.json in the repo and push, then Redeploy. Approving on the client's behalf also closes these.</p>
+            <>
+              <button onClick={() => post('resolve-changes', {}, 'resolve')} disabled={working === 'resolve'} style={btnGhost}>
+                <Check size={13} /> {working === 'resolve' ? 'Closing…' : `Mark done & tell the client`}
+              </button>
+              <p style={{ ...muted, marginTop: 8 }}>
+                A Redeploy of a live site closes these automatically and emails the client. Use this button when the work went out another way — a direct push to the repo builds on Vercel without going through here, so nothing would close it.
+              </p>
+            </>
           )}
         </div>
       )}

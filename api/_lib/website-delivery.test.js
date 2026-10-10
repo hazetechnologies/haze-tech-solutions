@@ -133,3 +133,30 @@ Deno.test('every pre-launch status does move to changes_requested', () => {
     assertEquals(requestChangesKeepsStatus(s), false, `expected ${s} to transition`)
   }
 })
+
+Deno.test('a redeploy of a live site goes back to live, not into preview', () => {
+  // There is no staging copy for a live site to be a preview OF, and telling a
+  // client with a running website it is "ready to review" is nonsense.
+  const r = nextFromDeployment({ outcome: 'ready', previewConfirmed: true, deployingForMs: 1000, hasLiveDomain: true })
+  assertEquals(r.status, 'live')
+})
+
+Deno.test('a live redeploy is not held back by an unconfirmed alias', () => {
+  // The custom domain is attached and serving whatever the vercel.app alias
+  // reports, so the alias gate does not apply post-launch.
+  const r = nextFromDeployment({ outcome: 'ready', previewConfirmed: false, deployingForMs: 1000, hasLiveDomain: true })
+  assertEquals(r.status, 'live')
+})
+
+Deno.test('a live redeploy that fails still fails', () => {
+  assertEquals(nextFromDeployment({ outcome: 'failed', hasLiveDomain: true }).status, 'failed')
+})
+
+Deno.test('a live redeploy still reports nothing while pending', () => {
+  assertEquals(nextFromDeployment({ outcome: 'pending', hasLiveDomain: true }).status, null)
+})
+
+Deno.test('without a live domain the pre-launch path is unchanged', () => {
+  assertEquals(nextFromDeployment({ outcome: 'ready', previewConfirmed: true, hasLiveDomain: false }).status, 'preview_ready')
+  assertEquals(nextFromDeployment({ outcome: 'ready', previewConfirmed: true }).status, 'preview_ready')
+})

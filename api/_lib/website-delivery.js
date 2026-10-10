@@ -77,14 +77,23 @@ export const ALIAS_GRACE_MS = 5 * 60 * 1000
  *   previewConfirmed the preview URL came from the API, not from guessing a
  *                    `<name>.vercel.app` subdomain that may not be ours
  *   deployingForMs   how long the project has been in `deploying`
+ *   hasLiveDomain    a custom domain is already attached, so this is a
+ *                    post-launch redeploy rather than a first preview
  *
  * Returns { status, reason }. `status: null` means "no change — keep polling".
  */
-export function nextFromDeployment({ outcome, previewConfirmed, deployingForMs = 0 }) {
+export function nextFromDeployment({ outcome, previewConfirmed, deployingForMs = 0, hasLiveDomain = false }) {
   if (outcome === 'failed') {
     return { status: 'failed', reason: 'The Vercel build failed.' }
   }
   if (outcome === 'ready') {
+    // A site already on the client's own domain goes back to `live`, not into
+    // `preview_ready`. There is no staging copy for it to be a preview OF, and
+    // telling a client with a running website that it is "ready to review"
+    // would be nonsense. The alias check below is skipped for the same reason:
+    // the custom domain is attached and serving whatever the vercel.app alias
+    // happens to report.
+    if (hasLiveDomain) return { status: 'live', reason: null }
     if (previewConfirmed) return { status: 'preview_ready', reason: null }
     if (deployingForMs > ALIAS_GRACE_MS) {
       // A guessed `<name>.vercel.app` is a global subdomain that may belong to

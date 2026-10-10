@@ -51,6 +51,7 @@ export default async function handler(req, res) {
     case 'deploy-status':       return req.method === 'GET'  ? deployStatus(req, res)      : methodNotAllowed(res, 'GET')
     case 'approve-site':        return req.method === 'POST' ? approveSite(req, res)       : methodNotAllowed(res, 'POST')
     case 'request-changes':     return req.method === 'POST' ? requestChanges(req, res)    : methodNotAllowed(res, 'POST')
+    case 'resolve-changes':     return req.method === 'POST' ? resolveChanges(req, res)    : methodNotAllowed(res, 'POST')
     case 'attach-domain':       return req.method === 'POST' ? attachSiteDomain(req, res)  : methodNotAllowed(res, 'POST')
     case 'blog-generate':       return req.method === 'POST' ? blogGenerate(req, res)       : methodNotAllowed(res, 'POST')
     case 'blog-generate-cover': return req.method === 'POST' ? blogGenerateCover(req, res)  : methodNotAllowed(res, 'POST')
@@ -1028,6 +1029,26 @@ async function casStatus(adminClient, project, fromStatus, patch) {
 }
 
 /**
+ * Close out open change requests and report how many there were.
+ *
+ * `resolved_at` is what keeps the operator's queue and the client's portal
+ * honest about outstanding work, so every path that genuinely services a
+ * request has to come through here.
+ */
+async function resolveOpenRevisions(adminClient, projectId, ids = null) {
+  let q = adminClient.from('website_revisions')
+    .update({ resolved_at: new Date().toISOString() })
+    .eq('project_id', projectId).is('resolved_at', null)
+  if (ids && ids.length) q = q.in('id', ids)
+  const { data, error } = await q.select('id')
+  if (error) {
+    console.error('[website-delivery] resolving revisions failed:', error.message)
+    return 0
+  }
+  return (data || []).length
+}
+
+/**
  * Fail a project and tell the admin now rather than at the next cron tick.
  * notified_status is set to 'failed' in the same write so the watcher does not
  * send a second copy of the same bad news.
@@ -1144,7 +1165,30 @@ async function advanceDeployment(adminClient, project, cfg) {
   // updated_at unless the status actually changes, so this clock does not reset
   // on every poll — otherwise the stalled-alias timeout could never fire.
   const deployingForMs = Date.now() - new Date(project.updated_at || Date.now()).getTime()
-  const next = nextFromDeployment({ outcome, previewConfirmed, deployingForMs })
+  const hasLiveDomain = Boolean(project.live_url)
+  const next = nextFromDeployment({ outcome, previewConfirmed, deployingForMs, hasLiveDomain })
+
+  if (next.status === 'live') {
+    // A post-launch redeploy. The build that just shipped IS what the client's
+    // visitors now see, so any change request it serviced is done.
+    const won = await casStatus(adminClient, project, 'deploying', {
+      status: 'live',
+      ...(previewUrl ? { preview_url: previewUrl } : {}),
+      progress_message: null, error: null, notified_status: 'live',
+    })
+    let published = 0
+    if (won) {
+      published = await resolveOpenRevisions(adminClient, project.id)
+      // Only notify when this deploy actually serviced something. A routine
+      // redeploy of a live site is not news, and re-sending "your site is
+      // live" for it would train clients to ignore these emails.
+      if (published > 0) {
+        await emitNotification(adminClient, 'website.changes_published',
+          notifyPayload(project, { liveUrl: project.live_url, count: published }))
+      }
+    }
+    return { project_id: project.id, status: 'live', changed: won, resolved: published }
+  }
 
   if (next.status === 'preview_ready') {
     const won = await casStatus(adminClient, project, 'deploying', {
@@ -1206,8 +1250,7 @@ async function approveSite(req, res) {
 
   // Close out any open change requests: approving the site is the answer to all
   // of them, and leaving them open would show the operator stale work.
-  await adminClient.from('website_revisions')
-    .update({ resolved_at: now }).eq('project_id', project.id).is('resolved_at', null)
+  await resolveOpenRevisions(adminClient, project.id)
 
   await emitNotification(adminClient, 'website.approved', notifyPayload(project, { byAdmin: isAdmin }))
   return res.status(200).json({ project_id: project.id, status: 'approved', approved_at: now })
@@ -1238,7 +1281,14 @@ async function requestChanges(req, res) {
   // updates the site the client's customers see. Saying `changes_requested`
   // would advertise a preview-and-approve cycle that does not run for it.
   let finalStatus = project.status
-  if (!requestChangesKeepsStatus(project.status)) {
+  if (requestChangesKeepsStatus(project.status)) {
+    // No CAS on this path, so nothing has confirmed the row is still `live` —
+    // an operator may have started a redeploy since we read it. Re-read rather
+    // than echoing back a status that was true a moment ago.
+    const { data: fresh } = await adminClient
+      .from('website_projects').select('status').eq('id', project.id).maybeSingle()
+    finalStatus = fresh?.status || project.status
+  } else {
     const won = await casStatus(adminClient, project, project.status, {
       status: 'changes_requested', notified_status: 'changes_requested', progress_message: null,
     })
@@ -1257,6 +1307,30 @@ async function requestChanges(req, res) {
 
   await emitNotification(adminClient, 'website.changes_requested', notifyPayload(project, { note }))
   return res.status(200).json({ project_id: project.id, status: finalStatus, recorded: true })
+}
+
+// POST ?action=resolve-changes — admin. Body: { project_id, revision_ids? }.
+//
+// The escape hatch for requests serviced outside our deploy path: an operator
+// pushing straight to the linked repo (Vercel builds it on push, our code never
+// runs), or an edit made somewhere that is not content.json at all. Without
+// this, those requests stay open forever and the queue stops meaning anything.
+async function resolveChanges(req, res) {
+  const ctx = await websiteProjectCtx(req, res, req.body?.project_id, { adminOnly: true })
+  if (!ctx) return
+  const { adminClient, project } = ctx
+
+  const ids = Array.isArray(req.body?.revision_ids) ? req.body.revision_ids.map(String) : null
+  const resolved = await resolveOpenRevisions(adminClient, project.id, ids)
+  if (resolved === 0) {
+    return res.status(200).json({ project_id: project.id, resolved: 0, message: 'Nothing was open.' })
+  }
+
+  // Clicking this IS the operator saying the work is done, so the client is
+  // told. Staying silent would leave them waiting on something already shipped.
+  await emitNotification(adminClient, 'website.changes_published',
+    notifyPayload(project, { liveUrl: project.live_url, previewUrl: project.preview_url, count: resolved }))
+  return res.status(200).json({ project_id: project.id, resolved })
 }
 
 // POST ?action=attach-domain — admin. Body: { project_id, domain }.

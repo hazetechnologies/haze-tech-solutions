@@ -208,6 +208,37 @@ export const REGISTRY = {
     },
   ],
 
+  // Closes the loop a maintenance retainer is actually sold on: the client
+  // asked for a change, and this is the only thing that tells them it shipped.
+  'website.changes_published': [
+    {
+      audience: 'client',
+      resolveTo: async (_sb, p) => p.clientEmail || null,
+      render: (p) => {
+        const n = Number(p.count) || 1
+        const what = n === 1 ? 'The change you asked for is' : `The ${n} changes you asked for are`
+        const url = p.liveUrl || p.previewUrl
+        return {
+          title: n === 1 ? 'Your change is live' : `Your ${n} changes are live`,
+          body: `${what} now on your site.`,
+          link: '/portal/dashboard',
+          emailSubject: n === 1 ? 'Your change is live' : `Your ${n} changes are live`,
+          emailHtml: wrapHtml(`All done, ${esc(p.clientName) || 'there'}`,
+            `<p>${esc(what)} now on your site.</p>${button(url, url === p.liveUrl ? 'Visit your site' : 'Open your site')}<p style="color:#94a3b8;font-size:13px">Spot something else? Request another change from your portal any time.</p>`),
+        }
+      },
+    },
+    {
+      audience: 'admin',
+      resolveTo: async () => null, // in-app only — the admin is the one who did it
+      render: (p) => ({
+        title: `Changes published: ${p.clientName || p.clientId}`,
+        body: `${Number(p.count) || 1} request${(Number(p.count) || 1) === 1 ? '' : 's'} closed.`,
+        link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
+      }),
+    },
+  ],
+
   'website.live': [
     {
       audience: 'client',
