@@ -67,6 +67,19 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
     )
   }
 
+  if (status === 'failed') {
+    // PortalDashboard renders its own line for `failed` today, so this is
+    // belt and braces — but two files disagreeing about who owns a status is
+    // exactly how a client ends up reading "going through our checks" about a
+    // build that failed hours ago.
+    return (
+      <Shell>
+        <p style={body}>We've hit a snag publishing your site. The team has been alerted and is on it — we'll email you as soon as it's sorted. Nothing needed from you.</p>
+        {liveStrip}
+      </Shell>
+    )
+  }
+
   if (!previewUrl && !liveUrl) {
     // Covers 'done': built, not yet published. Says what is actually true
     // rather than implying the client has something to collect.
@@ -89,7 +102,10 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
         <p style={body}>We have your change request and we're on it. You'll get a new preview when it's updated.</p>
       )}
       {status === 'approved' && (
-        <p style={body}>Approved — thank you. We're pointing your domain at it now and will email you when it's live.</p>
+        // Not "we're pointing your domain at it now": the DNS records still
+        // have to be added and verified, which can take a day. Saying it is
+        // already happening sets a clock the next step cannot keep.
+        <p style={body}>Approved — thank you. Next we connect your domain. That needs a DNS change and can take up to a day to take effect; we'll email you the moment it's live.</p>
       )}
       {status === 'live' && (
         openRequests > 0
@@ -101,23 +117,35 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
           : <p style={body}>Your site is live. Need a change? Ask below any time.</p>
       )}
 
-      {/* Primary actions. The new tab comes first: the preview frame below is a
-          thumbnail, not the way to judge the work. */}
+      {/* OPENING the site is the accent action, not approving it. An earlier
+          version made Approve the brightest thing on screen, which invites a
+          client to sign off a $7,500 build without looking at it — and on
+          `changes_requested` it would have approved the very version they had
+          just asked us to change. Approve stays easy to find, and stops being
+          the path of least resistance. */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
         {liveStrip}
-        {previewUrl && (
+        {previewUrl && !liveUrl && (
+          <a href={previewUrl} target="_blank" rel="noreferrer" style={primaryBtn}>
+            <ExternalLink size={14} /> Open your site in a new tab
+          </a>
+        )}
+        {previewUrl && liveUrl && (
+          // Once live, the client's own domain IS the site. This address is the
+          // staging copy, and calling it "preview" without saying so reads as a
+          // second, competing website.
           <a href={previewUrl} target="_blank" rel="noreferrer" style={linkBtn}>
-            <ExternalLink size={14} /> {liveUrl ? 'Open preview' : 'Open your site in a new tab'}
+            <ExternalLink size={14} /> Open the working copy
           </a>
         )}
         {reviewable && mode !== 'confirm-approve' && (
-          <button onClick={() => { setMode('confirm-approve'); setError(null) }} style={primaryBtn} disabled={working}>
-            <Check size={14} /> Approve
+          <button onClick={() => { setMode('confirm-approve'); setError(null) }} style={approveBtn} disabled={working}>
+            <Check size={14} /> {status === 'changes_requested' ? 'Approve as it is' : 'Approve'}
           </button>
         )}
         {canComment && mode !== 'request-changes' && (
           <button onClick={() => { setMode('request-changes'); setError(null) }} style={ghostBtn} disabled={working}>
-            <MessageSquarePlus size={14} /> Request changes
+            <MessageSquarePlus size={14} /> {openRequests > 0 ? 'Request another change' : 'Request changes'}
           </button>
         )}
       </div>
@@ -160,15 +188,37 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
 
       {previewUrl && (
         <div style={{ marginTop: 14 }}>
-          <div style={{ color: '#475569', fontSize: 11, marginBottom: 6 }}>Preview — open in a new tab for the full experience</div>
-          <div style={{ position: 'relative', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, overflow: 'hidden', background: '#0B1120' }}>
+          <div style={{ color: '#475569', fontSize: 11, marginBottom: 6 }}>
+            {liveUrl ? 'Working copy' : 'Preview'} — open it in a new tab for the full experience
+          </div>
+          <div style={{ position: 'relative', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, overflow: 'hidden', background: '#0B1120', minHeight: 180 }}>
+            {/* Behind the frame, and it only covers the LOADING case — while
+                the frame is still transparent, this is what the client sees
+                instead of a black rectangle. It cannot be the recovery path:
+                a site refusing to be framed renders an opaque browser error
+                document on top of this, hiding it exactly when it is needed.
+                That is why the way out lives outside the frame, below. */}
+            <div aria-hidden="true" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, textAlign: 'center' }}>
+              <div style={{ color: '#64748B', fontSize: 12 }}>Loading your site…</div>
+            </div>
             <iframe
-              src={previewUrl} title="Website preview" loading="lazy"
+              src={previewUrl} title={liveUrl ? 'Working copy of your website' : 'Preview of your website'} loading="lazy"
               sandbox="allow-scripts allow-same-origin allow-popups"
               referrerPolicy="no-referrer"
-              style={{ width: '100%', height: 360, border: 0, display: 'block' }}
+              style={{ position: 'relative', width: '100%', height: 360, border: 0, display: 'block' }}
             />
           </div>
+          {/* Always rendered, never behind anything. Whatever the frame does —
+              loads, stays blank, or paints a refusal — the client has a
+              working way to see their site. No timeout to tune and nothing to
+              detect, because a blocked cross-origin frame fires `load` for its
+              error page and cannot be told apart from a successful one. */}
+          <a
+            href={previewUrl} target="_blank" rel="noreferrer"
+            style={{ display: 'inline-block', marginTop: 8, color: '#00CFFF', fontSize: 12, fontWeight: 700 }}
+          >
+            Not showing above? Open it in a new tab
+          </a>
         </div>
       )}
     </Shell>
@@ -187,6 +237,9 @@ const baseBtn = {
   fontFamily: 'inherit', textDecoration: 'none', border: '1px solid transparent',
 }
 const primaryBtn = { ...baseBtn, background: '#00CFFF', color: '#0F172A' }
+// Findable without being the path of least resistance. Approving is a
+// commitment; it should not be the brightest thing on the screen.
+const approveBtn = { ...baseBtn, background: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.45)', color: '#4ADE80' }
 const ghostBtn = { ...baseBtn, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.12)', color: '#CBD5E1' }
 const linkBtn = { ...baseBtn, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.12)', color: '#F1F5F9' }
 const textarea = {

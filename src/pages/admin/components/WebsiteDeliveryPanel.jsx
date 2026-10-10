@@ -101,7 +101,7 @@ export default function WebsiteDeliveryPanel({ project, onRefresh }) {
         )}
         {project.preview_url && (
           <a href={project.preview_url} target="_blank" rel="noreferrer" style={btnGhost}>
-            <ExternalLink size={13} /> Preview
+            <ExternalLink size={13} /> {project.live_url ? 'Working copy' : 'Preview'}
           </a>
         )}
         {inspectorUrl && (
@@ -184,12 +184,16 @@ export default function WebsiteDeliveryPanel({ project, onRefresh }) {
       )}
 
       {/* What the client asked for */}
-      {(open.length > 0 || resolved > 0) && (
+      {resolved > 0 && open.length === 0 && (
+        <p style={muted}>{resolved} change request{resolved === 1 ? '' : 's'} resolved.</p>
+      )}
+
+      {open.length > 0 && (
         <div style={subPanel}>
           <div style={{ color: '#F1F5F9', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
             <MessageSquare size={13} color="#00CFFF" />
             {open.length} open change request{open.length === 1 ? '' : 's'}
-            {resolved > 0 && <span style={{ color: '#475569', fontWeight: 400 }}>· {resolved} resolved</span>}
+            {resolved > 0 && <span style={{ color: '#475569', fontWeight: 400 }}> · {resolved} resolved</span>}
           </div>
           {open.map((r) => (
             <div key={r.id} style={{ borderLeft: '3px solid #00CFFF', padding: '6px 0 6px 10px', marginBottom: 8 }}>
