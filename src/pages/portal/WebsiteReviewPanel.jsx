@@ -192,19 +192,14 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
             {liveUrl ? 'Working copy' : 'Preview'} — open it in a new tab for the full experience
           </div>
           <div style={{ position: 'relative', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, overflow: 'hidden', background: '#0B1120', minHeight: 180 }}>
-            {/* Sits BEHIND the frame. A site sending X-Frame-Options or a
-                frame-ancestors CSP renders as a blank rectangle, and so does a
-                slow one: several hundred pixels of black with no explanation,
-                which reads as a broken delivery rather than a thumbnail. The
-                frame paints over this as soon as it loads; if it never does,
-                the client gets a sentence and a way out instead of a void.
-                A layer rather than onLoad detection, because a blocked
-                cross-origin frame fires load for its error page too. */}
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20, textAlign: 'center' }}>
+            {/* Behind the frame, and it only covers the LOADING case — while
+                the frame is still transparent, this is what the client sees
+                instead of a black rectangle. It cannot be the recovery path:
+                a site refusing to be framed renders an opaque browser error
+                document on top of this, hiding it exactly when it is needed.
+                That is why the way out lives outside the frame, below. */}
+            <div aria-hidden="true" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, textAlign: 'center' }}>
               <div style={{ color: '#64748B', fontSize: 12 }}>Loading your site…</div>
-              <a href={previewUrl} target="_blank" rel="noreferrer" style={{ color: '#00CFFF', fontSize: 12, fontWeight: 700 }}>
-                Not showing? Open it in a new tab
-              </a>
             </div>
             <iframe
               src={previewUrl} title={liveUrl ? 'Working copy of your website' : 'Preview of your website'} loading="lazy"
@@ -213,6 +208,17 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
               style={{ position: 'relative', width: '100%', height: 360, border: 0, display: 'block' }}
             />
           </div>
+          {/* Always rendered, never behind anything. Whatever the frame does —
+              loads, stays blank, or paints a refusal — the client has a
+              working way to see their site. No timeout to tune and nothing to
+              detect, because a blocked cross-origin frame fires `load` for its
+              error page and cannot be told apart from a successful one. */}
+          <a
+            href={previewUrl} target="_blank" rel="noreferrer"
+            style={{ display: 'inline-block', marginTop: 8, color: '#00CFFF', fontSize: 12, fontWeight: 700 }}
+          >
+            Not showing above? Open it in a new tab
+          </a>
         </div>
       )}
     </Shell>
