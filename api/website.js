@@ -1035,11 +1035,16 @@ async function casStatus(adminClient, project, fromStatus, patch) {
  * honest about outstanding work, so every path that genuinely services a
  * request has to come through here.
  */
-async function resolveOpenRevisions(adminClient, projectId, ids = null) {
+async function resolveOpenRevisions(adminClient, projectId, { ids = null, createdBefore = null } = {}) {
   let q = adminClient.from('website_revisions')
     .update({ resolved_at: new Date().toISOString() })
     .eq('project_id', projectId).is('resolved_at', null)
   if (ids && ids.length) q = q.in('id', ids)
+  // A deploy can only have serviced requests that existed when it started. A
+  // client can submit a note in the window between the deploy claiming the row
+  // and the build finishing, and closing that note would silently drop a
+  // request nobody has acted on.
+  if (createdBefore) q = q.lt('created_at', createdBefore)
   const { data, error } = await q.select('id')
   if (error) {
     console.error('[website-delivery] resolving revisions failed:', error.message)
@@ -1178,7 +1183,10 @@ async function advanceDeployment(adminClient, project, cfg) {
     })
     let published = 0
     if (won) {
-      published = await resolveOpenRevisions(adminClient, project.id)
+      // project.updated_at is the write that claimed `deploying` — nothing
+      // touches it while polling, which is what makes it usable as the
+      // deploy-start timestamp here.
+      published = await resolveOpenRevisions(adminClient, project.id, { createdBefore: project.updated_at })
       // Only notify when this deploy actually serviced something. A routine
       // redeploy of a live site is not news, and re-sending "your site is
       // live" for it would train clients to ignore these emails.
@@ -1321,7 +1329,7 @@ async function resolveChanges(req, res) {
   const { adminClient, project } = ctx
 
   const ids = Array.isArray(req.body?.revision_ids) ? req.body.revision_ids.map(String) : null
-  const resolved = await resolveOpenRevisions(adminClient, project.id, ids)
+  const resolved = await resolveOpenRevisions(adminClient, project.id, { ids })
   if (resolved === 0) {
     return res.status(200).json({ project_id: project.id, resolved: 0, message: 'Nothing was open.' })
   }

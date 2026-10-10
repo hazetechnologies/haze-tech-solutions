@@ -253,6 +253,20 @@ shipped is what the client's visitors now see, and emits
 their edit went out. A redeploy that serviced nothing stays silent — re-sending
 "your site is live" for routine rebuilds would train clients to ignore these.
 
+Two edges that bit on review and are now pinned:
+
+- **A deploy may only close requests that predate it.** A client can submit a
+  note in the window between the deploy claiming the row and the build
+  finishing. Resolution is therefore filtered on `created_at <` the write that
+  set `deploying` (nothing touches `updated_at` while polling, which is what
+  makes that usable as the deploy-start timestamp). Otherwise a request nobody
+  has acted on is silently closed.
+- **`website.changes_published` must not claim "live" before launch.** The same
+  event fires pre-launch when an operator closes requests on a site still in
+  review. The copy branches on whether a verified custom domain exists: live
+  sites get "your change is live", pre-launch gets "ready to see" and points at
+  the preview.
+
 `resolve-changes` (admin) is the escape hatch for work that went out another
 way. **A direct push to the linked repo builds on Vercel without our code
 running at all**, so nothing would close those requests and the operator's queue

@@ -216,15 +216,26 @@ export const REGISTRY = {
       resolveTo: async (_sb, p) => p.clientEmail || null,
       render: (p) => {
         const n = Number(p.count) || 1
-        const what = n === 1 ? 'The change you asked for is' : `The ${n} changes you asked for are`
+        const thing = n === 1 ? 'change' : `${n} changes`
+        // Only a project with a verified custom domain is actually LIVE. The
+        // same event fires pre-launch (an operator closing requests on a site
+        // still in review), and telling that client their change is live would
+        // be false — their site is not serving on their domain yet.
+        const isLive = Boolean(p.liveUrl)
         const url = p.liveUrl || p.previewUrl
+        const title = isLive
+          ? (n === 1 ? 'Your change is live' : `Your ${n} changes are live`)
+          : (n === 1 ? 'Your change is ready to see' : `Your ${n} changes are ready to see`)
+        const sentence = isLive
+          ? `Your ${thing} ${n === 1 ? 'is' : 'are'} now on your site.`
+          : `We've made your ${thing}. Take another look at your preview, then approve it or tell us what else to adjust.`
         return {
-          title: n === 1 ? 'Your change is live' : `Your ${n} changes are live`,
-          body: `${what} now on your site.`,
+          title,
+          body: sentence,
           link: '/portal/dashboard',
-          emailSubject: n === 1 ? 'Your change is live' : `Your ${n} changes are live`,
+          emailSubject: title,
           emailHtml: wrapHtml(`All done, ${esc(p.clientName) || 'there'}`,
-            `<p>${esc(what)} now on your site.</p>${button(url, url === p.liveUrl ? 'Visit your site' : 'Open your site')}<p style="color:#94a3b8;font-size:13px">Spot something else? Request another change from your portal any time.</p>`),
+            `<p>${esc(sentence)}</p>${button(url, isLive ? 'Visit your site' : 'Open your preview')}<p style="color:#94a3b8;font-size:13px">${isLive ? 'Spot something else? Request another change from your portal any time.' : 'Approve it or request more changes from your portal.'}</p>`),
         }
       },
     },
@@ -232,7 +243,7 @@ export const REGISTRY = {
       audience: 'admin',
       resolveTo: async () => null, // in-app only — the admin is the one who did it
       render: (p) => ({
-        title: `Changes published: ${p.clientName || p.clientId}`,
+        title: `Changes ${p.liveUrl ? 'published' : 'ready for review'}: ${p.clientName || p.clientId}`,
         body: `${Number(p.count) || 1} request${(Number(p.count) || 1) === 1 ? '' : 's'} closed.`,
         link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
       }),
