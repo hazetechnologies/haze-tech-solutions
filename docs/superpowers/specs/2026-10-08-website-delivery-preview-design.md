@@ -215,6 +215,29 @@ gets `sandbox` and a visible fallback link. A 3D or video template will not
 feel right in a small frame — for the experiential line the primary action is
 the new-tab link, with the iframe as a thumbnail rather than the main event.
 
+## Post-launch edits go live, and the product says so
+
+Once a custom domain is attached, a deploy IS the client's live site. Vercel
+also rebuilds production on **any push to the linked repo**, so this is true
+whether or not the deploy goes through our action — disabling that would mean
+an ignored-build-step shim and a promote pipeline, i.e. the per-client staging
+environment this spec has already ruled out.
+
+The resolution is honesty rather than machinery:
+
+- A change request on a `live` site records the note and emails the operator,
+  but **does not move the project out of `live`.** A status of
+  `changes_requested` would advertise a preview-and-approve cycle that does not
+  run for a site already serving on the client's domain.
+- The client's portal acknowledges the open request in place, so sending one
+  visibly does something.
+- The admin button reads **"Redeploy (updates the live site)"** once a domain is
+  attached, instead of looking like a harmless preview refresh.
+
+Revisit this if per-client staging is ever in scope. It is the right answer at a
+larger size; it is not the right first thing to build on an API surface where no
+call has yet been executed.
+
 ## Revision loop
 
 A change request stores the client's note. Two ways to service it:

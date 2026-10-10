@@ -73,7 +73,7 @@ export default function PortalDashboard() {
   const fetchWebsiteAndBilling = useCallback(async () => {
     if (!client?.id) return
     const [{ data: wp }, { data: sub }] = await Promise.all([
-      supabase.from('website_projects').select('id, status, repo_url, preview_url, live_url, approved_at').eq('client_id', client.id).maybeSingle(),
+      supabase.from('website_projects').select('id, status, repo_url, preview_url, live_url, approved_at, website_revisions(id, note, created_at, resolved_at)').eq('client_id', client.id).maybeSingle(),
       supabase.from('subscriptions').select('id, status, current_period_end, cancel_at_period_end, stripe_price_id')
         .eq('client_id', client.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])

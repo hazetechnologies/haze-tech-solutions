@@ -4,7 +4,7 @@
 import { assertEquals, assert } from 'https://deno.land/std@0.224.0/assert/mod.ts'
 import {
   canDeployFrom, canApproveFrom, canRequestChangesFrom, canAttachDomainFrom,
-  nextFromDeployment, normalizeDomain, normalizeNote,
+  requestChangesKeepsStatus, nextFromDeployment, normalizeDomain, normalizeNote,
   ALIAS_GRACE_MS, MAX_NOTE_LENGTH,
 } from './website-delivery.js'
 
@@ -118,4 +118,18 @@ Deno.test('a change note is trimmed, required, and bounded', () => {
   assert(normalizeNote(null).error)
   assert(normalizeNote('x'.repeat(MAX_NOTE_LENGTH + 1)).error)
   assertEquals(normalizeNote('x'.repeat(MAX_NOTE_LENGTH)).note.length, MAX_NOTE_LENGTH)
+})
+
+Deno.test('a live site stays live when changes are requested', () => {
+  // There is no per-client staging, and Vercel rebuilds production on any push,
+  // so a redeploy updates the site the client's customers see. Flipping to
+  // changes_requested would advertise a preview-and-approve cycle that does not
+  // run for a live site.
+  assertEquals(requestChangesKeepsStatus('live'), true)
+})
+
+Deno.test('every pre-launch status does move to changes_requested', () => {
+  for (const s of ['preview_ready', 'changes_requested', 'approved']) {
+    assertEquals(requestChangesKeepsStatus(s), false, `expected ${s} to transition`)
+  }
 })

@@ -27,7 +27,7 @@ import {
 } from './_lib/vercel.js'
 import {
   canDeployFrom, canApproveFrom, canRequestChangesFrom, canAttachDomainFrom,
-  nextFromDeployment, normalizeDomain, normalizeNote,
+  requestChangesKeepsStatus, nextFromDeployment, normalizeDomain, normalizeNote,
 } from './_lib/website-delivery.js'
 // Imported, not restated: this list drifting out of sync with the portal
 // picker is what made the flagship template unselectable for ~3 months.
@@ -1234,11 +1234,29 @@ async function requestChanges(req, res) {
     .insert({ project_id: project.id, note, requested_by: caller.id })
   if (insErr) return res.status(500).json({ error: 'db_error', message: insErr.message })
 
-  await casStatus(adminClient, project, project.status, {
-    status: 'changes_requested', notified_status: 'changes_requested', progress_message: null,
-  })
+  // A live site keeps its status: there is no per-client staging, so a redeploy
+  // updates the site the client's customers see. Saying `changes_requested`
+  // would advertise a preview-and-approve cycle that does not run for it.
+  let finalStatus = project.status
+  if (!requestChangesKeepsStatus(project.status)) {
+    const won = await casStatus(adminClient, project, project.status, {
+      status: 'changes_requested', notified_status: 'changes_requested', progress_message: null,
+    })
+    if (won) {
+      finalStatus = 'changes_requested'
+    } else {
+      // Lost the race — an admin approved, or a redeploy started, between our
+      // read and our write. The note is still a real request and the operator
+      // still needs it, so the notification stands. What must NOT stand is
+      // telling the caller the project is in a status it is not in.
+      const { data: fresh } = await adminClient
+        .from('website_projects').select('status').eq('id', project.id).maybeSingle()
+      finalStatus = fresh?.status || project.status
+    }
+  }
+
   await emitNotification(adminClient, 'website.changes_requested', notifyPayload(project, { note }))
-  return res.status(200).json({ project_id: project.id, status: 'changes_requested' })
+  return res.status(200).json({ project_id: project.id, status: finalStatus, recorded: true })
 }
 
 // POST ?action=attach-domain — admin. Body: { project_id, domain }.

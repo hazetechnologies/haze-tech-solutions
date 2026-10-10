@@ -45,6 +45,20 @@ export function canRequestChangesFrom(status) { return CHANGEABLE.has(status) }
 export function canAttachDomainFrom(status) { return DOMAIN_ATTACHABLE.has(status) }
 
 /**
+ * Does a change request move the project out of its current status?
+ *
+ * For a `live` site: no. Once a custom domain is attached, a redeploy updates
+ * the site the client's customers are looking at — Vercel also rebuilds
+ * production on any push to the repo, so this is true whether or not it goes
+ * through our deploy action. There is deliberately no per-client staging
+ * environment (see the delivery spec), so flipping a live site to
+ * `changes_requested` would advertise a preview-and-approve cycle that does not
+ * run for it. The request is still recorded and the operator still told; the
+ * status keeps telling the truth, which is that the site is live.
+ */
+export function requestChangesKeepsStatus(status) { return status === 'live' }
+
+/**
  * How long a deployment may sit in READY with no production alias before the
  * project is handed to an operator instead of a client.
  *

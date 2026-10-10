@@ -122,7 +122,12 @@ export default function WebsiteDeliveryPanel({ project, onRefresh }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
         <button onClick={() => post('deploy', {}, 'deploy')} disabled={!canDeploy || working === 'deploy'} style={canDeploy ? btnPrimary : btnDisabled}>
           <Rocket size={13} />
-          {working === 'deploy' ? 'Starting…' : project.vercel_project_id ? 'Redeploy' : 'Publish to Vercel'}
+          {working === 'deploy' ? 'Starting…'
+            // Once a domain is attached, a deploy IS the live site — Vercel also
+            // rebuilds production on any push to the repo. The button says so
+            // rather than reading like a harmless preview refresh.
+            : project.live_url ? 'Redeploy (updates the live site)'
+            : project.vercel_project_id ? 'Redeploy' : 'Publish to Vercel'}
         </button>
         {canApprove && (
           <button onClick={() => post('approve-site', {}, 'approve')} disabled={working === 'approve'} style={btnGhost}>

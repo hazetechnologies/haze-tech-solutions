@@ -27,6 +27,8 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
   const previewUrl = project.preview_url
   const liveUrl = project.live_url
   const status = project.status
+  const openRequests = (Array.isArray(project.website_revisions) ? project.website_revisions : [])
+    .filter((r) => !r.resolved_at).length
 
   async function post(action, body) {
     setWorking(true); setError(null)
@@ -90,7 +92,13 @@ export default function WebsiteReviewPanel({ project, onChanged }) {
         <p style={body}>Approved — thank you. We're pointing your domain at it now and will email you when it's live.</p>
       )}
       {status === 'live' && (
-        <p style={body}>Your site is live. Need a change? Ask below any time.</p>
+        openRequests > 0
+          // A live site keeps its `live` status when changes are requested —
+          // there is no staging copy to review, so the status would be lying if
+          // it said otherwise. The acknowledgement has to come from the request
+          // itself instead, or the client clicks send and sees nothing change.
+          ? <p style={body}>Your site is live, and we have {openRequests === 1 ? 'your change request' : `${openRequests} change requests`}. We'll update the live site and let you know — there's no separate preview for a site that's already running.</p>
+          : <p style={body}>Your site is live. Need a change? Ask below any time.</p>
       )}
 
       {/* Primary actions. The new tab comes first: the preview frame below is a
