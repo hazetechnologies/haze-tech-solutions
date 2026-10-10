@@ -80,11 +80,25 @@ export const ALIAS_GRACE_MS = 5 * 60 * 1000
  *   hasLiveDomain    a custom domain is already attached, so this is a
  *                    post-launch redeploy rather than a first preview
  *
- * Returns { status, reason }. `status: null` means "no change — keep polling".
+ * Returns { status, reason, failed? }. `status: null` means "no change — keep
+ * polling". `failed: true` marks a build that did not succeed, which matters
+ * even when the status stays `live`: nothing was published, so no change
+ * request was serviced and the client must not be told anything shipped.
  */
 export function nextFromDeployment({ outcome, previewConfirmed, deployingForMs = 0, hasLiveDomain = false }) {
   if (outcome === 'failed') {
-    return { status: 'failed', reason: 'The Vercel build failed.' }
+    // A live site keeps serving its previous production build when a redeploy
+    // fails — Vercel does not take the old one down. Marking the project
+    // `failed` would hide the live link in the client's portal and block
+    // further change requests, over a site that is still perfectly up.
+    if (hasLiveDomain) {
+      return {
+        status: 'live',
+        failed: true,
+        reason: 'The redeploy failed. The previously published version is still serving, so the site is up — but the new changes did not go out.',
+      }
+    }
+    return { status: 'failed', failed: true, reason: 'The Vercel build failed.' }
   }
   if (outcome === 'ready') {
     // A site already on the client's own domain goes back to `live`, not into

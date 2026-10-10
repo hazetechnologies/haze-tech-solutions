@@ -38,6 +38,11 @@ alter table website_projects
 
 -- ── 2. Delivery columns ────────────────────────────────────────────────────
 alter table website_projects add column if not exists vercel_project_id text;
+-- WHICH deployment the current build is. Polling the project's newest
+-- deployment instead reads whatever Vercel lists first — a build from a git
+-- push, or on a redeploy the previous one already sitting at READY — and would
+-- advance the project and email the client about content that did not ship.
+alter table website_projects add column if not exists vercel_deployment_id text;
 alter table website_projects add column if not exists preview_url       text;
 alter table website_projects add column if not exists live_url          text;
 alter table website_projects add column if not exists approved_at       timestamptz;
@@ -82,7 +87,7 @@ commit;
 --     where conname = 'website_projects_status_check';
 --   select column_name from information_schema.columns
 --     where table_name = 'website_projects'
---       and column_name in ('vercel_project_id','preview_url','live_url','approved_at');
+--       and column_name in ('vercel_project_id','vercel_deployment_id','preview_url','live_url','approved_at');
 --   select policyname from pg_policies where tablename = 'website_revisions';
 --
--- Expect: the 10-value CHECK, four columns, one policy.
+-- Expect: the 10-value CHECK, five columns, one policy.

@@ -75,6 +75,15 @@ operate the site. See `docs/superpowers/specs/2026-10-08-website-delivery-previe
 - Attaching a domain is not the same as it resolving. `attach-domain` is
   re-runnable: it returns the DNS records first, and only flips to `live` once
   Vercel reports the domain **verified**.
+- **Poll `vercel_deployment_id`, never "the latest deployment".** On a redeploy
+  there is always a previous build sitting at READY, and a git push creates
+  others — reading those advances the project and emails the client about
+  content that did not ship.
+- A site with a custom domain attached has a **second lifecycle**:
+  `live → deploying → live`. A post-launch redeploy returns to `live` (not
+  `preview_ready`), resolves the change requests that **predate the deploy**,
+  and emits `website.changes_published`. If that redeploy *fails*, the project
+  stays `live` — Vercel keeps serving the previous build, so the site is up.
 
 ## Conventions
 

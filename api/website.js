@@ -22,7 +22,8 @@ import { buildBlogPrompt, parseBlogGeneration } from './_lib/blog-generate.js'
 import { isSafePublicUrl, htmlToText, buildAutofillPrompt, parseBrandAutofill } from './_lib/brand-autofill.js'
 import { r2Configured, buildBlogImageKey, uploadBuffer, slugifyForKey } from './_lib/r2.js'
 import {
-  vercelConfig, ensureProject, fetchProject, triggerDeployment, latestDeployment,
+  vercelConfig, ensureProject, fetchProject, triggerDeployment,
+  getDeployment, latestDeployment,
   resolvePreviewUrl, attachDomain, projectDomain, deploymentOutcome,
 } from './_lib/vercel.js'
 import {
@@ -930,7 +931,7 @@ async function status(req, res) {
 //    these statuses to STATUS_EVENTS.
 
 const WEBSITE_PROJECT_FIELDS =
-  'id, client_id, status, repo_name, repo_url, vercel_project_id, preview_url, live_url, approved_at, updated_at, clients!inner(name, email, user_id)'
+  'id, client_id, status, repo_name, repo_url, vercel_project_id, vercel_deployment_id, preview_url, live_url, approved_at, updated_at, clients!inner(name, email, user_id)'
 
 /**
  * Load a website project for a caller who may be the owning client OR an admin,
@@ -1114,6 +1115,15 @@ async function deploySite(req, res) {
 
   try {
     const dep = await triggerDeployment(vp.id, project.repo_name, cfg)
+    // Record WHICH deployment this is. Polling the project's newest deployment
+    // instead would read whatever Vercel happens to list first — a build from a
+    // git push, or on a redeploy the previous one already sitting at READY,
+    // either of which would advance the project and email the client about
+    // content that is not what just shipped.
+    if (dep.id) {
+      await adminClient.from('website_projects')
+        .update({ vercel_deployment_id: dep.id }).eq('id', project.id)
+    }
     return res.status(200).json({ project_id: project.id, status: 'deploying', vercel_project_id: vp.id, deployment_id: dep.id })
   } catch (e) {
     // The build never started, so there is nothing to poll. Fail now rather than
@@ -1141,7 +1151,11 @@ async function advanceDeployment(adminClient, project, cfg) {
 
   let dep = null
   try {
-    dep = await latestDeployment(project.vercel_project_id, cfg)
+    // By id when we have one. latestDeployment is only a fallback for rows
+    // created before deployment ids were tracked.
+    dep = project.vercel_deployment_id
+      ? await getDeployment(project.vercel_deployment_id, cfg)
+      : await latestDeployment(project.vercel_project_id, cfg)
   } catch (e) {
     // A transient Vercel error must not fail a build that is probably fine.
     // Stay in `deploying`; the next poll decides.
@@ -1173,9 +1187,21 @@ async function advanceDeployment(adminClient, project, cfg) {
   const hasLiveDomain = Boolean(project.live_url)
   const next = nextFromDeployment({ outcome, previewConfirmed, deployingForMs, hasLiveDomain })
 
+  if (next.failed && next.status === 'live') {
+    // The redeploy failed but the site is still up on its previous build.
+    // Record it, tell the admin, and leave the project `live` — nothing was
+    // published, so no change request was serviced and the client is told
+    // nothing. Their site did not change and did not break.
+    const won = await casStatus(adminClient, project, 'deploying', {
+      status: 'live', error: next.reason, progress_message: null, notified_status: 'live',
+    })
+    if (won) await emitNotification(adminClient, 'website.failed', notifyPayload(project, { error: next.reason }))
+    return { project_id: project.id, status: 'live', changed: won, error: next.reason, inspector_url: dep?.inspectorUrl || null }
+  }
+
   if (next.status === 'live') {
-    // A post-launch redeploy. The build that just shipped IS what the client's
-    // visitors now see, so any change request it serviced is done.
+    // A post-launch redeploy that succeeded. The build that just shipped IS
+    // what the client's visitors now see, so any request it serviced is done.
     const won = await casStatus(adminClient, project, 'deploying', {
       status: 'live',
       ...(previewUrl ? { preview_url: previewUrl } : {}),

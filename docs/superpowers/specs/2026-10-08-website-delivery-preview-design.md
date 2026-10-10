@@ -132,6 +132,7 @@ New columns on `website_projects`:
 | Column | Purpose |
 |---|---|
 | `vercel_project_id` | the Vercel project this site deploys to |
+| `vercel_deployment_id` | the specific build being polled — see "Polling is bound…" below |
 | `preview_url` | the `*.vercel.app` URL the client reviews |
 | `live_url` | the custom domain once attached |
 | `approved_at` | when the client signed off |
@@ -309,6 +310,15 @@ outside indistinguishable from a broken deploy. The build is therefore requested
 explicitly via `POST /v13/deployments`. That request shape is from the docs and
 has never been executed.
 
+**Polling is bound to the deployment that was started, not to "latest".**
+`deploy` stores `vercel_deployment_id` and the poller reads that one.
+`latestDeployment` reads whichever deployment Vercel lists first, which is not
+necessarily ours: a push to the linked repo creates another, and on a redeploy
+there is always a previous build already sitting at READY. Reading that one
+would advance the project immediately and email the client about content that
+did not ship. `latestDeployment` survives only as a fallback for rows created
+before the id was tracked.
+
 **The preview URL must come from the API, never be constructed.**
 `<project>.vercel.app` is a global namespace and project names are derived from
 `slugify(client.name)`, so `acme-website` may already belong to someone else.
@@ -320,6 +330,12 @@ rather than emailed to a client who would land on a 404 or a stranger's site.
 
 - No Vercel token → `vercel_not_configured`, project stays at `done`. No
   regression against today's behaviour.
+- **A redeploy of a LIVE site fails → the project stays `live`.** Vercel does
+  not take the previous production build down, so the site is still up; nothing
+  new was published. Marking it `failed` would hide the live link in the
+  client's portal and block further change requests over a site that is working.
+  The error is recorded and the admin emailed; the client is told nothing,
+  because nothing about their site changed.
 - Vercel project creation fails → `failed` with the Vercel error, same as the
   scaffold's existing failure path.
 - Build fails on Vercel → `failed` carrying the deployment's error, with a link

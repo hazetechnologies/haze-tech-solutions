@@ -148,9 +148,9 @@ Deno.test('a live redeploy is not held back by an unconfirmed alias', () => {
   assertEquals(r.status, 'live')
 })
 
-Deno.test('a live redeploy that fails still fails', () => {
-  assertEquals(nextFromDeployment({ outcome: 'failed', hasLiveDomain: true }).status, 'failed')
-})
+// (A failed live redeploy is covered below — it keeps the site `live`, because
+// Vercel goes on serving the previous build. An earlier version of this test
+// asserted 'failed', which is the behaviour review caught as wrong.)
 
 Deno.test('a live redeploy still reports nothing while pending', () => {
   assertEquals(nextFromDeployment({ outcome: 'pending', hasLiveDomain: true }).status, null)
@@ -159,4 +159,33 @@ Deno.test('a live redeploy still reports nothing while pending', () => {
 Deno.test('without a live domain the pre-launch path is unchanged', () => {
   assertEquals(nextFromDeployment({ outcome: 'ready', previewConfirmed: true, hasLiveDomain: false }).status, 'preview_ready')
   assertEquals(nextFromDeployment({ outcome: 'ready', previewConfirmed: true }).status, 'preview_ready')
+})
+
+Deno.test('a failed redeploy leaves a live site live', () => {
+  // Vercel keeps serving the previous production build when a redeploy fails.
+  // Marking the project `failed` would hide the live link in the client's
+  // portal and block further change requests over a site that is still up.
+  const r = nextFromDeployment({ outcome: 'failed', hasLiveDomain: true })
+  assertEquals(r.status, 'live')
+  assertEquals(r.failed, true)
+  assert(/still serving/i.test(r.reason))
+})
+
+Deno.test('a failed first deploy still fails the project', () => {
+  const r = nextFromDeployment({ outcome: 'failed', hasLiveDomain: false })
+  assertEquals(r.status, 'failed')
+  assertEquals(r.failed, true)
+})
+
+Deno.test('a successful live redeploy is not marked failed', () => {
+  // `failed` is what stops a change request being reported as shipped, so it
+  // must never be set on a build that worked.
+  const r = nextFromDeployment({ outcome: 'ready', previewConfirmed: true, hasLiveDomain: true })
+  assertEquals(r.status, 'live')
+  assertEquals(r.failed, undefined)
+})
+
+Deno.test('a stalled-alias timeout is a real failure', () => {
+  const r = nextFromDeployment({ outcome: 'ready', previewConfirmed: false, deployingForMs: ALIAS_GRACE_MS + 1 })
+  assertEquals(r.status, 'failed')
 })

@@ -165,7 +165,33 @@ export async function triggerDeployment(projectId, repoName, cfg, { ref = 'main'
   }
 }
 
-/** Most recent deployment for a project, or null before the first build. */
+/**
+ * Read ONE deployment by id.
+ *
+ * This is what polling should use. `latestDeployment` reads whichever
+ * deployment is newest on the project, which is not necessarily the one we
+ * asked for: a push to the linked repo creates another, and on a redeploy there
+ * is always a previous build sitting at READY. Observing that one would advance
+ * the project and email the client about content that is not what just shipped.
+ */
+export async function getDeployment(deploymentId, cfg) {
+  const d = await call(`/v13/deployments/${encodeURIComponent(deploymentId)}`, cfg)
+  if (!d) return null
+  return {
+    id: d.id || d.uid || deploymentId,
+    state: d.readyState || d.status || d.state || null,
+    url: d.url ? `https://${d.url}` : null,
+    inspectorUrl: d.inspectorUrl || null,
+    createdAt: d.createdAt || d.created || null,
+  }
+}
+
+/**
+ * Most recent deployment for a project, or null before the first build.
+ *
+ * Only a fallback for rows that predate deployment-id tracking — prefer
+ * getDeployment, and see its note for why.
+ */
 export async function latestDeployment(projectId, cfg) {
   const json = await call(
     `/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=1`,
