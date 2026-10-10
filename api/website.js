@@ -1164,9 +1164,17 @@ async function deploySite(req, res) {
  * email only goes out to whichever one won it.
  */
 async function advanceDeployment(adminClient, project, cfg) {
+  // This guard is load-bearing, not defensive. Below it, `project.updated_at`
+  // is guaranteed to be the write that claimed `deploying` — that write is the
+  // only thing that sets this status, and it sets updated_at in the same
+  // statement. Both callers read the row fresh (deploy-status reads by id, the
+  // cron selects on status='deploying'), and no path below writes updated_at
+  // unless the status actually changes. Two separate behaviours depend on that:
+  // the stalled-alias timeout and the revision cutoff.
   if (project.status !== 'deploying') {
     return { project_id: project.id, status: project.status, changed: false }
   }
+  const deployStartedAt = project.updated_at
   if (!project.vercel_project_id) {
     await failProject(adminClient, project, 'deploying', 'No Vercel project is linked to this site.')
     return { project_id: project.id, status: 'failed', changed: true }
@@ -1206,7 +1214,7 @@ async function advanceDeployment(adminClient, project, cfg) {
   // Measured from the write that set `deploying`. Nothing below updates
   // updated_at unless the status actually changes, so this clock does not reset
   // on every poll — otherwise the stalled-alias timeout could never fire.
-  const deployingForMs = Date.now() - new Date(project.updated_at || Date.now()).getTime()
+  const deployingForMs = Date.now() - new Date(deployStartedAt || Date.now()).getTime()
   const hasLiveDomain = Boolean(project.live_url)
   const next = nextFromDeployment({ outcome, previewConfirmed, deployingForMs, hasLiveDomain })
 
@@ -1228,10 +1236,16 @@ async function advanceDeployment(adminClient, project, cfg) {
     })
     let published = 0
     if (won) {
-      // project.updated_at is the write that claimed `deploying` — nothing
-      // touches it while polling, which is what makes it usable as the
-      // deploy-start timestamp here.
-      published = await resolveOpenRevisions(adminClient, project.id, { createdBefore: project.updated_at })
+      // Only requests that predate the build it just shipped. See the guard at
+      // the top of this function for why deployStartedAt is the deploy's own
+      // start and not some earlier transition.
+      //
+      // One honest wrinkle: this compares updated_at, written from THIS
+      // process's clock, against created_at, written by the database's. Skew
+      // between them is seconds against a build measured in minutes, and the
+      // direction it fails in is the safe one — a request from just before the
+      // deploy stays open rather than being silently closed.
+      published = await resolveOpenRevisions(adminClient, project.id, { createdBefore: deployStartedAt })
       // Only notify when this deploy actually serviced something. A routine
       // redeploy of a live site is not news, and re-sending "your site is
       // live" for it would train clients to ignore these emails.
