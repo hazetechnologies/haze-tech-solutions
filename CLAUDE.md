@@ -20,9 +20,16 @@ Agency platform. Vite + React 19 + Supabase, deployed on Vercel.
 
 ## Baseline noise — do not chase this
 
-- **`npm run lint` exits 1 with 210 errors and 3 warnings** on a clean
-  checkout. This is the pre-existing baseline, not your change. The bar is: no
-  *new* errors in files you touched. Don't fix the backlog unless asked.
+- **`npm run lint` exits 1 with 52 errors and 3 warnings** on a clean checkout
+  (verified 2026-10-10). This is the pre-existing baseline, not your change.
+  The bar is: no *new* errors in files you touched. Don't fix the backlog
+  unless asked. Almost all of it is unused `motion` imports and unused `Icon`
+  destructures.
+- It used to read 246. The difference was not a cleanup: `eslint.config.js`
+  applied `globals.browser` to every file, so **every `process.env` read in
+  `api/*` was reported as `no-undef`** — ~194 false positives that made "did my
+  change add an error?" unanswerable. The config now gives `api/**` and
+  `scripts/**` Node globals, and `api/**/*.test.js` the `Deno` global.
 - `npm run build` is the reliable gate; a chunk-size warning is expected.
 - The `api/_lib/*.test.js` files are **Deno** tests (`deno test api/_lib/`),
   not Node. There is no `npm test` — don't go looking for one. The edge
@@ -42,6 +49,41 @@ template repo in the hazetechnologies org whose `content.json` matches
 Do not restate the id list anywhere else. It was previously hardcoded in four
 places; PR #98 updated one of them, and the flagship template answered
 `400 Invalid template_id` for about three months.
+
+## Website delivery (deploy → preview → approve → live)
+
+A generated site is **hosted by us**, not handed over: the products sell
+"Custom domain wired up + Vercel deploy" and the maintenance tiers presume we
+operate the site. See `docs/superpowers/specs/2026-10-08-website-delivery-preview-design.md`.
+
+- Status machine: `done → deploying → preview_ready → {changes_requested |
+  approved} → live`, plus `failed`. The legal transitions live in
+  **`api/_lib/website-delivery.js`** and are Deno-tested — change them there,
+  not inline in a handler.
+- `api/_lib/vercel.js` is the only place that talks to the Vercel API. **Never
+  construct a `<project>.vercel.app` URL** — that subdomain is a global
+  namespace and project names come from `slugify(client.name)`, so a guess can
+  be a stranger's site. `resolvePreviewUrl` returns `{ url, confirmed }` and a
+  project reaches `preview_ready` only when `confirmed` is true.
+- Every status write is a **compare-and-swap on the status that was read**, and
+  the notification is emitted only by the caller that won it. The admin UI and
+  `cron-website-deploy-watch` poll the same build concurrently; without the CAS
+  a client gets emailed twice.
+- Delivery handlers write `notified_status` alongside `status` so the 5-minute
+  `cron-notify-status` watcher sees no pending transition and cannot send a
+  second copy.
+- Attaching a domain is not the same as it resolving. `attach-domain` is
+  re-runnable: it returns the DNS records first, and only flips to `live` once
+  Vercel reports the domain **verified**.
+- **Poll `vercel_deployment_id`, never "the latest deployment".** On a redeploy
+  there is always a previous build sitting at READY, and a git push creates
+  others — reading those advances the project and emails the client about
+  content that did not ship.
+- A site with a custom domain attached has a **second lifecycle**:
+  `live → deploying → live`. A post-launch redeploy returns to `live` (not
+  `preview_ready`), resolves the change requests that **predate the deploy**,
+  and emits `website.changes_published`. If that redeploy *fails*, the project
+  stays `live` — Vercel keeps serving the previous build, so the site is up.
 
 ## Conventions
 

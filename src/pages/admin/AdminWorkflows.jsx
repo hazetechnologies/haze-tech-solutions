@@ -2,15 +2,23 @@ import { useEffect, useState, useCallback } from 'react'
 import { Workflow, Check, Mail, Bell, X, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-// Catalog of the configured notification automations. Mirrors the server-side
-// registry in api/_lib/notification-registry.js (kept in sync by hand — these
-// are documentation of what is wired; the source of truth is the registry).
+// Catalog of the configured notification automations. The labels, categories
+// and descriptions are written for a human and have no server-side equivalent,
+// so this list is maintained by hand — but it is no longer trusted blindly:
+// ?action=workflow-types returns the registry's real keys and anything missing
+// from here is surfaced as a warning below. The registry remains the source of
+// truth for what actually fires.
 const CATALOG = [
   { type: 'client.created',            label: 'Welcome new client',        category: 'Welcome', client: 'email + in-app',  admin: 'email + in-app', desc: 'Fires when a client is added (admin) or converted from a lead / self-signup. Admin-added clients get a set-password link.' },
   { type: 'website.intake_requested',  label: 'Intake form sent',          category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Admin activates a website project — the client is asked to complete their intake form.' },
   { type: 'website.intake_submitted',  label: 'Website intake submitted',  category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'A client submits their website intake form.' },
-  { type: 'website.done',              label: 'Website ready',             category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Website scaffold generation completes.' },
-  { type: 'website.failed',            label: 'Website generation failed', category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'Website scaffold generation fails.' },
+  { type: 'website.done',              label: 'Site built',                category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Scaffold generation completes. The site is built but not deployed — the preview link comes from the next event.' },
+  { type: 'website.failed',            label: 'Website generation failed', category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'Scaffold generation or deployment fails.' },
+  { type: 'website.preview_ready',     label: 'Preview ready to review',   category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'The site is deployed and Vercel confirmed its URL. The client is sent the preview to approve or comment on.' },
+  { type: 'website.changes_requested', label: 'Client requested changes',  category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'A client asked for edits from their portal. The email quotes their note in full.' },
+  { type: 'website.approved',          label: 'Client approved the site',  category: 'Status',  client: '—',               admin: 'email + in-app', desc: 'The client signed off. Next step is attaching their custom domain.' },
+  { type: 'website.live',              label: 'Site is live',              category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'The custom domain is attached AND verified by Vercel, so the site really is serving.' },
+  { type: 'website.changes_published', label: 'Requested changes shipped', category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'A deploy of a live site, or an operator marking requests done, closed open change requests. The only thing that tells a maintenance client their edit shipped.' },
   { type: 'brandkit.logos_ready',      label: 'Logos ready to approve',    category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Brand-kit logos are generated and awaiting client approval.' },
   { type: 'brandkit.done',             label: 'Brand kit ready',           category: 'Status',  client: 'email + in-app',  admin: 'in-app',         desc: 'Full brand kit generation completes.' },
   { type: 'invoice.paid',              label: 'Payment received',          category: 'Payment', client: 'email + in-app',  admin: 'email + in-app', desc: 'A tracked invoice is paid (Stripe).' },
@@ -25,6 +33,7 @@ export default function AdminWorkflows() {
   const [preview, setPreview] = useState(null) // { workflow, recipients } | null
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewErr, setPreviewErr] = useState(null)
+  const [uncatalogued, setUncatalogued] = useState([])
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -38,6 +47,24 @@ export default function AdminWorkflows() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Check this page's hand-written catalogue against the registry the server
+  // actually dispatches from. A missing row means an event fires that nothing
+  // here documents, which is how the catalogue quietly goes stale.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/website?action=workflow-types', {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+        })
+        if (!res.ok) return
+        const { types } = await res.json()
+        const known = new Set(CATALOG.map((c) => c.type))
+        setUncatalogued((types || []).filter((t) => !known.has(t)))
+      } catch { /* a failed check must not break the page */ }
+    })()
+  }, [])
 
   const openPreview = async (workflow) => {
     setPreview({ workflow, recipients: null })
@@ -79,6 +106,18 @@ export default function AdminWorkflows() {
         </h2>
         <p style={{ fontSize: 13, color: '#475569', margin: '4px 0 0' }}>Event-driven client + admin notifications across email and in-app. Click a workflow to view its config and preview the emails.</p>
       </div>
+
+      {uncatalogued.length > 0 && (
+        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ color: '#FCD34D', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            {uncatalogued.length} notification event{uncatalogued.length === 1 ? '' : 's'} not listed below
+          </div>
+          <div style={{ color: '#CBD5E1', fontSize: 12 }}>
+            These fire from the server registry but have no row on this page — add them to CATALOG in this file:{' '}
+            <code style={{ color: '#FCD34D' }}>{uncatalogued.join(', ')}</code>
+          </div>
+        </div>
+      )}
 
       {/* Catalog of active automations */}
       <div>

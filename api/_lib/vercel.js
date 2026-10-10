@@ -82,7 +82,15 @@ export async function ensureProject(repoName, cfg) {
       }),
     })
     if (!created?.id) throw new Error('vercel create project returned no id')
-    return describeProject(created, true)
+    const desc = describeProject(created, true)
+    // The create response does not always carry the resolved git link. repoId
+    // is what identifies the repo to the deployment API, so re-read once rather
+    // than fall back to a form that may be rejected.
+    if (desc.repoId == null) {
+      const reread = await fetchProject(created.id, cfg).catch(() => null)
+      if (reread?.repoId != null) return { ...desc, repoId: reread.repoId }
+    }
+    return desc
   } catch (err) {
     // Check-then-create is a race: two deploy clicks both 404 on the GET and
     // both POST, and the loser gets a conflict. Re-read rather than failing —
@@ -105,7 +113,7 @@ export async function ensureProject(repoName, cfg) {
  * that 404s — or one that loads a stranger's site. Always prefer what the API
  * reports; the constructed form is a labelled last resort, never authoritative.
  */
-function describeProject(project, created) {
+export function describeProject(project, created) {
   const aliases = []
   const prodAlias = project?.targets?.production?.alias
   if (Array.isArray(prodAlias)) aliases.push(...prodAlias)
@@ -119,10 +127,101 @@ function describeProject(project, created) {
     created,
     productionUrl: preferred ? `https://${preferred}` : null,
     aliasFromApi: Boolean(preferred),
+    // Vercel resolves the linked GitHub repo when the project is created and
+    // reports its numeric id here. Reading it off the project means we can
+    // identify the repo to the deployment API without a GitHub PAT — which the
+    // serverless environment does not have (the PAT is a Supabase edge-function
+    // secret), and which these private repos would otherwise require.
+    repoId: Number.isInteger(project?.link?.repoId) && project.link.repoId > 0 ? project.link.repoId : null,
   }
 }
 
-/** Most recent deployment for a project, or null before the first build. */
+/**
+ * Which `gitSource` form to send when creating a deployment.
+ *
+ * Vercel's create-deployment API identifies a GitHub repo by numeric `repoId`.
+ * The org/repo form is the fallback for the case where the project payload did
+ * not carry an id — better to send the request and get a clear error than to
+ * refuse to deploy at all. Pure, so the choice is testable without a token.
+ */
+export function gitSourceFor({ repoId, org, repo, ref = 'main' }) {
+  // A positive integer, specifically: GitHub ids start at 1, so 0 is not one,
+  // and a string id from an unexpected payload shape would be sent as the wrong
+  // type. Falling back beats constructing a request that cannot work.
+  if (Number.isInteger(repoId) && repoId > 0) return { type: 'github', repoId, ref }
+  return { type: 'github', org, repo, ref }
+}
+
+/**
+ * Re-read a project by id or name.
+ *
+ * Needed because a project created from a git repository has no production
+ * alias yet at create time — the alias only exists once the first build has
+ * gone live. The alias is what a client gets emailed, so it has to be read
+ * again later rather than remembered from the create response.
+ */
+export async function fetchProject(idOrName, cfg) {
+  const project = await call(`/v9/projects/${encodeURIComponent(idOrName)}`, cfg)
+  return project?.id ? describeProject(project, false) : null
+}
+
+/**
+ * Trigger a production build of the repo's default branch.
+ *
+ * Creating a Vercel project with `gitRepository` links the repo but does NOT
+ * build it — an existing repo with no new push sits there with zero
+ * deployments, which from the outside is indistinguishable from a broken
+ * deploy. So the build is asked for explicitly.
+ *
+ * Not idempotent, by design: calling this again is how a redeploy happens after
+ * the operator edits content.json. Two *concurrent* calls would queue two
+ * builds, which is why `deploy` refuses to run while a project is already in
+ * the `deploying` state.
+ */
+export async function triggerDeployment(projectId, repoName, cfg, { ref = 'main', repoId = null } = {}) {
+  const d = await call('/v13/deployments', cfg, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: repoName,
+      project: projectId,
+      target: 'production',
+      gitSource: gitSourceFor({ repoId, org: GH_ORG, repo: repoName, ref }),
+    }),
+  })
+  return {
+    id: d?.id || d?.uid || null,
+    state: d?.status || d?.readyState || d?.state || null,
+    inspectorUrl: d?.inspectorUrl || null,
+  }
+}
+
+/**
+ * Read ONE deployment by id.
+ *
+ * This is what polling should use. `latestDeployment` reads whichever
+ * deployment is newest on the project, which is not necessarily the one we
+ * asked for: a push to the linked repo creates another, and on a redeploy there
+ * is always a previous build sitting at READY. Observing that one would advance
+ * the project and email the client about content that is not what just shipped.
+ */
+export async function getDeployment(deploymentId, cfg) {
+  const d = await call(`/v13/deployments/${encodeURIComponent(deploymentId)}`, cfg)
+  if (!d) return null
+  return {
+    id: d.id || d.uid || deploymentId,
+    state: d.readyState || d.status || d.state || null,
+    url: d.url ? `https://${d.url}` : null,
+    inspectorUrl: d.inspectorUrl || null,
+    createdAt: d.createdAt || d.created || null,
+  }
+}
+
+/**
+ * Most recent deployment for a project, or null before the first build.
+ *
+ * Only a fallback for rows that predate deployment-id tracking — prefer
+ * getDeployment, and see its note for why.
+ */
 export async function latestDeployment(projectId, cfg) {
   const json = await call(
     `/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=1`,
@@ -166,11 +265,54 @@ export function resolvePreviewUrl(project) {
   return { url: guessProductionUrl(project?.name || ''), confirmed: false }
 }
 
+/**
+ * Add a domain to a project.
+ *
+ * Re-runnable: a domain already on THIS project is success, not an error. The
+ * operator will click this more than once, because attaching a domain and the
+ * domain actually resolving are two different events (see projectDomain) and
+ * the second one needs DNS they have to go and add.
+ *
+ * A domain attached to a *different* project still throws — that is a real
+ * conflict an operator has to resolve, and swallowing it would leave them
+ * waiting for DNS that can never verify.
+ */
 export async function attachDomain(projectId, domain, cfg) {
-  return call(`/v10/projects/${encodeURIComponent(projectId)}/domains`, cfg, {
-    method: 'POST',
-    body: JSON.stringify({ name: domain }),
-  })
+  try {
+    return await call(`/v10/projects/${encodeURIComponent(projectId)}/domains`, cfg, {
+      method: 'POST',
+      body: JSON.stringify({ name: domain }),
+    })
+  } catch (err) {
+    if (err.status === 409) {
+      const existing = await projectDomain(projectId, domain, cfg).catch(() => null)
+      if (existing) return existing  // already ours
+    }
+    throw err
+  }
+}
+
+/**
+ * Read one domain's state on a project.
+ *
+ * `verified` is the only thing that decides whether a client is told their site
+ * is live. A domain can be attached for days while its DNS still points
+ * somewhere else; presenting that as the live URL would send a client to
+ * whatever their old host is still serving.
+ */
+export async function projectDomain(projectId, domain, cfg) {
+  const d = await call(
+    `/v9/projects/${encodeURIComponent(projectId)}/domains/${encodeURIComponent(domain)}`,
+    cfg,
+  )
+  if (!d?.name) return null
+  return {
+    name: d.name,
+    verified: d.verified === true,
+    // The DNS records the operator has to add at the client's registrar. Shown
+    // verbatim in the admin UI — paraphrasing DNS instructions breaks them.
+    verification: Array.isArray(d.verification) ? d.verification : [],
+  }
 }
 
 /** Normalise a deployment state into what the funnel does next. */

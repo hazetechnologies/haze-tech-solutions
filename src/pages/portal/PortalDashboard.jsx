@@ -2,10 +2,16 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useClient } from '../../lib/PortalProtectedRoute'
+import WebsiteReviewPanel from './WebsiteReviewPanel'
 import {
   FolderKanban, CheckCircle, Clock, AlertCircle,
   TrendingUp, Receipt, ChevronRight, CreditCard, ExternalLink,
 } from 'lucide-react'
+
+// Statuses the client-facing review panel owns. 'done' is included because a
+// generated-but-not-yet-published site still needs honest copy — that state is
+// where the old "your dev team has your files" line lived.
+const DELIVERY_STATUSES = ['done', 'deploying', 'preview_ready', 'changes_requested', 'approved', 'live']
 
 const statusConfig = {
   not_started: { label: 'Not Started', color: '#64748B', bg: 'rgba(100,116,139,0.15)' },
@@ -64,18 +70,28 @@ export default function PortalDashboard() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  useEffect(() => {
+  const fetchWebsiteAndBilling = useCallback(async () => {
     if (!client?.id) return
-    (async () => {
-      const [{ data: wp }, { data: sub }] = await Promise.all([
-        supabase.from('website_projects').select('id, status, repo_url').eq('client_id', client.id).maybeSingle(),
-        supabase.from('subscriptions').select('id, status, current_period_end, cancel_at_period_end, stripe_price_id')
-          .eq('client_id', client.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      ])
-      setWebsiteProject(wp || null)
-      setSubscription(sub || null)
-    })()
+    const [{ data: wp }, { data: sub }] = await Promise.all([
+      supabase.from('website_projects').select('id, status, repo_url, preview_url, live_url, approved_at, website_revisions(id, note, created_at, resolved_at)').eq('client_id', client.id).maybeSingle(),
+      supabase.from('subscriptions').select('id, status, current_period_end, cancel_at_period_end, stripe_price_id')
+        .eq('client_id', client.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    setWebsiteProject(wp || null)
+    setSubscription(sub || null)
   }, [client?.id])
+
+  useEffect(() => { fetchWebsiteAndBilling() }, [fetchWebsiteAndBilling])
+
+  // While a build is running the status changes server-side with nothing to
+  // push it here, so poll until it settles. Without this a client sits on
+  // "Publishing your site" until they reload, having been told to expect a
+  // preview.
+  useEffect(() => {
+    if (websiteProject?.status !== 'deploying') return
+    const t = setInterval(fetchWebsiteAndBilling, 15000)
+    return () => clearInterval(t)
+  }, [websiteProject?.status, fetchWebsiteAndBilling])
 
   async function openBillingPortal() {
     setBillingPortalLoading(true)
@@ -148,8 +164,8 @@ export default function PortalDashboard() {
           {websiteProject.status === 'generating' && (
             <p style={{ color:'#CBD5E1', fontSize: 13 }}>In progress — your team is setting up your site.</p>
           )}
-          {websiteProject.status === 'done' && (
-            <p style={{ color:'#CBD5E1', fontSize: 13 }}>Ready — your dev team has your files.</p>
+          {DELIVERY_STATUSES.includes(websiteProject.status) && (
+            <WebsiteReviewPanel project={websiteProject} onChanged={fetchWebsiteAndBilling} />
           )}
           {websiteProject.status === 'failed' && (
             <p style={{ color:'#F87171', fontSize: 13 }}>Something went wrong. Your team has been notified.</p>

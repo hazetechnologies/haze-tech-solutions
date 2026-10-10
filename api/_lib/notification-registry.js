@@ -111,12 +111,16 @@ export const REGISTRY = {
       audience: 'client',
       resolveTo: async (_sb, p) => p.clientEmail || null,
       render: (p) => ({
-        title: 'Your website is ready 🎉',
-        body: 'Your website project has finished generating. Reach out to your team for next steps.',
+        // This is NOT the end of the funnel any more: the site is built but not
+        // yet deployed, so website.preview_ready is the one that carries a link.
+        // Telling a client "ready — reach out to your team" at this point was
+        // the copy half of the delivery gap.
+        title: 'Your site has been built',
+        body: 'We’re running our checks now — your preview link lands next.',
         link: '/portal/dashboard',
-        emailSubject: 'Your website is ready 🎉',
-        emailHtml: wrapHtml(`Great news, ${esc(p.clientName) || 'there'} — your website is ready! 🎉`,
-          `<p>Your website project has finished generating. Log in to your portal to see what's next.</p>${button('https://www.hazetechsolutions.com/portal/dashboard', 'View in portal')}`),
+        emailSubject: 'Your site has been built',
+        emailHtml: wrapHtml(`Your site is built, ${esc(p.clientName) || 'there'}`,
+          `<p>Your site has been built and we’re running our final checks on it. You’ll get a preview link to review as soon as it’s up — nothing needed from you until then.</p>${button('https://www.hazetechsolutions.com/portal/dashboard', 'View in portal')}`),
       }),
     },
     {
@@ -141,6 +145,131 @@ export const REGISTRY = {
         emailSubject: 'Website generation failed',
         emailHtml: wrapHtml('Website generation failed',
           `<p>Scaffold generation failed for <b>${esc(p.clientName || p.clientId)}</b>.</p>${detailTable([['Error', p.error]])}${button(p.clientId ? `https://www.hazetechsolutions.com/admin/clients/${p.clientId}` : 'https://www.hazetechsolutions.com/admin/clients', 'Open client')}`),
+      }),
+    },
+  ],
+
+  // ─── Website delivery ─────────────────────────────────────────────────────
+  // The four events that replace "reach out to your team for next steps".
+
+  'website.preview_ready': [
+    {
+      audience: 'client',
+      resolveTo: async (_sb, p) => p.clientEmail || null,
+      render: (p) => ({
+        title: 'Your site is ready to review',
+        body: 'Open your preview, then approve it or tell us what to change.',
+        link: '/portal/dashboard',
+        emailSubject: 'Your site is ready to review 👀',
+        emailHtml: wrapHtml(`Your site is ready to look at, ${esc(p.clientName) || 'there'}`,
+          `<p>We've built your site and put it on a preview link. Have a look, then either approve it or tell us what you'd like changed — both are one click in your portal.</p>${button(p.previewUrl, 'Open your preview')}<p style="color:#94a3b8;font-size:13px">This is a preview address. Once you approve, we point your own domain at it.</p>${button('https://www.hazetechsolutions.com/portal/dashboard', 'Approve or request changes')}`),
+      }),
+    },
+    {
+      audience: 'admin',
+      resolveTo: async () => null, // in-app only — the client is the one who acts
+      render: (p) => ({
+        title: `Preview sent: ${p.clientName || p.clientId}`,
+        body: p.previewUrl || 'Preview deployed.',
+        link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
+      }),
+    },
+  ],
+
+  'website.changes_requested': [
+    {
+      audience: 'admin',
+      resolveTo: async () => adminEmail(),
+      render: (p) => ({
+        title: `Changes requested: ${p.clientName || p.clientId}`,
+        body: p.note || 'The client requested changes to their site.',
+        link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
+        emailSubject: `Website changes requested${p.clientName ? ` — ${p.clientName}` : ''}`,
+        // The note is the whole point of this email, so it is quoted in full
+        // rather than summarised — escaped, because a client wrote it.
+        emailHtml: wrapHtml('Changes requested',
+          `<p><b>${esc(p.clientName || p.clientId)}</b> asked for changes to their site:</p><blockquote style="margin:14px 0;padding:12px 16px;border-left:3px solid #00CFFF;background:rgba(0,207,255,0.06);color:#f1f5f9;font-size:14px;white-space:pre-wrap">${esc(p.note)}</blockquote>${button(p.clientId ? `https://www.hazetechsolutions.com/admin/clients/${p.clientId}` : 'https://www.hazetechsolutions.com/admin/clients', 'Open client')}`),
+      }),
+    },
+  ],
+
+  'website.approved': [
+    {
+      audience: 'admin',
+      resolveTo: async () => adminEmail(),
+      render: (p) => ({
+        title: `Site approved: ${p.clientName || p.clientId}`,
+        body: p.byAdmin ? 'Approved on the client’s behalf — ready for the custom domain.' : 'The client approved their site — ready for the custom domain.',
+        link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
+        emailSubject: `Website approved${p.clientName ? ` — ${p.clientName}` : ''}`,
+        emailHtml: wrapHtml('Site approved 🎉',
+          `<p><b>${esc(p.clientName || p.clientId)}</b> approved their site${p.byAdmin ? ' (approved on their behalf)' : ''}. Next step is attaching their domain.</p>${detailTable([['Preview', p.previewUrl]])}${button(p.clientId ? `https://www.hazetechsolutions.com/admin/clients/${p.clientId}` : 'https://www.hazetechsolutions.com/admin/clients', 'Attach the domain')}`),
+      }),
+    },
+  ],
+
+  // Closes the loop a maintenance retainer is actually sold on: the client
+  // asked for a change, and this is the only thing that tells them it shipped.
+  'website.changes_published': [
+    {
+      audience: 'client',
+      resolveTo: async (_sb, p) => p.clientEmail || null,
+      render: (p) => {
+        const n = Number(p.count) || 1
+        const thing = n === 1 ? 'change' : `${n} changes`
+        // Only a project with a verified custom domain is actually LIVE. The
+        // same event fires pre-launch (an operator closing requests on a site
+        // still in review), and telling that client their change is live would
+        // be false — their site is not serving on their domain yet.
+        const isLive = Boolean(p.liveUrl)
+        const url = p.liveUrl || p.previewUrl
+        const title = isLive
+          ? (n === 1 ? 'Your change is live' : `Your ${n} changes are live`)
+          : (n === 1 ? 'Your change is ready to see' : `Your ${n} changes are ready to see`)
+        const sentence = isLive
+          ? `Your ${thing} ${n === 1 ? 'is' : 'are'} now on your site.`
+          : `We've made your ${thing}. Take another look at your preview, then approve it or tell us what else to adjust.`
+        return {
+          title,
+          body: sentence,
+          link: '/portal/dashboard',
+          emailSubject: title,
+          emailHtml: wrapHtml(`All done, ${esc(p.clientName) || 'there'}`,
+            `<p>${esc(sentence)}</p>${button(url, isLive ? 'Visit your site' : 'Open your preview')}<p style="color:#94a3b8;font-size:13px">${isLive ? 'Spot something else? Request another change from your portal any time.' : 'Approve it or request more changes from your portal.'}</p>`),
+        }
+      },
+    },
+    {
+      audience: 'admin',
+      resolveTo: async () => null, // in-app only — the admin is the one who did it
+      render: (p) => ({
+        title: `Changes ${p.liveUrl ? 'published' : 'ready for review'}: ${p.clientName || p.clientId}`,
+        body: `${Number(p.count) || 1} request${(Number(p.count) || 1) === 1 ? '' : 's'} closed.`,
+        link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
+      }),
+    },
+  ],
+
+  'website.live': [
+    {
+      audience: 'client',
+      resolveTo: async (_sb, p) => p.clientEmail || null,
+      render: (p) => ({
+        title: 'Your site is live 🚀',
+        body: p.liveUrl || 'Your site is live on your own domain.',
+        link: '/portal/dashboard',
+        emailSubject: 'Your site is live 🚀',
+        emailHtml: wrapHtml(`You're live, ${esc(p.clientName) || 'there'} 🚀`,
+          `<p>Your site is now serving on your own domain.</p>${button(p.liveUrl, 'Visit your site')}<p style="color:#94a3b8;font-size:13px">We keep it hosted, monitored and backed up. Need a change? Request it from your portal any time.</p>`),
+      }),
+    },
+    {
+      audience: 'admin',
+      resolveTo: async () => null, // in-app only
+      render: (p) => ({
+        title: `Site live: ${p.clientName || p.clientId}`,
+        body: p.liveUrl || 'Custom domain attached and verified.',
+        link: p.clientId ? `/admin/clients/${p.clientId}` : '/admin/clients',
       }),
     },
   ],

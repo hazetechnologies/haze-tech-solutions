@@ -38,10 +38,16 @@ export function escapeHtml(s) {
 }
 
 // A branded CTA button for use inside email bodies. Returns '' when href is falsy.
+//
+// href is escaped, not interpolated raw: it used to be a hardcoded constant at
+// every call site, but delivery emails now carry a Vercel-reported preview URL
+// and an operator-entered custom domain. Escaping an `&` to `&amp;` inside an
+// attribute is correct HTML and browsers decode it, so this is safe for the
+// existing callers too.
 export function button(href, label) {
   if (!href) return ''
   return `<table cellpadding="0" cellspacing="0" style="margin:20px 0"><tr><td style="border-radius:9px;background:#00CFFF">
-    <a href="${href}" style="display:inline-block;padding:13px 24px;color:#021018;text-decoration:none;border-radius:9px;font-weight:700;font-size:14px">${escapeHtml(label || 'Open')}</a>
+    <a href="${escapeHtml(href)}" style="display:inline-block;padding:13px 24px;color:#021018;text-decoration:none;border-radius:9px;font-weight:700;font-size:14px">${escapeHtml(label || 'Open')}</a>
   </td></tr></table>`
 }
 

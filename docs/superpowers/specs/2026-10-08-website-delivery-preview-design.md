@@ -76,12 +76,46 @@ than optional.
 
 ```
 scaffold done (repo + content.json exist)
-  → deploying        create Vercel project linked to the repo; first build runs
+  → [operator clicks Publish]
+  → deploying        Vercel project created/reused; a production build is asked for
   → preview_ready    preview_url stored; client emailed; portal shows the site
-      ├── client clicks Approve          → approved  → operator attaches domain → live
+      ├── client clicks Approve          → approved
+      │     → operator enters the domain → DNS records returned
+      │     → operator re-runs once DNS is added → live (only when Vercel verifies)
       └── client requests changes + note → changes_requested
             → operator (or AI) edits content → push → redeploy → preview_ready
 ```
+
+**The deploy is operator-triggered, not automatic on scaffold completion.** The
+copy on a generated site is AI-written, and the deploy is what emails a paying
+client a link to it. One human read before that email is cheap; an unreviewed
+hero headline in front of a client is not. The button lives in the same admin
+tab the operator is already in when the scaffold finishes.
+
+A Vercel build takes minutes and nobody is obliged to sit on the page, so
+`cron-website-deploy-watch` (every 5 minutes) advances any project left in
+`deploying`. The admin UI polls the same endpoint while it is open, so the two
+race by design — see the concurrency rule below.
+
+## Concurrency: one status change, one email
+
+Every status write is a **compare-and-swap on the status that was read**, and
+the notification fires only for the caller that won the swap. The admin UI poll
+and the cron will both observe the same finished build; without the CAS they
+would both email the client, and "your site is ready" arriving twice is the kind
+of detail that makes a $7,500 deliverable feel amateur.
+
+The delivery actions also write `notified_status` alongside `status`. The
+existing `cron-notify-status` watcher emits events for transitions it discovers;
+these actions emit their own immediately. Writing both keeps the watcher from
+finding a pending transition, so the guarantee holds even if one of these
+statuses is later added to `STATUS_EVENTS`.
+
+One consequence worth stating: the stalled-alias timeout is measured from the
+write that set `deploying`, so **a poll that changes nothing must not touch
+`updated_at`** — otherwise the clock resets on every tick and the timeout can
+never fire. The poller returns its progress message in the response instead of
+persisting it.
 
 ## Schema
 
@@ -98,6 +132,7 @@ New columns on `website_projects`:
 | Column | Purpose |
 |---|---|
 | `vercel_project_id` | the Vercel project this site deploys to |
+| `vercel_deployment_id` | the specific build being polled — see "Polling is bound…" below |
 | `preview_url` | the `*.vercel.app` URL the client reviews |
 | `live_url` | the custom domain once attached |
 | `approved_at` | when the client signed off |
@@ -141,7 +176,17 @@ convention:
 | `deploy-status` | admin | poll the Vercel deployment; on READY store `preview_url` and set `preview_ready` |
 | `approve-site` | client or admin | set `approved`, stamp `approved_at`, notify admin |
 | `request-changes` | client | insert a `website_revisions` row, set `changes_requested`, notify admin |
-| `attach-domain` | admin | add the client's domain to the Vercel project, store `live_url`, set `live` |
+| `attach-domain` | admin | add the client's domain, report its DNS records, and set `live` **only once Vercel reports it verified** |
+| `resolve-changes` | admin | close open change requests serviced outside our deploy path, and tell the client |
+| `cron-website-deploy-watch` | cron | advance any project stuck in `deploying` when nobody is watching |
+
+**`attach-domain` is re-runnable on purpose.** Attaching a domain and a domain
+resolving are different events: Vercel accepts the name immediately but serves
+the site only once DNS points at it. The first call returns the exact records
+for the operator to add at the client's registrar; a later call finds the domain
+verified and takes the site live. `live_url` stays unset until then, because a
+stored URL appears in the client's portal and a link to a domain still pointing
+at their old host is worse than no link.
 
 Authorisation mirrors `approveLogo`: bearer token, resolve the caller, allow
 the owning client or an admin. Not a new auth pattern.
@@ -157,6 +202,7 @@ Extends the existing registry, which already carries `website.intake_requested`,
 | `website.changes_requested` | admin — carries the client's note |
 | `website.approved` | admin — ready to attach the domain |
 | `website.live` | client — the real URL |
+| `website.changes_published` | client — the change they asked for has shipped |
 
 `website.done`'s copy is rewritten. Telling a client their project "finished
 generating — reach out to your team" is the text version of the same gap.
@@ -171,6 +217,75 @@ One honest constraint: the preview iframe is a live third-party page, so it
 gets `sandbox` and a visible fallback link. A 3D or video template will not
 feel right in a small frame — for the experiential line the primary action is
 the new-tab link, with the iframe as a thumbnail rather than the main event.
+
+## Post-launch edits go live, and the product says so
+
+Once a custom domain is attached, a deploy IS the client's live site. Vercel
+also rebuilds production on **any push to the linked repo**, so this is true
+whether or not the deploy goes through our action — disabling that would mean
+an ignored-build-step shim and a promote pipeline, i.e. the per-client staging
+environment this spec has already ruled out.
+
+The resolution is honesty rather than machinery:
+
+- A change request on a `live` site records the note and emails the operator,
+  but **does not move the project out of `live`.** A status of
+  `changes_requested` would advertise a preview-and-approve cycle that does not
+  run for a site already serving on the client's domain.
+- The client's portal acknowledges the open request in place, so sending one
+  visibly does something.
+- The admin button reads **"Redeploy (updates the live site)"** once a domain is
+  attached, instead of looking like a harmless preview refresh.
+
+So the lifecycle has two halves, and the discriminator is whether a custom
+domain is attached:
+
+```
+pre-launch:   done → deploying → preview_ready → approved → live
+post-launch:  live → deploying → live
+```
+
+A post-launch redeploy returns to `live` rather than `preview_ready` — there is
+no staging copy for a live site to be a preview *of*, and telling a client with
+a running website that it is "ready to review" is nonsense. Arriving back at
+`live` **resolves the open change requests**, because the build that just
+shipped is what the client's visitors now see, and emits
+`website.changes_published`: the only thing that tells a maintenance client
+their edit went out. A redeploy that serviced nothing stays silent — re-sending
+"your site is live" for routine rebuilds would train clients to ignore these.
+
+Two edges that bit on review and are now pinned:
+
+- **A deploy may only close requests that predate it.** A client can submit a
+  note in the window between the deploy claiming the row and the build
+  finishing. Resolution is therefore filtered on `created_at <` the write that
+  set `deploying` (nothing touches `updated_at` while polling, which is what
+  makes that usable as the deploy-start timestamp). Otherwise a request nobody
+  has acted on is silently closed.
+- **`website.changes_published` must not claim "live" before launch.** The same
+  event fires pre-launch when an operator closes requests on a site still in
+  review. The copy branches on whether a verified custom domain exists: live
+  sites get "your change is live", pre-launch gets "ready to see" and points at
+  the preview.
+
+`resolve-changes` is **refused while a build is running**, and its button is
+hidden. The operator most likely started that build *for* these requests, and
+closing them by hand would email the client that their change shipped — which a
+failing build turns into a lie. The watcher closes them itself on success.
+
+Pre-launch, resolving also moves `changes_requested` back to `preview_ready`.
+Otherwise the email says "take another look" while the portal still says the
+team is working on it.
+
+`resolve-changes` (admin) is the escape hatch for work that went out another
+way. **A direct push to the linked repo builds on Vercel without our code
+running at all**, so nothing would close those requests and the operator's queue
+would fill with work already done. One button, and the client is told, because
+clicking it is the operator saying it is finished.
+
+Revisit this if per-client staging is ever in scope. It is the right answer at a
+larger size; it is not the right first thing to build on an API surface where no
+call has yet been executed.
 
 ## Revision loop
 
@@ -197,6 +312,31 @@ token is saved.
 First run with a real token is therefore a verification step, not a formality,
 and the first client site must not be the thing it is verified on.
 
+`triggerDeployment` is in this category and deserves calling out: creating a
+Vercel project with `gitRepository` links the repo but does **not** build it, so
+an existing repo with no new push would sit at zero deployments — from the
+outside indistinguishable from a broken deploy. The build is therefore requested
+explicitly via `POST /v13/deployments`. That request shape is from the docs and
+has never been executed.
+
+Its `gitSource` identifies the repo by **numeric `repoId`**, read off the Vercel
+project's own `link.repoId`. That matters for a reason beyond correctness: the
+serverless environment has no GitHub PAT — it is a Supabase edge-function
+secret — and these repos are private, so there is no other way to resolve the
+id without adding a credential. `ensureProject` re-reads the project once if the
+create response did not carry the link. `gitSourceFor` falls back to the
+`org`/`repo` form when no id is available, so a missing link produces a clear
+API error rather than a refusal to deploy.
+
+**Polling is bound to the deployment that was started, not to "latest".**
+`deploy` stores `vercel_deployment_id` and the poller reads that one.
+`latestDeployment` reads whichever deployment Vercel lists first, which is not
+necessarily ours: a push to the linked repo creates another, and on a redeploy
+there is always a previous build already sitting at READY. Reading that one
+would advance the project immediately and email the client about content that
+did not ship. `latestDeployment` survives only as a fallback for rows created
+before the id was tracked.
+
 **The preview URL must come from the API, never be constructed.**
 `<project>.vercel.app` is a global namespace and project names are derived from
 `slugify(client.name)`, so `acme-website` may already belong to someone else.
@@ -208,6 +348,30 @@ rather than emailed to a client who would land on a 404 or a stranger's site.
 
 - No Vercel token → `vercel_not_configured`, project stays at `done`. No
   regression against today's behaviour.
+- **Any deploy failure on a LIVE site leaves the project `live`.** Vercel does
+  not take the previous production build down, so the site is still up; nothing
+  new was published. Marking it `failed` would hide the live link in the
+  client's portal and block further change requests over a site that is working.
+  This covers the whole path, not just a failed build: a transient error
+  creating the Vercel project, or a rejected deployment request, is handled the
+  same way. One helper, `recordDeployFailure`, owns that decision so the three
+  failure sites cannot drift. The error is recorded and the admin emailed; the
+  client is told nothing, because nothing about their site changed.
+
+## Notifications must be idempotent, not just guarded
+
+The CAS stops two *racing* callers from both emailing. It does not stop one
+caller emailing twice, because a same-status CAS succeeds:
+
+- **`attach-domain` re-check.** Once a site is live, re-running it to confirm
+  DNS reaches a `live → live` CAS, which succeeds. Emitting on that would send
+  the client another launch email every time the operator checks. It emits only
+  when the status or the stored `live_url` actually changed.
+- **`resolve-changes` claims the row before closing anything.** The `deploying`
+  guard is a check-then-act, and a build starting in between would let it close
+  requests that build may yet fail to ship — with the client already told they
+  were done. A same-status CAS is a real claim: it matches nothing once another
+  writer has moved the row.
 - Vercel project creation fails → `failed` with the Vercel error, same as the
   scaffold's existing failure path.
 - Build fails on Vercel → `failed` carrying the deployment's error, with a link
@@ -224,16 +388,31 @@ rather than emailed to a client who would land on a 404 or a stranger's site.
 
 ## Build order
 
-1. Migration SQL + `admin_settings` entries for the two Vercel keys.
-2. `api/_lib/vercel.js` — create project, trigger deploy, read deployment
+1. ✅ Migration SQL + `admin_settings` entries for the two Vercel keys.
+2. ✅ `api/_lib/vercel.js` — create project, trigger deploy, read deployment
    status, attach domain. Behind a `vercelConfigured()` check throughout.
-3. `deploy` / `deploy-status` actions, wired to run after a successful scaffold.
-4. Portal review surface + `approve-site` / `request-changes`.
-5. `attach-domain` and the `live` state.
+3. ✅ `deploy` / `deploy-status` actions + `cron-website-deploy-watch`.
+4. ✅ Portal review surface + `approve-site` / `request-changes`.
+5. ✅ `attach-domain` and the `live` state.
+
+The state machine itself lives in `api/_lib/website-delivery.js` as pure
+functions over plain values, Deno-tested. It decides whether a paying client
+gets emailed a link, which is not a thing to leave untested because it happens
+to sit inside a request handler.
+
+**Still blocked on the operator, and only this:** the Vercel API token in
+`/admin/settings`, and running
+`supabase/migrations/_manual_2026_10_08_website_delivery.sql`. Until both land,
+`deploy` answers `vercel_not_configured` and every project stays at `done`,
+exactly as before.
 
 ## Out of scope
 
-- Transferring repos to clients. If that becomes the model, this spec changes.
+- Transferring repos to clients. Settled, not deferred: the published products
+  sell a managed deploy and never mention source code, and a Growth site's
+  contact form writes into *this* platform's leads table — a handed-over repo
+  stops working when it leaves. The honest version of ownership is the
+  domain-in-their-registrar rule and the paid static export above.
 - Staging vs production environments per client site. One preview URL that
   becomes the live site is the right amount of machinery at this size.
 - Automated visual QA of generated sites. The `website-testing-agent` skill

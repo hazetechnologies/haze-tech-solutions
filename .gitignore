@@ -30,3 +30,7 @@ dist-ssr
 
 .vercel
 .worktrees/
+
+# Local artifact of running `deno test` — the std imports are already
+# version-pinned in their URLs, and nothing in CI reads this.
+deno.lock
