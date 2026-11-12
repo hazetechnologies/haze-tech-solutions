@@ -59,9 +59,9 @@ export default function SmsSignupPage() {
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', margin: '20px 0 8px' }}>
             <input id="sms-consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ width: 20, height: 20, marginTop: 4, flexShrink: 0, accentColor: '#38BDF8' }} />
-            <label htmlFor="sms-consent" style={{ fontSize: 14, lineHeight: 1.6, color: '#CBD5E1' }}>{CONSENT_TEXT}</label>
+            <label htmlFor="sms-consent" style={{ fontSize: 15, lineHeight: 1.65, color: '#E2E8F0' }}>{CONSENT_TEXT}</label>
           </div>
-          <p style={{ fontSize: 14, color: '#94A3B8', margin: '0 0 20px 32px' }}>
+          <p style={{ fontSize: 15, color: '#CBD5E1', margin: '0 0 20px 32px' }}>
             Read the <Link to={SMS_TERMS_PATH}>Text Message Terms</Link> and <Link to={SMS_PRIVACY_PATH}>Privacy Policy</Link>.
           </p>
 

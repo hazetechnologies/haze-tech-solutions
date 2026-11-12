@@ -34,7 +34,7 @@ export default function PrivacyPage() {
 
       <Section id="texts" title="Text messages">
         <p>We text only people who agreed to receive texts from us: through our <Link to={SMS_SIGNUP_PATH}>text sign-up form</Link>, or by giving us their mobile number and agreeing to texts when they became a client or contact. Texts come from <FromNumber /> and are about your questions, appointments, projects and account. They are not marketing. The full terms, including how to stop them, are in our <Link to={SMS_TERMS_PATH}>Text Message Terms</Link>.</p>
-        <p><strong>{NO_SHARING_SENTENCE}</strong> We do not sell, rent or share mobile numbers with anyone for their own use. The only company that receives your number is our phone carrier, Telnyx, which delivers the messages for us. The sharing described elsewhere in this policy does not include text message opt-in data and consent.</p>
+        <p><strong>{NO_SHARING_SENTENCE}</strong> We do not sell, rent or share mobile numbers with anyone for their own use. Your number is kept in our database (Supabase), emailed to our team when you sign up (through our email provider, Hostinger), and given to our phone carrier, Telnyx, to deliver the messages. They handle it only for us. The sharing described elsewhere in this policy does not include text message opt-in data and consent.</p>
         <p>Reply STOP to any text to stop receiving them, or HELP for help.</p>
       </Section>
 

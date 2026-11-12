@@ -116,33 +116,25 @@ async function smsOptIn(req, res) {
   const v = validateSmsOptIn(body)
   if (!v.ok) return res.status(400).json({ error: 'bad_request', message: v.message })
 
-  const ipHeader = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || ''
+  // Vercel overwrites these with the real client IP (a client can't spoof them,
+  // per Vercel's request-headers docs); x-vercel-forwarded-for survives a proxy in front.
+  const ipHeader = req.headers['x-vercel-forwarded-for'] || req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || ''
   const ip = String(Array.isArray(ipHeader) ? ipHeader[0] : ipHeader).split(',')[0].trim().slice(0, 64) || null
   const userAgent = String(req.headers['user-agent'] || '').slice(0, 300) || null
   const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
-  const failed = (where, e) => {
-    console.error(`[sms-optin] ${where}:`, e?.message || e)
+
+  // Limit check, duplicate check and insert in one locked step (sms_optin_record),
+  // so concurrent requests can't all pass the checks.
+  const { data: outcome, error } = await sb.rpc('sms_optin_record', {
+    p_name: v.value.name, p_phone: v.value.phone, p_consent_text: CONSENT_TEXT, p_consent_version: CONSENT_VERSION,
+    p_ip: ip, p_user_agent: userAgent, p_ip_limit: SMS_OPTIN_PER_IP_PER_HOUR,
+  })
+  if (error || !['stored', 'duplicate', 'rate_limited'].includes(outcome)) {
+    console.error('[sms-optin] record:', error?.message || outcome)
     return res.status(500).json({ error: 'save_failed', message: 'We could not save your sign-up. Try again, or email hello@hazetechsolutions.com.' })
   }
-
-  if (ip) {
-    const hourAgo = new Date(Date.now() - 3600 * 1000).toISOString()
-    const { count, error } = await sb.from('sms_consents').select('id', { count: 'exact', head: true }).eq('ip', ip).gte('created_at', hourAgo)
-    if (error) return failed('ip count', error)
-    if ((count ?? 0) >= SMS_OPTIN_PER_IP_PER_HOUR) {
-      return res.status(429).json({ error: 'rate_limited', message: 'Too many sign-ups from this connection. Try again in an hour.' })
-    }
-  }
-  const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
-  const { data: recent, error: recentErr } = await sb.from('sms_consents').select('id').eq('phone', v.value.phone).is('revoked_at', null).gte('created_at', dayAgo).limit(1)
-  if (recentErr) return failed('recent lookup', recentErr)
-  if (recent?.length) return res.status(200).json({ ok: true })
-
-  const { error } = await sb.from('sms_consents').insert({
-    name: v.value.name, phone: v.value.phone, consent_text: CONSENT_TEXT, consent_version: CONSENT_VERSION,
-    source: 'web_form', ip, user_agent: userAgent,
-  })
-  if (error) return failed('insert', error)
+  if (outcome === 'rate_limited') return res.status(429).json({ error: 'rate_limited', message: 'Too many sign-ups from this connection. Try again in an hour.' })
+  if (outcome === 'duplicate') return res.status(200).json({ ok: true })
   try { await emitNotification(sb, 'sms.optin', { optin: { name: v.value.name, phone: v.value.phone } }) } catch (e) { console.error('[sms-optin] notify:', e?.message || e) }
   return res.status(200).json({ ok: true })
 }
