@@ -33,6 +33,9 @@ import {
 // Imported, not restated: this list drifting out of sync with the portal
 // picker is what made the flagship template unselectable for ~3 months.
 import { isValidTemplateId } from '../src/lib/websiteTemplates.js'
+// The text-message program. The consent wording stored with each sign-up is the
+// server's copy from here, never what the browser sent.
+import { validateSmsOptIn, CONSENT_TEXT, CONSENT_VERSION } from '../src/lib/smsProgram.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -93,8 +96,55 @@ export default async function handler(req, res) {
     case 'admin-affiliates-list':    return req.method === 'GET'  ? adminAffiliatesList(req, res)   : methodNotAllowed(res, 'GET')
     case 'admin-commissions-list':   return req.method === 'GET'  ? adminCommissionsList(req, res)  : methodNotAllowed(res, 'GET')
     case 'admin-commission-update':  return req.method === 'POST' ? adminCommissionUpdate(req, res) : methodNotAllowed(res, 'POST')
+    case 'sms-optin':           return req.method === 'POST' ? smsOptIn(req, res)          : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
+}
+
+// POST ?action=sms-optin — public text-message sign-up from /sms-signup (the
+// 10DLC opt-in). Records consent only: it never sends a text, so the form can't
+// be used to make us text a stranger's number or run up message charges.
+// Abuse limits: a hidden honeypot field, at most 5 sign-ups per IP per hour,
+// and a repeat of the same number within a day is acknowledged without a new
+// row or a second admin email.
+const SMS_OPTIN_PER_IP_PER_HOUR = 5
+async function smsOptIn(req, res) {
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Sign-up is unavailable right now. Email hello@hazetechsolutions.com instead.' })
+  const body = req.body && typeof req.body === 'object' ? req.body : {}
+  // Bots fill every field; people never see this one. Pretend it worked.
+  if (typeof body.website === 'string' && body.website.trim()) return res.status(200).json({ ok: true })
+  const v = validateSmsOptIn(body)
+  if (!v.ok) return res.status(400).json({ error: 'bad_request', message: v.message })
+
+  const ipHeader = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || ''
+  const ip = String(Array.isArray(ipHeader) ? ipHeader[0] : ipHeader).split(',')[0].trim().slice(0, 64) || null
+  const userAgent = String(req.headers['user-agent'] || '').slice(0, 300) || null
+  const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+  const failed = (where, e) => {
+    console.error(`[sms-optin] ${where}:`, e?.message || e)
+    return res.status(500).json({ error: 'save_failed', message: 'We could not save your sign-up. Try again, or email hello@hazetechsolutions.com.' })
+  }
+
+  if (ip) {
+    const hourAgo = new Date(Date.now() - 3600 * 1000).toISOString()
+    const { count, error } = await sb.from('sms_consents').select('id', { count: 'exact', head: true }).eq('ip', ip).gte('created_at', hourAgo)
+    if (error) return failed('ip count', error)
+    if ((count ?? 0) >= SMS_OPTIN_PER_IP_PER_HOUR) {
+      return res.status(429).json({ error: 'rate_limited', message: 'Too many sign-ups from this connection. Try again in an hour.' })
+    }
+  }
+  const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+  const { data: recent, error: recentErr } = await sb.from('sms_consents').select('id').eq('phone', v.value.phone).is('revoked_at', null).gte('created_at', dayAgo).limit(1)
+  if (recentErr) return failed('recent lookup', recentErr)
+  if (recent?.length) return res.status(200).json({ ok: true })
+
+  const { error } = await sb.from('sms_consents').insert({
+    name: v.value.name, phone: v.value.phone, consent_text: CONSENT_TEXT, consent_version: CONSENT_VERSION,
+    source: 'web_form', ip, user_agent: userAgent,
+  })
+  if (error) return failed('insert', error)
+  try { await emitNotification(sb, 'sms.optin', { optin: { name: v.value.name, phone: v.value.phone } }) } catch (e) { console.error('[sms-optin] notify:', e?.message || e) }
+  return res.status(200).json({ ok: true })
 }
 
 function methodNotAllowed(res, allow) {
