@@ -36,6 +36,9 @@ import BlogPost        from './pages/BlogPost'
 import PricingPage     from './pages/PricingPage'
 import CartPage        from './pages/CartPage'
 import ServicePage     from './pages/ServicePage'
+import PrivacyPage     from './pages/legal/PrivacyPage'
+import SmsTermsPage    from './pages/legal/SmsTermsPage'
+import SmsSignupPage   from './pages/legal/SmsSignupPage'
 
 import PortalLogin          from './pages/portal/PortalLogin'
 import PortalLayout         from './pages/portal/PortalLayout'
@@ -95,6 +98,9 @@ export default function App() {
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/services/:slug" element={<ServicePage />} />
           <Route path="/cart"    element={<CartPage />} />
+          <Route path="/privacy"    element={<PrivacyPage />} />
+          <Route path="/sms-terms"  element={<SmsTermsPage />} />
+          <Route path="/sms-signup" element={<SmsSignupPage />} />
           <Route path="/affiliate" element={<AffiliateDashboard />} />
           <Route path="/affiliate/confirm" element={<AffiliateConfirm />} />
 

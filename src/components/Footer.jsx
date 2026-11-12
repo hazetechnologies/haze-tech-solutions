@@ -262,6 +262,11 @@ export default function Footer() {
           <p>
             © {new Date().getFullYear()} Haze Tech Solutions. All rights reserved.
           </p>
+          <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+            <a href="/privacy" className="text-muted hover:text-primary transition-colors duration-200">Privacy Policy</a>
+            <a href="/sms-terms" className="text-muted hover:text-primary transition-colors duration-200">Text Message Terms</a>
+            <a href="/sms-signup" className="text-muted hover:text-primary transition-colors duration-200">Get texts from us</a>
+          </nav>
           <p className="flex items-center gap-1">
             Built with{' '}
             <span

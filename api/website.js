@@ -33,6 +33,9 @@ import {
 // Imported, not restated: this list drifting out of sync with the portal
 // picker is what made the flagship template unselectable for ~3 months.
 import { isValidTemplateId } from '../src/lib/websiteTemplates.js'
+// The text-message program. The consent wording stored with each sign-up is the
+// server's copy from here, never what the browser sent.
+import { validateSmsOptIn, CONSENT_TEXT, CONSENT_VERSION } from '../src/lib/smsProgram.js'
 
 const EDGE_FN = process.env.SUPABASE_EDGE_FUNCTION_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -93,8 +96,47 @@ export default async function handler(req, res) {
     case 'admin-affiliates-list':    return req.method === 'GET'  ? adminAffiliatesList(req, res)   : methodNotAllowed(res, 'GET')
     case 'admin-commissions-list':   return req.method === 'GET'  ? adminCommissionsList(req, res)  : methodNotAllowed(res, 'GET')
     case 'admin-commission-update':  return req.method === 'POST' ? adminCommissionUpdate(req, res) : methodNotAllowed(res, 'POST')
+    case 'sms-optin':           return req.method === 'POST' ? smsOptIn(req, res)          : methodNotAllowed(res, 'POST')
     default:                    return res.status(400).json({ error: 'bad_request', message: 'Unknown or missing action' })
   }
+}
+
+// POST ?action=sms-optin — public text-message sign-up from /sms-signup (the
+// 10DLC opt-in). Records consent only: it never sends a text, so the form can't
+// be used to make us text a stranger's number or run up message charges.
+// Abuse limits: a hidden honeypot field, at most 5 sign-ups per IP per hour,
+// and a repeat of the same number within a day is acknowledged without a new
+// row or a second admin email.
+const SMS_OPTIN_PER_IP_PER_HOUR = 5
+async function smsOptIn(req, res) {
+  if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'config_error', message: 'Sign-up is unavailable right now. Email hello@hazetechsolutions.com instead.' })
+  const body = req.body && typeof req.body === 'object' ? req.body : {}
+  // Bots fill every field; people never see this one. Pretend it worked.
+  if (typeof body.website === 'string' && body.website.trim()) return res.status(200).json({ ok: true })
+  const v = validateSmsOptIn(body)
+  if (!v.ok) return res.status(400).json({ error: 'bad_request', message: v.message })
+
+  // Vercel overwrites these with the real client IP (a client can't spoof them,
+  // per Vercel's request-headers docs); x-vercel-forwarded-for survives a proxy in front.
+  const ipHeader = req.headers['x-vercel-forwarded-for'] || req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || ''
+  const ip = String(Array.isArray(ipHeader) ? ipHeader[0] : ipHeader).split(',')[0].trim().slice(0, 64) || null
+  const userAgent = String(req.headers['user-agent'] || '').slice(0, 300) || null
+  const sb = createClient(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, SERVICE_ROLE_KEY)
+
+  // Limit check, duplicate check and insert in one locked step (sms_optin_record),
+  // so concurrent requests can't all pass the checks.
+  const { data: outcome, error } = await sb.rpc('sms_optin_record', {
+    p_name: v.value.name, p_phone: v.value.phone, p_consent_text: CONSENT_TEXT, p_consent_version: CONSENT_VERSION,
+    p_ip: ip, p_user_agent: userAgent, p_ip_limit: SMS_OPTIN_PER_IP_PER_HOUR,
+  })
+  if (error || !['stored', 'duplicate', 'rate_limited'].includes(outcome)) {
+    console.error('[sms-optin] record:', error?.message || outcome)
+    return res.status(500).json({ error: 'save_failed', message: 'We could not save your sign-up. Try again, or email hello@hazetechsolutions.com.' })
+  }
+  if (outcome === 'rate_limited') return res.status(429).json({ error: 'rate_limited', message: 'Too many sign-ups from this connection. Try again in an hour.' })
+  if (outcome === 'duplicate') return res.status(200).json({ ok: true })
+  try { await emitNotification(sb, 'sms.optin', { optin: { name: v.value.name, phone: v.value.phone } }) } catch (e) { console.error('[sms-optin] notify:', e?.message || e) }
+  return res.status(200).json({ ok: true })
 }
 
 function methodNotAllowed(res, allow) {

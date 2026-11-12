@@ -373,6 +373,26 @@ export const REGISTRY = {
     },
   ],
 
+  // Someone signed up for texts at /sms-signup. Admin-only: the number goes to
+  // the owner, nowhere else.
+  'sms.optin': [
+    {
+      audience: 'admin',
+      resolveTo: async () => adminEmail(),
+      render: (p) => {
+        const o = p.optin || {}
+        return {
+          title: `New text sign-up: ${o.name || 'unknown'}`,
+          body: `${o.name || ''} agreed to receive texts at ${o.phone || ''}.`,
+          link: null,
+          emailSubject: `New text sign-up: ${o.name || 'unknown'}`,
+          emailHtml: wrapHtml('New text sign-up',
+            `<p>Someone agreed to receive texts from Haze Tech Solutions on hazetechsolutions.com/sms-signup. Their consent is recorded in the sms_consents table.</p>${detailTable([['Name', o.name], ['Mobile', o.phone]])}`),
+        }
+      },
+    },
+  ],
+
   'affiliate.signup': [
     {
       audience: 'admin',
